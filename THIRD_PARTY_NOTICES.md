@@ -14,7 +14,7 @@ Exact revisions, import date and license SHA-256 hashes are in `upstream.lock.js
 Archived upstream automation and installer files under `docs/upstream/` are also covered
 by the corresponding upstream license.
 
-Rust/npm dependencies and bundled fonts, icons and images retain their own licenses.
+Rust/JavaScript dependencies and bundled fonts, icons and images retain their own licenses.
 This file records the source imports, not a complete dependency license audit or SBOM.
 Before public distribution, inventory the actual bundled dependencies/assets and include
 all required third-party notices in binary, container and frontend distributions.

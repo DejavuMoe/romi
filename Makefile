@@ -14,14 +14,13 @@ help:
 	@echo 'make package     Build a checksummed local snapshot archive'
 
 setup:
-	npm --prefix admin ci --no-audit --no-fund
-	npm --prefix web ci --no-audit --no-fund
+	pnpm install --frozen-lockfile
 	cargo fetch --locked --manifest-path server/Cargo.toml
 	cargo fetch --locked --manifest-path agent/Cargo.toml
 
 frontend:
-	npm --prefix admin run build
-	npm --prefix web run build
+	pnpm --dir admin run build
+	pnpm --dir web run build
 	mkdir -p server/target/theme
 	rm -rf server/target/theme/dist
 	cp -R web/dist server/target/theme/dist
@@ -41,10 +40,10 @@ package: release
 
 check: frontend
 	python3 scripts/package.py check
-	npm --prefix admin run lint
-	npm --prefix admin test
-	npm --prefix web run lint
-	npm --prefix web test
+	pnpm --dir admin run lint
+	pnpm --dir admin test
+	pnpm --dir web run lint
+	pnpm --dir web test
 	cargo fmt --manifest-path server/Cargo.toml --all --check
 	cargo fmt --manifest-path agent/Cargo.toml --all --check
 	cargo clippy --locked --manifest-path server/Cargo.toml --all-targets -- -D warnings
@@ -61,7 +60,7 @@ dev-server:
 	cargo run --locked --manifest-path server/Cargo.toml -- --listen 127.0.0.1:9911 --db .local/romi.db
 
 dev-admin:
-	npm --prefix admin run dev -- --host 127.0.0.1 --port 5173 --strictPort
+	pnpm --dir admin run dev --host 127.0.0.1 --port 5173 --strictPort
 
 dev-web:
-	npm --prefix web run dev -- --host 127.0.0.1 --port 5174 --strictPort
+	pnpm --dir web run dev --host 127.0.0.1 --port 5174 --strictPort

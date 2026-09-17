@@ -15,8 +15,8 @@
 初始化适配：
 
 - 根 Makefile 统一安装、前端构建、Rust 编译、检查和开发命令。
-- 保留两份 npm 锁文件和两份 Cargo 锁文件；暂不引入 npm/Cargo workspace，避免合并锁文件改变解析结果。
-  monorepo 的源码与任务入口已经统一；Rust 共用根 `target/` 编译缓存。
+- 初次导入保留 npm 锁文件；现已通过 `pnpm import` 迁移为根 pnpm workspace 和统一锁文件。
+  原有前端依赖版本及 integrity 校验保持一致。Rust 仍保留两份 Cargo 锁文件，共用根 `target/` 编译缓存。
 - 管理端嵌入路径改为 `../admin/dist`；`make frontend` 将 `web/` 的本地构建产物、主题元数据、预览图
   放到 `server/target/theme`。`build.rs` 只检查文件，不下载或构建前端。
 - `/install.sh` 与 `/agent/{arch}` 返回 503，删除上游 latest 二进制转发代码及其专用测试，增加拒绝分发测试。

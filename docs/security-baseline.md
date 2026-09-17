@@ -3,7 +3,8 @@
 本阶段的安全验证在本地完成，未上传代码、发布镜像或签名。
 后续已配置 `git@github.com:DejavuMoe/romi.git`、默认分支 `master` 和 GitHub Actions 测试工作流；
 远程 CI 执行结果须在首次推送后单独确认。
-保持原始 Agent 协议和已有组件锁文件；没有升级依赖或重做 UI。
+保持原始 Agent 协议，没有升级应用依赖或重做 UI。前端锁文件现已迁移至 pnpm workspace，
+保留已锁定的应用依赖版本和 integrity；mise 配置使本地与 CI 使用相同开发工具版本。
 
 ## 节点凭证和迁移
 

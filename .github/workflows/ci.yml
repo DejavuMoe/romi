@@ -25,21 +25,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Set up development tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: |
-            admin/package-lock.json
-            web/package-lock.json
-
-      - name: Pin npm
-        run: npm install --global npm@11.19.0 --ignore-scripts --no-audit --no-fund
-
-      - name: Install pinned Rust toolchain
-        # rustup reads the exact version and components from rust-toolchain.toml.
-        run: rustup show active-toolchain
+          version: 2026.9.7
+          install_args: node pnpm python rust
 
       - name: Install locked dependencies
         run: make setup

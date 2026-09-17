@@ -49,7 +49,8 @@ def record():
     receipt = {'source': source_state(), 'binaries': binaries(), 'generated': generated(),
                'rustc': subprocess.check_output(['rustc', '-vV'], cwd=ROOT, text=True).strip(),
                'node': subprocess.check_output(['node', '--version'], text=True).strip(),
-               'npm': subprocess.check_output(['npm', '--version'], text=True).strip()}
+               'pnpm': subprocess.check_output(['pnpm', '--version'], text=True).strip(),
+               'python': subprocess.check_output(['python3', '--version'], text=True).strip()}
     RECEIPT.write_bytes(encoded(receipt))
 
 
@@ -62,7 +63,8 @@ def package():
     payload = {f'bin/{n}': (RELEASE / n).read_bytes() for n in receipt['binaries']}
     for item in ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'upstream.lock.json', 'docs/local-release.md',
                  'server/LICENSE', 'agent/LICENSE', 'admin/LICENSE', 'web/LICENSE',
-                 'server/Cargo.lock', 'agent/Cargo.lock', 'admin/package-lock.json', 'web/package-lock.json',
+                 'server/Cargo.lock', 'agent/Cargo.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
+                 'package.json', 'admin/package.json', 'web/package.json', 'mise.toml', 'rust-toolchain.toml',
                  'web/theme.json', 'web/preview.png']:
         payload[item] = (ROOT / item).read_bytes()
     for path in sorted((ROOT / 'web/dist').rglob('*')):

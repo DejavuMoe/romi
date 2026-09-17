@@ -1,70 +1,52 @@
 # romi
 
-自托管服务器探针，基于 monitor-probe 的 MIT 源码构建。
-已完成开发环境和第一轮本地安全改造，可构建带校验清单的本地发行快照。
-GitHub Actions 测试流程已配置；签名和自动安装尚未接入。当前安全边界见 [安全基线](docs/security-baseline.md)。
+轻量、自托管的服务器监控工具。通过 Linux Agent 采集主机指标，由 Rust 服务端统一存储、展示和管理。
+
+- 实时查看 CPU、内存、磁盘、网络流量与在线状态。
+- 配置 TCP 延迟探测、流量统计和通知。
+- 管理后台与公开状态页分别开发，构建后嵌入服务端二进制。
+- 使用 SQLite 保存数据，无需额外数据库服务。
+- 节点默认私有，公开状态页需要显式开启；节点令牌仅在创建和换发时展示。
+
+## 项目结构
 
 ```text
-server/   Rust Hub、SQLite、API、WebSocket、嵌入式静态页面
-admin/    React 管理后台，访问 /admin/
-agent/    Linux 指标采集与网络探测 Agent
-web/      React 公开状态页，访问 /
-scripts/  本地集成验证
-docs/     上游来源、初始化验收与后续开发边界
+server/   Rust 服务端、API、WebSocket 和 SQLite 存储
+admin/    React 管理后台
+agent/    Linux 采集与探测 Agent
+web/      React 公开状态页
+scripts/  打包、校验和集成测试
+docs/     开发、发行和安全说明
 ```
 
-来源：[monitor](https://github.com/monitor-probe/monitor)、
-[agent](https://github.com/monitor-probe/agent)、
-[默认主题](https://github.com/monitor-probe/monitor-theme-default)。
-精确提交与许可摘要见 [upstream.lock.json](upstream.lock.json)，导入映射见 [docs/upstream.md](docs/upstream.md)。
+仓库：[DejavuMoe/romi](https://github.com/DejavuMoe/romi)，默认分支为 `master`。
 
-## 仓库与持续集成
+## 开发环境
 
-主仓库：[DejavuMoe/romi](https://github.com/DejavuMoe/romi)，默认分支 `master`。
-SSH 地址：`git@github.com:DejavuMoe/romi.git`。
+使用 [mise](https://mise.jdx.dev/) 管理开发工具，前端使用 pnpm workspace。
+`mise.toml` 固定 Node.js **24.21.0**、pnpm **12.4.2** 和 Python **3.14.7**；
+Rust **1.98.0** 及 rustfmt、Clippy 由 `rust-toolchain.toml` 定义，mise 自动读取。
 
-[GitHub Actions CI](.github/workflows/ci.yml) 在推送 `master`、向 `master` 发起或更新 PR，
-以及手动触发时运行。流程使用 Ubuntu 24.04、项目固定的 Rust/Node.js 和 npm 11.19.0，执行：
-
-1. `make setup`：安装锁定依赖。
-2. `make check`：前端构建/lint/测试、Rust fmt/clippy/测试和打包拒绝检查。
-3. `make package`：构建 release 二进制及快照包，校验归档摘要。
-4. 解压本次归档，以 `scripts/smoke.py --bin-dir` 验证包内二进制的实际运行。
-
-工作流只授予 `contents: read`，官方 Actions 固定完整提交 SHA，不发布 Release 或镜像。
-本地检查成功不代表远程 CI 已通过；远程执行结果以 [Actions 页面](https://github.com/DejavuMoe/romi/actions) 为准。
-
-## 工具链与初始化
-
-Linux，Rust **1.98.0**（`rust-toolchain.toml`）、Node.js **24.21.0**（`.node-version`）、
-npm **11.19.0**、GNU Make、Python 3、C 编译器/链接器。SQLite 使用 Rust 依赖内置源码。
-本轮保留组件原始锁文件；所有 Cargo 命令使用 `--locked`，前端用 `npm ci`。
+还需要 Git、GNU Make、C 编译器和链接器。开发与测试环境为 Linux。
 
 ```sh
-make setup
-make build
-make check
-make smoke
+git clone git@github.com:DejavuMoe/romi.git
+cd romi
+mise trust
+mise install node pnpm python rust
+mise exec -- make setup
+mise exec -- make build
 ```
 
-`make setup` 需要访问 npm/crates.io；首次使用精确 Rust 工具链需要 rustup 下载。
-`make build` 从本地 `admin/` 和 `web/` 构建资源，再编译服务端与 Agent。
-不会下载上游主题或上游 Agent 成品。修改前端后重新 `make build` 才会更新服务端内嵌资源。
+已在 shell 中启用 mise 的情况下，可以直接使用下文的 `make` 和 `pnpm` 命令；
+未启用时，在命令前加上 `mise exec --`。
 
-```sh
-make release
-python3 scripts/smoke.py --release
-make package
-```
+前端依赖统一记录在根目录的 `pnpm-lock.yaml`，安装时使用 `--frozen-lockfile`。
+Rust 保留 `server/Cargo.lock` 和 `agent/Cargo.lock`，构建时使用 `--locked`。
 
-发布模式的本机二进制在 `target/release/monitor-hub` 和 `target/release/monitor-agent`。
-`make package` 生成带源码/工具链/产物清单的 `dist/romi-*.tar.gz` 与 `.sha256`。
-构建记录同时绑定生成后的前端资源，拒绝打包期间替换的负载。校验和运行见 [本地发行](docs/local-release.md)。
-当前只保证本机 Linux 构建，未建立跨架构 musl、镜像、签名或在线发行流程。
+## 本地开发
 
-## 开始开发
-
-在项目根目录的三个终端分别运行：
+完成首次构建后，在三个终端分别启动服务：
 
 ```sh
 make dev-server
@@ -72,46 +54,80 @@ make dev-admin
 make dev-web
 ```
 
-- 服务端：http://127.0.0.1:9911；嵌入式后台：http://127.0.0.1:9911/admin/
-- 后台热更新：http://127.0.0.1:5173/admin/
-- 公开页热更新：http://127.0.0.1:5174/
-- 两个 Vite 开发服务将 `/api`（含 WebSocket）代理到 9911，均只绑定回环地址。
-- 跨应用页面由 9911 的已构建资源提供：5174 的 `/admin/` 走 Hub，5173 的非 `/admin/` 路径走 Hub。
-  每个端口只对自身应用提供 HMR；修改另一应用后需要重新 `make build`，或打开它自己的开发端口。
-- 首次启动的应急管理员密码只在服务端终端显示。数据库与主题目录放在被 Git 忽略的 `.local/`。
-- `Ctrl+C` 停止对应进程，没有安装 systemd/OpenRC 服务或修改系统代理。
+| 入口 | 地址 |
+| --- | --- |
+| 服务端 | http://127.0.0.1:9911 |
+| 内嵌管理后台 | http://127.0.0.1:9911/admin/ |
+| 管理后台热更新 | http://127.0.0.1:5173/admin/ |
+| 公开页热更新 | http://127.0.0.1:5174/ |
 
-上游的节点创建/注册要求 HTTPS 域名入口，纯 localhost HTTP 下这些按钮会被拒绝。
-正式开发这些流程时需要本地可信 HTTPS 反向代理，保留 Host 并正确设置 X-Forwarded-Proto；
-不要公开暴露可伪造代理头的后端。`make smoke` 仅在临时回环实例上模拟代理请求以验证 API，
-自动创建临时凭证和私有节点，验证摘要存储、换发和重连；国家查询默认关闭，结束后清理进程与数据。
+首次启动时，管理员应急密码显示在服务端终端。数据库和本地主题目录位于 `.local/`，不会提交到 Git。
 
-运行自己的 Agent（服务器中已有节点时）：
+两个前端开发服务器将 API 和 WebSocket 请求代理到服务端。跨应用导航使用服务端已构建的页面；
+需要另一应用的热更新时，打开它对应的开发端口。修改前端后，重新运行 `make build` 更新内嵌资源。
+
+也可以单独运行前端任务：
 
 ```sh
-read -rsp 'Node token: ' MONITOR_TOKEN; echo
-export MONITOR_TOKEN
-MONITOR_SERVER=http://127.0.0.1:9911 ./target/debug/monitor-agent
-unset MONITOR_TOKEN
+pnpm --filter @romi/admin build
+pnpm --filter @romi/web test
 ```
 
-`/install.sh` 与 `/agent/{arch}` 当前明确返回 **503**。后台现在给出本地二进制运行命令，
-创建与换发的令牌仅在当次对话框显示，关闭后无法读回；Node API 和 WebSocket 不返回令牌或摘要。
-独立可信发行链路完成前请从源码构建，不使用 `docs/upstream/` 中的历史安装脚本。
+节点创建和批量注册要求 HTTPS 域名入口；普通 localhost HTTP 下相关操作会禁用。
+测试这些流程时，需要配置可信的 HTTPS 反向代理并正确传递 Host 和 X-Forwarded-Proto。
+后端保持回环监听，避免被外部请求直接访问。
 
-## 下一阶段
+## 检查与构建
 
-1. 完成首次签名提交/推送与 GitHub CI 实际运行，再接入正式发行版本、独立签名与安装验证。
-2. 补齐部署服务用户与 systemd 规范、注册窗口凭证策略、全量依赖许可/安全审计。
-3. 增加兼容性与迁移/备份回归，再开始功能定制及有测量依据的性能优化。
+| 命令 | 用途 |
+| --- | --- |
+| `make setup` | 安装锁定的前端与 Rust 依赖 |
+| `make check` | 前端构建、lint、测试，Rust fmt、Clippy、测试及打包拒绝检查 |
+| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发和主题限制 |
+| `make release` | 编译本机 release 二进制并记录构建输入 |
+| `make package` | 生成带清单与 SHA-256 校验文件的本地快照包 |
 
-节点令牌现在只存 SHA-256 摘要；新节点默认私有，公开状态页需显式开启。
-国家查询默认关闭，开启后会向 ipinfo.io 发送节点连接 IP。
-默认只服务本仓内置主题；仅在明确接受同源脚本信任风险时使用 `--allow-custom-themes`。
-原生服务端默认监听 `127.0.0.1:28080`，容器或远程绑定需显式 `--listen`。
-这不是完整安全审计，也不代表可以直接对公网部署。
-当前 UI、Cookie、数据库字段、环境变量和二进制内部名称尚未统一品牌化。
+集成测试使用临时回环实例和临时数据，结束后自动清理，不安装系统服务。
 
-## 许可
+GitHub Actions 与本地使用同一份 mise 配置，在推送 `master`、面向 `master` 的 PR 和手动触发时运行。
+CI 除了执行检查，还会校验并解压发行包，测试包中的实际二进制。
+运行记录见 [GitHub Actions](https://github.com/DejavuMoe/romi/actions)。
 
-MIT。原作者版权保留，见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+## 运行与发行
+
+服务端与 Agent 二进制分别位于：
+
+```text
+target/release/monitor-hub
+target/release/monitor-agent
+```
+
+服务端默认监听 `127.0.0.1:28080`。更换监听地址需显式传入 `--listen`。
+Agent 使用后台创建或换发时给出的本地运行命令；关闭凭证窗口后，令牌不能再次读回。
+
+`make package` 的输出位于 `dist/`。快照包记录源码、工具链、二进制和前端资源摘要，
+当前支持构建机对应的 Linux 架构与 ABI，尚未提供跨架构静态包、镜像和自动安装服务。
+在线安装入口暂未启用，发行快照也尚未签名。
+
+校验和运行步骤见 [本地发行说明](docs/local-release.md)。
+
+## 安全与数据
+
+- 节点令牌以 SHA-256 摘要存储，管理端列表和实时数据不返回令牌或摘要。
+- 新节点默认私有，公开页需在设置中开启。
+- 国家查询默认关闭；开启后会将节点连接 IP 发送给 ipinfo.io。
+- 默认只使用内嵌主题。`--allow-custom-themes` 会允许外部主题代码与后台同源运行，只应加载可信代码。
+- 升级前备份数据库。数据库迁移不可直接降级，回退程序时需要恢复对应版本的备份。
+
+当前实现与已验证范围见 [安全基线](docs/security-baseline.md)。生产部署前仍需完成服务权限、
+TLS 反向代理和备份恢复验证。
+
+## 许可证与致谢
+
+romi 使用 [MIT 许可证](LICENSE)。项目基于 stqfdyr 的
+[monitor](https://github.com/monitor-probe/monitor)、
+[agent](https://github.com/monitor-probe/agent) 和
+[monitor-theme-default](https://github.com/monitor-probe/monitor-theme-default)，保留原作者版权和许可证。
+
+第三方说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
+源码来源与固定提交记录见 [upstream.lock.json](upstream.lock.json)。
