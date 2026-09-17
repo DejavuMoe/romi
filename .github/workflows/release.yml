@@ -89,6 +89,15 @@ jobs:
           test ! -e "$unpack/bin/romi-bench"
           test ! -e "$unpack/bin/monitor-hub"
           test ! -e "$unpack/bin/monitor-agent"
+          # The Hub archive must carry the installer and both binaries; the
+          # Agent archive must carry its installer and unit template.
+          test -x "$unpack/deploy/hub/install.sh"
+          test -r "$unpack/deploy/hub/romi-hub.service.in"
+          test -x "$unpack/deploy/agent/install.sh"
+          test -r "$unpack/deploy/agent/romi-agent.service.in"
+          sh -n "$unpack/deploy/hub/install.sh"
+          sh -n "$unpack/deploy/agent/install.sh"
+          test -x "$unpack/bin/romi-agent"
           version=$(cat VERSION)
           test "$("$unpack/bin/romi-hub" --version)" = "romi-hub $version"
           test "$("$unpack/bin/romi-agent" --version)" = "romi-agent $version"
@@ -102,8 +111,30 @@ jobs:
             echo 'romi-hub unexpectedly links a system DuckDB library' >&2
             exit 1
           fi
+          # The supported runtime baseline is measured from the actual release
+          # binaries. Ubuntu 24.04 links Hub at GLIBC_2.38 and Agent at
+          # GLIBC_2.34; refuse a silent raise through a runner/toolchain change.
+          command -v readelf >/dev/null || { echo 'readelf is required' >&2; exit 1; }
+          max_glibc() {
+            readelf --version-info "$1" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -n 1
+          }
+          for expected_bin in 'romi-hub:GLIBC_2.38' 'romi-agent:GLIBC_2.34'; do
+            binary=${expected_bin%%:*}
+            expected=${expected_bin##*:}
+            actual=$(max_glibc "$unpack/bin/$binary")
+            [ -n "$actual" ] || { echo "no glibc symbols found in $binary" >&2; exit 1; }
+            newer=$(printf '%s\n%s\n' "$actual" "$expected" | sort -V | tail -n 1)
+            if [ "$newer" != "$expected" ]; then
+              echo "$binary requires $actual, above the supported baseline $expected" >&2
+              exit 1
+            fi
+            echo "$binary runtime baseline: $actual"
+          done
           # The released binaries, not the build directory, run the existing suite.
           python3 scripts/smoke.py --bin-dir "$unpack/bin"
+
+      - name: Run installer and root-prefix tests
+        run: python3 scripts/test_installers.py
 
       - name: Inspect dependency feature graphs
         run: |

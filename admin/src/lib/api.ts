@@ -274,14 +274,20 @@ export function useNodes() {
 /** POSIX shell quoting for user-configured URLs and one-time credentials. */
 export const shellQuote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
 
-export function agentCommand(site: string, token: string, seconds: number) {
+export function agentCommand(site: string, seconds: number) {
   site = provisioningSite(site)
   if (!site) return ""
-  return `ROMI_TOKEN=${shellQuote(token)} ./romi-agent --server ${shellQuote(site)} --interval ${Math.min(3600, Math.max(1, Math.round(seconds) || 1))}`
+  const interval = Math.min(3600, Math.max(1, Math.round(seconds) || 1))
+  // The permanent token is deliberately absent here. The downloaded installer
+  // prompts for it on the node, so it stays out of shell history and argv.
+  // mktemp avoids a predictable file name in a shared working directory.
+  return `tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT && curl -fsSL ${shellQuote(site + "/install.sh")} -o "$tmp" && sudo sh "$tmp" --server ${shellQuote(site)} --interval ${interval}`
 }
 
 export function registrationCommand(site: string, key: string) {
   site = provisioningSite(site)
   if (!site) return ""
-  return `romi_token=$(curl -fsS --request POST ${shellQuote(site + "/api/agent/register")} --header ${shellQuote("Authorization: Bearer " + key)} --data-binary "$(hostname)") && ROMI_TOKEN="$romi_token" ./romi-agent --server ${shellQuote(site)}; unset romi_token`
+  // The registration key is short-lived and exchanged once; batch automation
+  // may place it in the command, unlike the permanent node token.
+  return `tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT && curl -fsSL ${shellQuote(site + "/install.sh")} -o "$tmp" && sudo sh "$tmp" --server ${shellQuote(site)} --register-key ${shellQuote(key)}`
 }

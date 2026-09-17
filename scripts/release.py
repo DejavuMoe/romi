@@ -178,24 +178,31 @@ def component_sources(component: str):
         ("THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md", 0o644),
         ("VERSION", "VERSION", 0o644),
         ("upstream.lock.json", "upstream.lock.json", 0o644),
+        ("docs/deployment.md", "docs/deployment.md", 0o644),
         ("docs/release.md", "docs/release.md", 0o644),
     )
     if component == "hub":
         return (
-            (f"bin/{binary_filename('hub')}", None, 0o755),
+            ("bin/romi-hub", "@bin/romi-hub", 0o755),
+            # The Hub stages this exact binary for local Agent distribution.
+            ("bin/romi-agent", "@bin/romi-agent", 0o755),
             (README, "README.md", 0o644),
             *common,
             ("server/LICENSE", "server/LICENSE", 0o644),
             ("admin/LICENSE", "admin/LICENSE", 0o644),
             ("web/LICENSE", "web/LICENSE", 0o644),
             ("docs/storage.md", "docs/storage.md", 0o644),
+            ("deploy/hub/install.sh", "deploy/hub/install.sh", 0o755),
+            ("deploy/hub/romi-hub.service.in", "deploy/hub/romi-hub.service.in", 0o644),
         )
     if component == "agent":
         return (
-            (f"bin/{binary_filename('agent')}", None, 0o755),
+            ("bin/romi-agent", "@bin/romi-agent", 0o755),
             (README, "agent/README.md", 0o644),
             *common,
             ("agent/LICENSE", "agent/LICENSE", 0o644),
+            ("deploy/agent/install.sh", "deploy/agent/install.sh", 0o755),
+            ("deploy/agent/romi-agent.service.in", "deploy/agent/romi-agent.service.in", 0o644),
         )
     raise ReleaseError(f"unknown component: {component!r}")
 
@@ -244,8 +251,8 @@ def archive_bytes(payload: dict) -> bytes:
 def build_component_archive(identity: Identity, component: str, binary_dir: Path, root: Path, engine: str):
     payload = {}
     for member, source, mode in component_sources(component):
-        if source is None:
-            path = binary_dir / binary_filename(component)
+        if source.startswith("@bin/"):
+            path = binary_dir / source[len("@bin/"):]
             try:
                 payload[member] = (path.read_bytes(), mode)
             except OSError as error:
@@ -419,11 +426,15 @@ def verify_archive(path: Path, identity: Identity, component: str, engine: str) 
     if not isinstance(meta, dict):
         raise ReleaseError(f"{path.name}: release.json must contain an object")
     validate_component_metadata(meta, identity, component, engine)
-    binary = f"bin/{binary_filename(component)}"
-    if members[binary]["mode"] & 0o111 == 0:
-        raise ReleaseError(f"{path.name}: {binary} is not marked executable")
-    if not members[binary]["data"]:
-        raise ReleaseError(f"{path.name}: {binary} is empty")
+    for member, _source, expected_mode in component_sources(component):
+        if expected_mode & 0o111 and members[member]["mode"] & 0o111 == 0:
+            raise ReleaseError(f"{path.name}: {member} is not marked executable")
+    for member in sorted(name for name in expected if name.endswith("/install.sh")):
+        if not members[member]["data"].startswith(b"#!/bin/sh"):
+            raise ReleaseError(f"{path.name}: {member} is not a POSIX shell installer")
+    for binary in sorted(name for name in expected if name.startswith("bin/")):
+        if not members[binary]["data"]:
+            raise ReleaseError(f"{path.name}: {binary} is empty")
     return meta
 
 
@@ -662,6 +673,7 @@ def fixture_release_inputs(root: Path) -> Path:
     (root / "upstream.lock.json").write_text("{}\n", encoding="utf-8")
     (root / "README.md").write_text("romi fixture\n", encoding="utf-8")
     (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "deployment.md").write_text("deployment fixture\n", encoding="utf-8")
     (root / "docs" / "release.md").write_text("release fixture\n", encoding="utf-8")
     (root / "docs" / "storage.md").write_text("storage fixture\n", encoding="utf-8")
     for relative in ("server/LICENSE", "admin/LICENSE", "web/LICENSE", "agent/LICENSE"):
@@ -672,6 +684,15 @@ def fixture_release_inputs(root: Path) -> Path:
     schema = root / "server" / "src" / "db" / "schema.rs"
     schema.parent.mkdir(parents=True, exist_ok=True)
     schema.write_text('pub const ENGINE_VERSION: &str = "v1.5.5";\n', encoding="utf-8")
+    for relative in (
+        "deploy/hub/install.sh",
+        "deploy/hub/romi-hub.service.in",
+        "deploy/agent/install.sh",
+        "deploy/agent/romi-agent.service.in",
+    ):
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#!/bin/sh\n", encoding="utf-8")
     binary_dir = root / "target" / "release"
     binary_dir.mkdir(parents=True)
     for name in ("romi-hub", "romi-agent"):
@@ -850,7 +871,9 @@ def run_self_checks() -> int:
             archive = root / "bench.tar.gz"
             payload = {}
             for member, source, _ in component_sources("hub"):
-                payload[member] = (b"binary\n" if source is None else (root / source).read_bytes())
+                payload[member] = (
+                    b"binary\n" if source.startswith("@bin/") else (root / source).read_bytes()
+                )
             payload["release.json"] = encoded(component_metadata(identity, "hub", engine))
             payload["bin/romi-bench"] = b"excluded\n"
             raw = io.BytesIO()

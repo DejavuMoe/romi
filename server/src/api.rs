@@ -526,7 +526,100 @@ pub async fn me(State(app): State<Shared>, headers: HeaderMap) -> Json<Value> {
         // default, in which case the browser's address is the only one available
         // and the panel falls back to its own origin.
         "site": app.site,
+        // Public, non-secret distribution identity. The panel uses this to
+        // avoid offering an install command while the Hub has no validated
+        // Agent artifact to serve.
+        "distribution": app.distribution.as_ref().map(|d| json!({
+            "version": d.version,
+            "architecture": d.architecture,
+            "target": d.target,
+        })),
     }))
+}
+
+/// A cheap liveness/readiness result for the installer and reverse proxy.
+/// It performs a single trivial query through the reader pool and confirms
+/// the writer queue is still accepting; it never scans telemetry, never reads
+/// a setting, and carries no credential or build information.
+pub async fn healthz(State(app): State<Shared>) -> Response {
+    let body =
+        if app.db.health().is_ok() { json!({"status": "ok"}) } else { json!({"status": "unavailable"}) };
+    let status = if body["status"] == "ok" { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+    let mut response = ([(header::CACHE_CONTROL, "no-store")], Json(body)).into_response();
+    *response.status_mut() = status;
+    response
+}
+
+/// Public metadata for the configured Agent distribution.
+pub async fn agent_distribution(State(app): State<Shared>) -> Response {
+    let Some(distribution) = &app.distribution else {
+        return crate::distribution_unavailable();
+    };
+    (
+        [
+            (header::CACHE_CONTROL, "no-store".to_owned()),
+            (header::CONTENT_TYPE, "application/json".to_owned()),
+        ],
+        Json(distribution.metadata()),
+    )
+        .into_response()
+}
+
+/// The romi Agent installer embedded in this Hub build. It is served only when
+/// a local distribution has passed startup validation; it contains no mutable
+/// URL and fetches the exact version advertised by this same Hub.
+pub async fn agent_install_script(State(app): State<Shared>) -> Response {
+    if app.distribution.is_none() {
+        return crate::distribution_unavailable();
+    }
+    (
+        [
+            (header::CACHE_CONTROL, "no-store".to_owned()),
+            (header::CONTENT_TYPE, "text/x-shellscript; charset=utf-8".to_owned()),
+            (header::CONTENT_DISPOSITION, "inline; filename=\"install.sh\"".to_owned()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
+        ],
+        crate::distribution::INSTALL_SCRIPT,
+    )
+        .into_response()
+}
+
+/// The immutable versioned Agent binary URL. The bytes were validated and
+/// loaded at startup, so this route never performs a file or network lookup.
+pub async fn agent_binary(
+    State(app): State<Shared>,
+    Path((version, arch)): Path<(String, String)>,
+) -> Response {
+    let Some(distribution) = &app.distribution else {
+        return crate::distribution_unavailable();
+    };
+    if version != distribution.version || arch != distribution.architecture {
+        return (StatusCode::NOT_FOUND, "no such romi Agent artifact").into_response();
+    }
+    let bytes = distribution.binary();
+    let length = bytes.len().to_string();
+    (
+        [
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable".to_owned()),
+            (header::CONTENT_TYPE, "application/octet-stream".to_owned()),
+            (header::CONTENT_LENGTH, length),
+            (header::ETAG, format!("\"{}\"", distribution.sha256)),
+            (header::HeaderName::from_static("x-romi-agent-version"), distribution.version.clone()),
+            (header::HeaderName::from_static("x-romi-agent-sha256"), distribution.sha256.clone()),
+        ],
+        bytes,
+    )
+        .into_response()
+}
+
+/// The pre-release architecture-only alias is deliberately not served. A
+/// missing distribution still answers 503 so the disabled state is uniform;
+/// with a distribution configured callers are told to use the versioned URL.
+pub async fn agent_binary_alias(State(app): State<Shared>, Path(_arch): Path<String>) -> Response {
+    if app.distribution.is_none() {
+        return crate::distribution_unavailable();
+    }
+    (StatusCode::NOT_FOUND, "use the versioned Agent URL /agent/vX.Y.Z/x86_64").into_response()
 }
 
 /// Runs one storage call on a blocking thread.
@@ -601,8 +694,8 @@ const REGISTER_LIMIT: i64 = 100;
 /// No session stands behind this route: the caller is an unauthenticated
 /// provisioning script on a machine that has never contacted the hub. A key
 /// issued by the panel, valid only within [`REGISTER_WINDOW`], serves in place of
-/// a session. The active romi distribution paths remain disabled; this endpoint
-/// exists for the native provisioning phase (see `docs/release.md`).
+/// a session. Distribution routes are enabled only when the Hub was started
+/// with a validated local Agent distribution (see `docs/deployment.md`).
 ///
 /// One request costs two setting reads, a `COUNT` and an `INSERT`. It makes no
 /// outbound request, and the router's 64 KiB body limit bounds the name.
@@ -610,8 +703,8 @@ pub async fn agent_register(
     State(app): State<Shared>,
     ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
     headers: HeaderMap,
-    // Preserve the upstream plain-text registration protocol for shell clients.
-    // romi distribution routes remain disabled until release artifacts exist.
+    // Preserve the plain-text registration protocol for shell clients. The
+    // Agent installer exchanges this one-time key for a permanent token.
     name: String,
 ) -> Response {
     if !provisioning_allowed(&app, &headers) {
@@ -1553,7 +1646,13 @@ pub async fn save_settings(
             })
             .await;
             match changed.and_then(|()| issue_session(&app, &headers)) {
-                Ok(cookie) => reissued = cookie,
+                Ok(cookie) => {
+                    // The operator has chosen a password; the one-time
+                    // bootstrap file has served its purpose and must not
+                    // remain on disk.
+                    app.discard_bootstrap_credential();
+                    reissued = cookie;
+                }
                 Err(e) => return fail(e),
             }
             continue;
@@ -2718,6 +2817,107 @@ mod tests {
             "a fresh hub's own settings must survive a round trip"
         );
         assert_eq!(app.db.retention_days(), 7, "and the stored window is the one that was shown");
+    }
+
+    #[tokio::test]
+    async fn healthz_reports_closed_storage_as_unavailable() {
+        let app = std::sync::Arc::new(app());
+        assert_eq!(healthz(State(app.clone())).await.status(), StatusCode::OK);
+        app.db.close().unwrap();
+        let response = healthz(State(app.clone())).await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn distribution_routes_are_disabled_until_validated_and_then_versioned() {
+        let disabled = std::sync::Arc::new(app());
+        assert_eq!(
+            agent_distribution(State(disabled.clone())).await.status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            agent_install_script(State(disabled.clone())).await.status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            agent_binary_alias(State(disabled.clone()), Path("x86_64".into())).await.status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            agent_binary(State(disabled), Path(("0.1.0".into(), "x86_64".into()))).await.status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+
+        let mut configured = app();
+        configured.distribution =
+            Some(crate::distribution::Distribution::test_fixture("0.1.0", b"agent-bytes"));
+        let configured = std::sync::Arc::new(configured);
+
+        let metadata = agent_distribution(State(configured.clone())).await;
+        assert_eq!(metadata.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(metadata.into_body(), usize::MAX).await.unwrap();
+        let value: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(value["version"], "0.1.0");
+        assert_eq!(value["download"], "/agent/v0.1.0/x86_64");
+        assert!(value.get("path").is_none(), "filesystem paths must never be exposed");
+
+        let script = agent_install_script(State(configured.clone())).await;
+        assert_eq!(script.status(), StatusCode::OK);
+        let script = axum::body::to_bytes(script.into_body(), usize::MAX).await.unwrap();
+        let script = std::str::from_utf8(&script).unwrap();
+        assert!(script.contains("romi-agent"));
+        assert!(!script.contains("api.github.com"));
+        assert!(!script.contains("/releases/download/"));
+
+        let binary = agent_binary(State(configured.clone()), Path(("0.1.0".into(), "x86_64".into()))).await;
+        assert_eq!(binary.status(), StatusCode::OK);
+        assert_eq!(
+            axum::body::to_bytes(binary.into_body(), usize::MAX).await.unwrap(),
+            b"agent-bytes".as_slice()
+        );
+        assert_eq!(
+            agent_binary(State(configured.clone()), Path(("0.1.1".into(), "x86_64".into()))).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            agent_binary(State(configured.clone()), Path(("0.1.0".into(), "aarch64".into()))).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            agent_binary_alias(State(configured), Path("x86_64".into())).await.status(),
+            StatusCode::NOT_FOUND,
+            "the mutable architecture-only alias is never served"
+        );
+    }
+
+    #[tokio::test]
+    async fn changing_the_password_removes_the_bootstrap_credential_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = std::env::temp_dir().join(format!(
+            "romi-bootstrap-remove-{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("bootstrap-password");
+        std::fs::write(&path, "one-time-secret\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        let mut app = app();
+        app.bootstrap_password_file = Some(path.clone());
+        app.db.set("admin_password_hash", "old-hash").unwrap();
+        let app = std::sync::Arc::new(app);
+        let response = save_settings(
+            Admin,
+            State(app.clone()),
+            HeaderMap::new(),
+            Json(json!({"admin_password": "a-long-enough-one"})),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!path.exists(), "the one-time bootstrap credential must be removed");
+        assert!(app.db.get("admin_password_hash").unwrap().starts_with("$argon2"));
+        let _ = std::fs::remove_dir_all(&directory);
     }
 
     #[tokio::test]

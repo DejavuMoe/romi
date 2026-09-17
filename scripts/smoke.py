@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local process smoke test; temporary credentials/data, no system installation."""
 import argparse
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -41,6 +42,9 @@ def main():
             urllib.request.ProxyHandler({}),
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
         )
+        # Distribution/health checks need no cookies and must not consult a
+        # developer proxy environment either.
+        direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
         def request(path, data=None, headers=None, method=None):
             req = urllib.request.Request(base + path, headers=headers or {},
@@ -87,14 +91,19 @@ def main():
                         with request(path) as response:
                             assert response.status == 200
                             assert 'text/html' not in response.headers.get('Content-Type', '')
-                for route in ['/install.sh', '/agent/x86_64', '/agent/aarch64']:
+                for route in ['/install.sh', '/agent/x86_64', '/agent/aarch64',
+                              f'/agent/v{version}/x86_64', '/api/agent/distribution']:
                     try:
                         request(route)
                         raise AssertionError(f'{route}: distribution must be disabled')
                     except urllib.error.HTTPError as error:
                         assert error.code == 503
+                with request('/healthz') as response:
+                    assert response.status == 200
+                    assert json.load(response) == {'status': 'ok'}
                 with request('/api/me') as response:
-                    assert json.load(response)['public_page'] is False
+                    me = json.load(response)
+                assert me['public_page'] is False
                 try:
                     request('/api/nodes')
                     raise AssertionError('anonymous node access should be closed')
@@ -165,9 +174,68 @@ def main():
                         raise AssertionError('custom themes should be refused')
                     except urllib.error.HTTPError as error:
                         assert error.code == 403
+
+                # With a validated distribution configured, the Hub serves the
+                # installer, metadata, and exact versioned binary bytes from
+                # memory. It never fetches GitHub on request.
+                agent_bytes = (binaries / 'romi-agent').read_bytes()
+                dist_dir = work / 'distribution' / version
+                dist_dir.mkdir(parents=True)
+                (dist_dir / 'romi-agent').write_bytes(agent_bytes)
+                dist_sha = hashlib.sha256(agent_bytes).hexdigest()
+                (dist_dir / 'distribution.json').write_text(json.dumps({
+                    'format': 1, 'project': 'romi', 'kind': 'agent-distribution',
+                    'version': version, 'target': 'x86_64-unknown-linux-gnu',
+                    'architecture': 'x86_64', 'filename': 'romi-agent',
+                    'sha256': dist_sha, 'size': len(agent_bytes),
+                }))
+                with socket.socket() as sock:
+                    sock.bind(('127.0.0.1', 0))
+                    dist_port = sock.getsockname()[1]
+                dist_base = f'http://127.0.0.1:{dist_port}'
+                dist_log = (work / 'distribution.log').open('w+')
+                processes.append(subprocess.Popen([
+                    str(binaries / 'romi-hub'), '--listen', f'127.0.0.1:{dist_port}',
+                    '--db', str(work / 'distribution.db'), '--distribution-dir', str(dist_dir),
+                ], cwd=work, stdout=dist_log, stderr=dist_log))
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    assert processes[-1].poll() is None, 'distribution hub exited'
+                    try:
+                        if direct.open(dist_base + '/healthz', timeout=1).status == 200:
+                            break
+                    except (OSError, urllib.error.URLError):
+                        pass
+                    time.sleep(0.2)
+                else:
+                    raise AssertionError('distribution hub did not become healthy')
+                with direct.open(dist_base + '/install.sh', timeout=3) as response:
+                    script = response.read()
+                assert b'romi-agent' in script and b'api.github.com' not in script
+                assert b'/releases/download/' not in script
+                with direct.open(dist_base + '/api/agent/distribution', timeout=3) as response:
+                    metadata = json.load(response)
+                assert metadata['version'] == version and metadata['architecture'] == 'x86_64'
+                assert metadata['sha256'] == dist_sha and metadata['size'] == len(agent_bytes)
+                assert metadata['download'] == f'/agent/v{version}/x86_64'
+                with direct.open(dist_base + metadata['download'], timeout=3) as response:
+                    served = response.read()
+                    assert served == agent_bytes
+                    assert response.headers['Content-Length'] == str(len(agent_bytes))
+                    assert response.headers['X-Romi-Agent-Sha256'] == dist_sha
+                    assert 'immutable' in response.headers['Cache-Control']
+                for route in [f'/agent/v{version}/aarch64', '/agent/v9.9.9/x86_64', '/agent/x86_64']:
+                    try:
+                        direct.open(dist_base + route, timeout=3)
+                        raise AssertionError(f'{route}: unknown or mutable Agent route must fail')
+                    except urllib.error.HTTPError as error:
+                        assert error.code == 404, (route, error.code)
+                dist_log.close()
+                processes[-1].terminate()
+                processes[-1].wait(timeout=5)
                 print('PASS: local frontends/assets, disabled upstream downloads, login, node creation, '
-                      'private defaults, DuckDB storage, single-writer lock, '
-                      'rotation, agent metrics and theme denials; release binary versions verified')
+                      'private defaults, DuckDB storage, single-writer lock, rotation, agent metrics, '
+                      'theme denials, health, and validated versioned Agent distribution; release binary versions verified')
             finally:
                 for process in reversed(processes):
                     if process.poll() is None:

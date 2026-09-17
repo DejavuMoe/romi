@@ -6,11 +6,12 @@
 ## 当前状态
 
 - 当前源码版本为 `0.1.0`（根目录 [`VERSION`](../VERSION)），romi 尚未创建公开发行标签。
-- 在线安装入口仍然关闭：Hub 的 `GET /install.sh` 与 `GET /agent/{arch}` 都返回 503。
-- 现阶段只支持从本仓源码构建并在 Linux x86_64 GNU 环境直接运行。没有 musl 静态包，
-  没有 systemd / OpenRC 安装单元，也没有自动下载或自更新。
+- 支持目标只有 Linux x86_64 GNU + systemd。没有 musl、aarch64、OpenRC 或自动更新。
+- Hub 配置了合法本地分发时，`GET /install.sh` 提供 romi 自带安装器，节点从该 Hub 下载精确
+  版本的 Agent 并校验大小/SHA-256/`--version`；开发启动没有分发时该路由返回 503。
 - 公开 release 工件、校验和与 GitHub provenance 的定义见
-  [docs/release.md](../docs/release.md)；公开流程由 `vX.Y.Z` 标签触发，本阶段不会创建该标签。
+  [docs/release.md](../docs/release.md)；完整安装与升级说明见
+  [docs/deployment.md](../docs/deployment.md)。
 
 ## 构建与检查
 
@@ -39,23 +40,37 @@ cargo build --locked --release --manifest-path agent/Cargo.toml
 产物为 `target/release/romi-agent`。Agent 不链接 DuckDB，也不需要 C++ 工具链，但它是动态
 链接的 GNU/Linux 程序（依赖系统 `libc` 与 `libgcc_s`），不是 musl 静态文件。
 
-## 直接运行
+## 安装
 
-先在 Hub 后台创建节点或换发令牌，然后在能够访问 Hub 的主机上运行：
+在 Hub 后台创建节点后，复制安装命令到目标节点：
 
 ```sh
-target/release/romi-agent --server https://hub.example.com --token '<token>'
+tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT \
+  && curl -fsSL 'https://hub.example.com/install.sh' -o "$tmp" \
+  && sudo sh "$tmp" --server 'https://hub.example.com'
 ```
 
-后台在凭证窗口展示的本地命令与该形式一致，使用 `./romi-agent`。如果系统未安装
-systemd/OpenRC 服务，请自行在终端、tmux、supervisor 等环境中托管进程；romi 当前不提供
-系统安装脚本。
+安装器会安全提示输入一次性显示的节点令牌，将其写入 `/etc/romi/agent.env`（0600），并把
+版本化二进制安装到 `/opt/romi/releases/<version>/romi-agent`。systemd 服务通过
+`EnvironmentFile` 注入 `ROMI_SERVER`、`ROMI_TOKEN` 和 `ROMI_INTERVAL`，`ExecStart` 中不含
+令牌。更新是显式操作：对可信的新 Hub 重新运行安装器即可；不会后台自更新。
+
+## 直接运行
+
+从本仓开发或手工调试时，也可以直接运行二进制：
+
+```sh
+ROMI_TOKEN='<token>' target/release/romi-agent --server https://hub.example.com
+```
+
+这里仅用于开发调试；原生安装不会把令牌放进 `ExecStart` 或安装命令（`--token` CLI 参数仍保留，
+但服务 unit 不使用它）。
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `--server <url>` | 必填 | Hub 基础 URL；也可用环境变量 `ROMI_SERVER` |
 | `--token <token>` | 必填 | 节点令牌；也可用环境变量 `ROMI_TOKEN` |
-| `--interval <secs>` | `1` | 上报间隔，限制在 1–3600 秒 |
+| `--interval <secs>` | `1` | 上报间隔，限制在 1–3600 秒；也可用 `ROMI_INTERVAL` |
 | `--insecure` | 关闭 | 允许向非回环 Hub 使用明文 `ws://`，仅用于确实没有 TLS 的地址 |
 | `--version` | — | 输出 `romi-agent X.Y.Z` 后退出，不读数据库、不联网 |
 | `-h`, `--help` | — | 显示用法 |
@@ -65,7 +80,10 @@ systemd/OpenRC 服务，请自行在终端、tmux、supervisor 等环境中托�
 - 令牌通过 WebSocket `Authorization` 请求头发送，不放查询参数，避免进入反向代理访问日志。
 - 默认拒绝向非回环地址建立明文 `ws://` 连接；`--insecure` 会显式放弃该保护。
 - Agent 不写数据文件、不保存跨重启状态；流量累计由 Hub 负责。
-- 退出或连接失败时按现有重连/退避逻辑运行；进程管理由部署者提供的机制负责。
+- 原生安装中的永久令牌只存在于 root 可读的 `0600` env 文件，由 systemd 注入进程环境；
+  安装命令和 unit 文件都不包含令牌。
+- Agent 不自更新、不执行 Hub 发来的命令；安装与升级由本地管理员显式执行。
+- 退出或连接失败时按现有重连/退避逻辑运行。
 
 ## 上报协议
 

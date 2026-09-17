@@ -62,6 +62,7 @@ check: frontend
 	python3 scripts/version.py check
 	python3 scripts/release.py check
 	python3 scripts/package.py check
+	python3 scripts/test_installers.py
 	pnpm --dir admin run lint
 	pnpm --dir admin test
 	pnpm --dir web run lint

@@ -1,0 +1,35 @@
+[Unit]
+Description=romi Hub
+Documentation=https://github.com/DejavuMoe/romi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=romi
+Group=romi
+UMask=0077
+EnvironmentFile=-@ROMI_HUB_ENV@
+ExecStart=@ROMI_HUB_BIN@ --listen 127.0.0.1:@ROMI_PORT@ --db @ROMI_STATE_DIR@/romi.duckdb --themes @ROMI_STATE_DIR@/themes --db-temp @ROMI_STATE_DIR@/tmp --bootstrap-password-file @ROMI_STATE_DIR@/bootstrap-password --distribution-dir @ROMI_DISTRIBUTION_DIR@ --site ${ROMI_SITE}
+Restart=on-failure
+RestartSec=2s
+
+# The Hub runs unprivileged and has no capability to regain. DuckDB,
+# reqwest/rustls and the embedded HTTP server need no Linux capability.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# Only state is writable; /opt/romi holds root-controlled release files.
+ReadWritePaths=@ROMI_STATE_DIR@
+
+[Install]
+WantedBy=multi-user.target

@@ -28,7 +28,7 @@ pnpm --filter @romi/web test
 
 `make frontend` 会把 `web/dist`、`web/theme.json` 和预览图放到 `server/target/theme`，再随
 Hub 一起编译。公开发行中的 Hub 二进制已经包含这些资源；`GET /install.sh` 与
-`GET /agent/{arch}` 仍返回 503，本项目没有远程主题安装或分发入口。
+未配置 Agent 分发时 `GET /install.sh` 与版本化 `/agent/...` 路由返回 503；本项目没有远程主题安装入口。
 
 ## 主题包
 

@@ -1,0 +1,34 @@
+[Unit]
+Description=romi Agent
+Documentation=https://github.com/DejavuMoe/romi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=romi-agent
+Group=romi-agent
+UMask=0077
+EnvironmentFile=@ROMI_AGENT_ENV@
+ExecStart=@ROMI_AGENT_BIN@
+Restart=always
+RestartSec=5s
+# The Agent needs to read host metrics, not to change the host. It keeps
+# /proc visible (no ProtectProc/ProcSubset) and keeps /home visible read-only
+# so separately mounted filesystems are still measured accurately.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

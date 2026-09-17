@@ -358,6 +358,9 @@ pub(crate) struct Inner {
     /// Set when graceful shutdown starts. New reads and writes are refused
     /// from then on; work already accepted is drained by `close`.
     closed: AtomicBool,
+    /// Cleared when the writer loop exits, so readiness checks cannot report a
+    /// healthy database on top of a dead writer thread.
+    writer_alive: AtomicBool,
     /// Accepted by the writer queue and not yet answered. This is the bounded
     /// uncommitted window (`accepted - completed` while the writer is alive).
     queued: AtomicU64,
@@ -538,6 +541,7 @@ impl Db {
             gate: RwLock::new(()),
             generation: AtomicU64::new(0),
             closed: AtomicBool::new(false),
+            writer_alive: AtomicBool::new(true),
             queued: AtomicU64::new(0),
             accepted: AtomicU64::new(0),
             committed: AtomicU64::new(0),
@@ -1521,6 +1525,23 @@ impl Db {
         self.get("retention_days").and_then(|v| v.parse::<i64>().ok()).unwrap_or(7).clamp(1, 3_650)
     }
 
+    /// A cheap readiness probe: not closed, writer queue present, and a
+    /// one-row query still succeeds through a reader connection.
+    pub fn health(&self) -> Result<()> {
+        self.ensure_open()?;
+        if !self.0.writer_alive.load(Ordering::SeqCst) {
+            anyhow::bail!("database writer thread has stopped");
+        }
+        if self.0.sender.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_none() {
+            anyhow::bail!("database writer is not accepting work");
+        }
+        self.read(|conn| {
+            let one: i64 = conn.query_row("SELECT 1", [], |row| row.get(0))?;
+            anyhow::ensure!(one == 1, "unexpected health query result");
+            Ok(())
+        })
+    }
+
     /// What the panel's data page reads: how much space the file occupies, how
     /// much of that DuckDB reports as reusable, and how far back the history
     /// actually reaches.
@@ -1800,6 +1821,9 @@ fn writer_loop(
     // Drop the connection before announcing completion: a waiter must not be
     // told the writer is done while it still has the database file open.
     drop(conn);
+    if let Some(inner) = inner.upgrade() {
+        inner.writer_alive.store(false, Ordering::SeqCst);
+    }
     let _ = done.send(());
 }
 

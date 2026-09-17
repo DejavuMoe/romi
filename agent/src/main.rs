@@ -42,7 +42,7 @@ fn usage() -> ! {
          Options:\n  \
            --server <url>       Hub base URL, e.g. https://hub.example.com\n  \
            --token <token>      Node token from the hub panel\n  \
-           --interval <secs>    Report interval (default 1)\n  \
+           --interval <secs>    Report interval (default 1, or ROMI_INTERVAL)\n  \
            --insecure           Allow plain ws:// to a remote hub; the token\n  \
                                 travels in the clear. Only for a hub reached\n  \
                                 at ip:port with no TLS in front.\n  \
@@ -54,14 +54,14 @@ fn usage() -> ! {
 }
 
 fn parse_args() -> Result<Args> {
-    let (mut server, mut token, mut interval, mut insecure) = (None, None, 1u64, false);
+    let (mut server, mut token, mut interval, mut insecure) = (None, None, None, false);
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         let mut value = || it.next().unwrap_or_else(|| usage());
         match arg.as_str() {
             "--server" => server = Some(value()),
             "--token" => token = Some(value()),
-            "--interval" => interval = value().parse().unwrap_or_else(|_| usage()),
+            "--interval" => interval = Some(value().parse().unwrap_or_else(|_| usage())),
             "--insecure" => insecure = true,
             "--version" => {
                 println!("{}", version_line());
@@ -73,6 +73,12 @@ fn parse_args() -> Result<Args> {
     }
     let server = server.or_else(|| std::env::var("ROMI_SERVER").ok()).unwrap_or_else(|| usage());
     let token = token.or_else(|| std::env::var("ROMI_TOKEN").ok()).unwrap_or_else(|| usage());
+    // systemd injects the service's one-time configuration as environment
+    // variables, so an installed Agent never carries a token or interval in
+    // its ExecStart argv.
+    let interval = interval
+        .or_else(|| std::env::var("ROMI_INTERVAL").ok().and_then(|v| v.parse::<u64>().ok()))
+        .unwrap_or(1);
     Ok(Args { server, token, interval: interval.clamp(1, 3600), insecure })
 }
 

@@ -15,8 +15,9 @@ server/   Rust 服务端、API、WebSocket 和 DuckDB 存储
 admin/    React 管理后台
 agent/    Linux 采集与探测 Agent
 web/      React 公开状态页
+deploy/   romi 原生 Hub/Agent 安装器与 systemd 模板
 scripts/  开发快照、公开发行、校验和集成测试
-docs/     开发、发行和安全说明
+docs/     开发、发行、部署和安全说明
 ```
 
 仓库：[DejavuMoe/romi](https://github.com/DejavuMoe/romi)，默认分支为 `master`。
@@ -84,8 +85,8 @@ pnpm --filter @romi/web test
 | 命令 | 用途 |
 | --- | --- |
 | `make setup` | 安装锁定的前端与 Rust 依赖 |
-| `make check` | 前端构建、lint、测试，Rust fmt、Clippy、测试，版本一致性检查及发行工具负例检查 |
-| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发、主题限制、DuckDB 单写者约束和禁用分发路由 |
+| `make check` | 前端构建、lint、测试，Rust fmt、Clippy、测试，版本/发行/安装器测试 |
+| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发、健康检查、DuckDB 单写者约束和 Agent 分发路由 |
 | `make bench` | 对 release 二进制跑实时 ingestion / group-commit 基准（见 [docs/bench.md](docs/bench.md)） |
 | `make bench-fixture` | 构建 benchmark-only 大历史 fixture/profiler（不进入发布包） |
 | `make release` | 编译本机 release 二进制并记录构建输入 |
@@ -103,7 +104,14 @@ GitHub Actions 与本地使用同一份 mise 配置。CI 在推送 `master`、�
 ## 运行与发行
 
 本阶段源码版本为 **0.1.0**（根目录 `VERSION`）。romi 尚未创建 `v0.1.0` 标签，也尚未发布任何
-GitHub Release；在线安装入口继续关闭：`GET /install.sh` 与 `GET /agent/{arch}` 都返回 503。
+GitHub Release。
+
+原生部署只支持 Linux x86_64 GNU + systemd：Ubuntu 24.04 构建的发行二进制实测 Hub 需要
+glibc 2.38+、Agent 需要 glibc 2.34+。Hub 安装器从已验证的 release 归档安装
+`/opt/romi/current`，同时把同版本 Agent 放入本地分发；Hub 只在配置了合法
+`--distribution-dir` 时启用 `GET /install.sh`、`GET /api/agent/distribution` 与
+`GET /agent/vX.Y.Z/x86_64`。普通开发启动没有分发，这些路由返回 503。安装、systemd 加固、
+首次管理员凭证、Nginx 反代与升级/备份说明见 [原生部署](docs/deployment.md)。
 
 本地 release 构建产物为：
 
@@ -130,7 +138,8 @@ ROMI_TOKEN='<token>' ./romi-agent --server 'https://hub.example.com' --interval 
 - **公开发行**：由 `vX.Y.Z` 标签触发，绑定一个不可变 Git commit，产出带 release manifest 和
   `SHA256SUMS` 的版本化归档，并在发布前完成解压、运行、冒烟与 GitHub artifact attestation。
   可先运行 `make release-candidate` 构建/验证一个不主张标签的候选目录；公开发行流程本身不手工
-  执行。当前发布、校验和来源证明说明见 [发行与验证](docs/release.md)。
+  执行。当前发布、校验和来源证明说明见 [发行与验证](docs/release.md)，端到端安装流程见
+  [原生部署](docs/deployment.md)。
 
 `make release` 只编译本机 release 二进制；`make release-package TAG=vX.Y.Z` 要求标签已经存在
 且指向 HEAD，只做本地打包与验证，不推送、不创建 Release。

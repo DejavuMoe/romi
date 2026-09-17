@@ -19,7 +19,8 @@
   原有前端依赖版本及 integrity 校验保持一致。Rust 仍保留两份 Cargo 锁文件，共用根 `target/` 编译缓存。
 - 管理端嵌入路径改为 `../admin/dist`；`make frontend` 将 `web/` 的本地构建产物、主题元数据、预览图
   放到 `server/target/theme`。`build.rs` 只检查文件，不下载或构建前端。
-- `/install.sh` 与 `/agent/{arch}` 返回 503，删除上游 latest 二进制转发代码及其专用测试，增加拒绝分发测试。
+- 删除上游 latest 二进制转发代码及其专用测试；romi 只从已安装的本地分发提供版本化
+  `/agent/vX.Y.Z/x86_64`，未配置分发时相关路由返回 503。
 - 原三个 `.github/`、上游安装脚本、Dockerfile 和主题下载脚本归档到 `docs/upstream/`，
   只用于对照，不能作为 romi 的安装或发布入口。romi 自有 `.github/workflows/release.yml` 只在
   推送 `v*` 标签时发布，构建任务与被手动触发的 dry-run 保持只读。

@@ -7,9 +7,13 @@
 
 - 当前源码版本为 `0.1.0`（根目录 [`VERSION`](../VERSION)）；romi 尚未创建公开发行标签。
 - Hub 默认监听 `127.0.0.1:28080`，默认数据库为 `romi.db`。
-- `GET /install.sh` 与 `GET /agent/{arch}` 仍固定返回 503；romi 不提供系统安装脚本、
-  镜像或自动 Agent 分发。原生部署与 Agent provisioning 属于后续阶段。
-- 公开发行工件与 provenance 说明见 [docs/release.md](../docs/release.md)。
+- 原生安装只支持 Linux x86_64 GNU + systemd；Hub 安装器从 release 归档安装
+  `/opt/romi/current`，同时建立本地 Agent 分发。
+- 未配置 `--distribution-dir` 时，`GET /install.sh`、`GET /api/agent/distribution` 与
+  `GET /agent/vX.Y.Z/x86_64` 返回 503；配置合法分发后只提供精确版本和架构的 Agent。
+- `GET /healthz` 是免认证、轻量的健康接口，供安装器和反向代理使用。
+- 公开发行工件与 provenance 说明见 [docs/release.md](../docs/release.md)，部署说明见
+  [docs/deployment.md](../docs/deployment.md)。
 
 ## 构建与运行
 
@@ -40,11 +44,13 @@ GNU C/C++ 运行库（实测依赖见 [发行与验证](../docs/release.md)）�
 | `--listen <addr>` | `127.0.0.1:28080` | 监听地址；默认回环 |
 | `--db <path>` | `romi.db` | DuckDB 数据库文件 |
 | `--themes <dir>` | 数据库旁的 `themes/` | 第三方主题目录 |
-| `--site <url>` | 空 | 反向代理后的外部 HTTPS 域名 |
+| `--site <url>` | 空 | 反向代理后的外部 HTTPS 域名；也可用 `ROMI_SITE` |
 | `--db-memory <size>` | `512MB` | DuckDB 内存上限，不是进程 RSS 上限 |
 | `--db-threads <n>` | 最多 8 | DuckDB worker 线程 |
 | `--db-temp <dir>` | `<db>.tmp` | DuckDB spill 目录 |
 | `--allow-custom-themes` | 关闭 | 信任外部主题 JavaScript 与后台同源运行 |
+| `--distribution-dir <dir>` | 空 | 校验并服务一个本地 romi Agent 分发；空则路由返回 503 |
+| `--bootstrap-password-file <file>` | 空 | 首次启动把管理员凭证以 0600 原子写入该文件，不打印到 stdout |
 | `--version` | — | 输出 `romi-hub X.Y.Z` 后退出，不读数据库、不联网 |
 
 日志级别可用环境变量 `ROMI_LOG` 覆盖（默认 `romi_hub=info,tower_http=warn`）。

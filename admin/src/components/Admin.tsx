@@ -416,8 +416,9 @@ function RegisterDialog({ site, reg, onClose }: {
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            先校验并解压 romi 安装包，在 bin 目录运行以下命令。注册窗口持续一小时，
-            新节点默认私有。命令包含注册密钥，请妥善保管；每台机器会取得自己的令牌。
+            在节点上运行以下命令：脚本从本 Hub 下载与你当前发行版精确匹配的 Agent，
+            校验哈希后安装 systemd 服务。注册窗口持续一小时，新节点默认私有；命令包含
+            短期注册密钥，请妥善保管，每台机器会换取自己的长期令牌。
           </p>
           {command ? (
             <div className="space-y-2">
@@ -462,7 +463,7 @@ function InstallDialog({ node, site, onClose, onRotated }: {
   const [confirmRotate, setConfirmRotate] = useState(false)
 
   const seconds = Math.min(3600, Math.max(1, Math.round(Number(interval) || 1)))
-  const command = token ? agentCommand(site, token, seconds) : ""
+  const command = token ? agentCommand(site, seconds) : ""
 
   async function rotate() {
     setRotating(true)
@@ -484,14 +485,14 @@ function InstallDialog({ node, site, onClose, onRotated }: {
       <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{node.name}</DialogTitle>
-          <DialogDescription>令牌仅本次显示。先校验并解压 romi 安装包，再在 bin 目录运行命令；关闭后无法读回。</DialogDescription>
+          <DialogDescription>令牌仅本次显示。复制安装命令到节点运行；安装器会安全提示输入令牌，不会把令牌写进 shell 历史。关闭后令牌无法读回。</DialogDescription>
         </DialogHeader>
         <div className="space-y-5">
           <Field label="上报间隔（秒）" hint="1–3600，默认 1 秒">
             <Input type="number" min={1} max={3600} value={interval} onChange={(e) => setInterval(e.target.value)} />
           </Field>
           <div className="space-y-2">
-            <Label className="text-sm font-medium">本地运行命令</Label>
+            <Label className="text-sm font-medium">安装命令</Label>
             <pre className="h-28 overflow-auto whitespace-pre-wrap break-all rounded-lg border bg-muted/40 p-3 text-xs leading-relaxed select-all">
               {command || "令牌不支持读回；如需新的令牌，请显式换发。"}
             </pre>
@@ -529,7 +530,7 @@ function InstallDialog({ node, site, onClose, onRotated }: {
   )
 }
 
-function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh: () => void; site: string; canProvision: boolean }) {
+function Nodes({ nodes, refresh, site, canProvision, distributionAvailable }: { nodes: Node[]; refresh: () => void; site: string; canProvision: boolean; distributionAvailable: boolean }) {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Node | null>(null)
   const [billing, setBilling] = useState<Node | null>(null)
@@ -601,6 +602,7 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
   return (
     <div className="space-y-4">
       {!canProvision && <p className="text-sm text-muted-foreground">请通过 HTTPS 域名访问面板后添加或安装节点。</p>}
+      {canProvision && !distributionAvailable && <p className="text-sm text-muted-foreground">Hub 尚未配置经过验证的 Agent 本地分发；请先用原生安装器安装当前 romi 发行版，再复制安装命令。</p>}
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Input
           className="mr-auto w-full sm:w-64"
@@ -611,7 +613,7 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
         />
         {/* An open window is visible from the list itself, so nobody has to
             remember they left one open. */}
-        <Button variant="outline" disabled={!canProvision} onClick={() => setRegistering(true)}>
+        <Button variant="outline" disabled={!canProvision || !distributionAvailable} onClick={() => setRegistering(true)}>
           批量添加{reg.left > 0 && ` · ${Math.ceil(reg.left / 60)} 分`}
         </Button>
         <Button disabled={!canProvision} onClick={() => setCreating(true)}>
@@ -714,7 +716,7 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
                 </TableCell>
                 <TableCell className="text-sm">{n.expires_at || FOREVER}</TableCell>
                 <TableCell className="text-right whitespace-nowrap">
-                  <Button variant="ghost" size="icon" disabled={!canProvision} onClick={() => setInstalling(n)} title="安装 Agent" aria-label="安装 Agent">
+                  <Button variant="ghost" size="icon" disabled={!canProvision || !distributionAvailable} onClick={() => setInstalling(n)} title={distributionAvailable ? "安装 Agent" : "Agent 分发未配置"} aria-label="安装 Agent">
                     <Download />
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => setEditing(n)} title="编辑节点" aria-label="编辑节点">
@@ -1897,6 +1899,7 @@ export function Admin({
   refresh,
   site,
   canProvision,
+  distributionAvailable,
 }: {
   path: string
   go: (to: string) => void
@@ -1904,6 +1907,7 @@ export function Admin({
   refresh: () => void
   site: string
   canProvision: boolean
+  distributionAvailable: boolean
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -1939,7 +1943,7 @@ export function Admin({
         ) : path === "/admin/settings" ? (
           <SettingsTab />
         ) : (
-          <Nodes nodes={nodes} refresh={refresh} site={site} canProvision={canProvision} />
+          <Nodes nodes={nodes} refresh={refresh} site={site} canProvision={canProvision} distributionAvailable={distributionAvailable} />
         )}
       </div>
     </div>

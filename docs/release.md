@@ -1,7 +1,8 @@
 # romi 公开发行与验证
 
 本文是 romi 公开发行的权威说明。它描述的是已提交的发行模型与工作流；在首个 `v0.1.0` 标签被
-显式推送之前，仓库仍没有真实 GitHub Release，`/install.sh` 与 `/agent/{arch}` 也继续返回 503。
+显式推送之前，仓库仍没有真实 GitHub Release。未配置本地 Agent 分发的开发启动仍会让
+`/install.sh` 与版本化 `/agent/...` 路由返回 503；完整安装配置见 [原生部署](deployment.md)。
 
 ## 版本与标签模型
 
@@ -33,7 +34,12 @@ romi 只有一个发布版本源：
 - 不声明 musl、aarch64 Hub、Alpine、macOS 或 Windows 支持。没有实际构建并运行验证的目标不会
   出现在本文或 release manifest 中。
 
-在当前构建环境对已有 release 产物实测 `ldd`（发布工作流在 `ubuntu-24.04` 上会重新打印实际输出）：
+公开发行二进制在 `ubuntu-24.04`（glibc 2.39）上构建并实测：`romi-hub` 的最高 glibc
+符号版本为 `GLIBC_2.38`，`romi-agent` 为 `GLIBC_2.34`；发布工作流会在发布前重新测量并拒绝
+高于该基线的产物。更老的 glibc 不受支持。
+
+在当前开发构建环境对已有 release 产物实测 `ldd`（发布工作流在 `ubuntu-24.04` 上会重新打印
+实际输出）：
 
 - `romi-hub`：`linux-vdso.so.1`、`libstdc++.so.6`、`libgcc_s.so.1`、`libm.so.6`、
   `libc.so.6`、`ld-linux-x86-64.so.2`；**没有** `libduckdb`（引擎编入二进制）。
@@ -54,14 +60,18 @@ SHA256SUMS
 
 归档顶层固定包含二进制、许可证/来源说明、`VERSION`、`release.json` 和最小文档：
 
-- Hub：`bin/romi-hub`、根 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`upstream.lock.json`、
-  `VERSION`、`server/LICENSE`、`admin/LICENSE`、`web/LICENSE`、`README.md`、`docs/release.md`、
-  `docs/storage.md`。
+- Hub：`bin/romi-hub`、`bin/romi-agent`、根 `LICENSE`、`THIRD_PARTY_NOTICES.md`、
+  `upstream.lock.json`、`VERSION`、`server/LICENSE`、`admin/LICENSE`、`web/LICENSE`、
+  `README.md`、`docs/release.md`、`docs/deployment.md`、`docs/storage.md`、
+  `deploy/hub/install.sh`、`deploy/hub/romi-hub.service.in`。
 - Agent：`bin/romi-agent`、根 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`upstream.lock.json`、
-  `agent/LICENSE`、`README.md`、`docs/release.md`、`VERSION`。
+  `VERSION`、`agent/LICENSE`、`README.md`、`docs/release.md`、`docs/deployment.md`、
+  `deploy/agent/install.sh`、`deploy/agent/romi-agent.service.in`。
 - `release.json` 记录组件、版本、标签、commit、目标三元组和（Hub 的）DuckDB 引擎版本。
 
-归档中不允许出现 `romi-bench` 或其他 benchmark-only 产物、开发基准数据、临时路径或私有文件。
+Hub 归档同时携带同一版本的 Agent 二进制，供已验证的 Hub 安装器建立本地 Agent 分发；
+Hub 运行时不访问 GitHub 获取 Agent。归档中不允许出现 `romi-bench` 或其他 benchmark-only
+产物、开发基准数据、临时路径或私有文件。
 `bin/romi-hub`、`bin/romi-agent` 的 `--version` 必须在不读数据库、不联网的情况下分别输出
 `romi-hub X.Y.Z` 和 `romi-agent X.Y.Z`。
 
@@ -164,7 +174,8 @@ provenance 证明的是「该 digest 由本仓库该工作流构建」；它不�
 `workflow_dispatch` 永远是非发布模式：构建并验证 `release-candidate` 目录，上传为临时 GitHub
 Actions artifact，不创建 release，不需要 `contents: write`、`id-token` 或 `attestations` 权限。
 它使用与公开模式相同的解压、`--version`、smoke 与 manifest 校验，只是 `kind` 为
-`release-candidate` 且不主张标签。
+`release-candidate` 且不主张标签。Hub/Agent 安装器会拒绝 `kind != public-release` 的归档，
+候选目录只用于发布前验证，不用于生产安装。
 
 ### 标签发布
 
@@ -209,16 +220,14 @@ make release-package TAG=v0.1.0
 传递依赖的许可证审计。当前没有引入额外 SBOM 工具链；若未来加入，应作为独立可维护的发行工件
 生成并同样纳入 manifest 和校验。
 
-## 分发状态
+## 分发与原生部署
 
-发行基础建立后，安装路径仍属于下一阶段（romi v0.4B — Native Deployment & Agent Provisioning）。
-本阶段结束时：
+v0.4B 起，原生 Hub 安装器从 release 归档安装 `/opt/romi/current` 与本地 Agent 分发；
+完整文件系统布局、systemd 加固、首次管理员凭证、反向代理和升级/备份要求见
+[原生部署](deployment.md)。
 
-- `GET /install.sh` 返回 503；
-- `GET /agent/{arch}` 返回 503；
-- Hub 不抓取 GitHub Release；
-- Agent 不自动下载、不自更新；
-- Admin 仍只生成使用本地可用 `./romi-agent` 的手工命令。
-
-在这些路由真正启用前，用户应从公开 Release 的归档中自行解压、校验并运行 `romi-hub` 与
-`romi-agent`。
+- 未配置 `--distribution-dir` 时，`GET /install.sh`、`GET /api/agent/distribution` 和
+  `GET /agent/vX.Y.Z/x86_64` 返回 503；
+- 配置合法本地分发后，Hub 只从内存提供该精确版本的 Agent，不提供可变的 `/agent/x86_64`；
+- Hub 不抓取 GitHub Release，Agent 不自动下载、不自更新；
+- 所有安装/更新都是显式本地管理员操作。

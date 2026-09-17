@@ -8,7 +8,8 @@
 
 - 快照允许来自未打标签、甚至未提交的源码状态，只要构建记录与当前源码、二进制和生成资源一致；
 - 不创建 Release，不签名，`manifest.json` 中 `kind` 固定为 `local-snapshot`、`signed` 为 false；
-- 公开发行必须绑定一个 `vX.Y.Z` 标签和一个完整 commit，定义见 [发行与验证](release.md)。
+- 公开发行必须绑定一个 `vX.Y.Z` 标签和一个完整 commit，定义见 [发行与验证](release.md)；
+  原生 Hub/Agent 安装器只存在于公开发行归档中，本地快照不是安装介质。
 
 修改源码、二进制或前端资源后直接运行打包脚本会拒绝旧构建记录，需重新 `make package`。
 

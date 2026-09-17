@@ -9,12 +9,16 @@ mod agent_ws;
 mod api;
 mod auth;
 mod db;
+mod distribution;
 mod frontend;
 mod notify;
 
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::{Context, Result};
@@ -29,6 +33,7 @@ use tracing::{info, warn};
 
 use agent_ws::Agent;
 use db::Db;
+use distribution::Distribution;
 
 pub type Shared = Arc<App>;
 
@@ -63,6 +68,12 @@ pub struct App {
     /// Parent directory containing one folder per installed public theme.
     pub themes: PathBuf,
     pub allow_custom_themes: bool,
+    /// Validated local Agent distribution, if the operator configured one.
+    /// `None` means `/install.sh`, metadata, and binary routes all refuse.
+    pub distribution: Option<Distribution>,
+    /// When set, a fresh database writes the generated administrator password
+    /// here instead of printing it to standard output.
+    pub bootstrap_password_file: Option<PathBuf>,
     /// Alerts on their way out; see `notify::send`.
     pub notes: tokio::sync::mpsc::Sender<notify::Note>,
 }
@@ -83,7 +94,21 @@ impl App {
             site,
             themes,
             allow_custom_themes: false,
+            distribution: None,
+            bootstrap_password_file: None,
             notes,
+        }
+    }
+
+    /// Remove the bootstrap credential after the administrator has chosen a
+    /// password of their own. A missing file is the normal case; any other
+    /// failure is logged, never fatal, because the password already changed.
+    pub fn discard_bootstrap_credential(&self) {
+        let Some(path) = &self.bootstrap_password_file else { return };
+        match std::fs::remove_file(path) {
+            Ok(()) => info!("removed bootstrap credential {}", path.display()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => warn!("could not remove bootstrap credential {}: {error}", path.display()),
         }
     }
 
@@ -122,11 +147,12 @@ fn forwarded_proto(headers: &HeaderMap) -> Option<&str> {
     Some(chain.split(',').next()?.trim())
 }
 
-/// Distribution stays disabled until romi has its own verified release artifacts.
-async fn agent_distribution_unavailable() -> Response {
+/// Distribution refusal shared by every route that needs a validated local
+/// Agent artifact. The text deliberately says what an operator has to do.
+pub(crate) fn distribution_unavailable() -> Response {
     (
         StatusCode::SERVICE_UNAVAILABLE,
-        "romi agent distribution is not configured; build agent/ locally (see README.md)",
+        "romi Agent distribution is not configured; install a verified romi release with its Agent artifact",
     )
         .into_response()
 }
@@ -151,6 +177,8 @@ struct Args {
     db_memory: Option<String>,
     db_threads: Option<i64>,
     db_temp: Option<String>,
+    distribution_dir: Option<PathBuf>,
+    bootstrap_password_file: Option<PathBuf>,
 }
 
 /// Native installs bind loopback unless explicitly configured otherwise.
@@ -191,6 +219,8 @@ fn parse_args() -> Result<Args> {
     let mut db_memory = None;
     let mut db_threads = None;
     let mut db_temp = None;
+    let mut distribution_dir = None;
+    let mut bootstrap_password_file = None;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         let mut value = || it.next().unwrap_or_default();
@@ -208,6 +238,8 @@ fn parse_args() -> Result<Args> {
                 db_threads = Some(n);
             }
             "--db-temp" => db_temp = Some(value()),
+            "--distribution-dir" => distribution_dir = Some(PathBuf::from(value())),
+            "--bootstrap-password-file" => bootstrap_password_file = Some(PathBuf::from(value())),
             "--version" => {
                 println!("{}", version_line());
                 std::process::exit(0);
@@ -227,7 +259,12 @@ fn parse_args() -> Result<Args> {
                      --db-memory caps DuckDB's own memory use (default 512MB); it is not a\n\
                      ceiling on the process's resident set.\n\
                      --db-threads caps DuckDB's worker threads (default: up to 8).\n\
-                     --db-temp is where DuckDB spills; defaults to <db>.tmp.\n",
+                     --db-temp is where DuckDB spills; defaults to <db>.tmp.\n\
+                     --distribution-dir validates and serves one local romi Agent\n\
+                     distribution; both /install.sh and versioned /agent URLs stay\n\
+                     disabled when it is omitted.\n\
+                     --bootstrap-password-file writes a fresh Hub's generated admin\n\
+                     credential there (0600) instead of printing it to stdout.\n",
                     version_line()
                 );
                 std::process::exit(0);
@@ -241,6 +278,16 @@ fn parse_args() -> Result<Args> {
     if let Some(value) = &db_temp {
         anyhow::ensure!(!value.is_empty(), "--db-temp needs a directory");
     }
+    if let Some(value) = &distribution_dir {
+        anyhow::ensure!(!value.as_os_str().is_empty(), "--distribution-dir needs a directory");
+    }
+    if let Some(value) = &bootstrap_password_file {
+        anyhow::ensure!(
+            !value.as_os_str().is_empty() && value.parent().is_some(),
+            "--bootstrap-password-file needs a file path"
+        );
+    }
+    let site = if site.is_empty() { std::env::var("ROMI_SITE").unwrap_or_default() } else { site };
     let listen: SocketAddr = listen.unwrap_or_else(|| default_listen().to_owned()).parse()?;
     let themes = themes.unwrap_or_else(|| {
         std::path::Path::new(&database).parent().unwrap_or_else(|| std::path::Path::new(".")).join("themes")
@@ -254,6 +301,8 @@ fn parse_args() -> Result<Args> {
         db_memory,
         db_threads,
         db_temp,
+        distribution_dir,
+        bootstrap_password_file,
     })
 }
 
@@ -281,6 +330,15 @@ async fn main() -> Result<()> {
     }
     let mut app = App::new(Db::open_with(&args.database, options)?, args.site.clone(), args.themes, notes);
     app.allow_custom_themes = args.allow_custom_themes;
+    if let Some(directory) = &args.distribution_dir {
+        let distribution = Distribution::load(directory, env!("CARGO_PKG_VERSION"))?;
+        info!(
+            "serving romi Agent {} for {} from {} bytes of validated in-memory data",
+            distribution.version, distribution.target, distribution.size
+        );
+        app.distribution = Some(distribution);
+    }
+    app.bootstrap_password_file = args.bootstrap_password_file.clone();
     if app.allow_custom_themes {
         warn!("custom themes enabled: their JavaScript shares the admin origin; use only reviewed code");
     }
@@ -317,8 +375,8 @@ async fn main() -> Result<()> {
     // both of which are correct here, while the debug line naming --site is off
     // at the default log level. A warning rather than a fatal error: the hub
     // still serves everything else, and an operator upgrading into this check
-    // should not lose a running hub. `install-hub.sh` refuses the same values
-    // where they are entered.
+    // should not lose a running hub. The native Hub installer validates --site
+    // at entry with the same domain rule.
     if !args.site.is_empty() && api::https_domain(&args.site).is_none() {
         warn!(
             "--site {} is not an https domain entry, so adding and installing nodes will be refused \
@@ -336,8 +394,11 @@ async fn main() -> Result<()> {
         // Agents.
         .route("/api/agent/ws", get(agent_ws::handler))
         .route("/api/agent/register", post(api::agent_register))
-        .route("/install.sh", get(agent_distribution_unavailable))
-        .route("/agent/{arch}", get(agent_distribution_unavailable))
+        .route("/api/agent/distribution", get(api::agent_distribution))
+        .route("/install.sh", get(api::agent_install_script))
+        .route("/agent/v{version}/{arch}", get(api::agent_binary))
+        .route("/agent/{arch}", get(api::agent_binary_alias))
+        .route("/healthz", get(api::healthz))
         // Read paths; the public page reaches these unauthenticated.
         .route("/api/me", get(api::me))
         .route("/api/nodes", get(api::nodes))
@@ -446,8 +507,8 @@ fn advertised_url(site: &str, listen: SocketAddr) -> String {
 /// This host's own address on its outbound route. Asking the kernel to route a
 /// datagram it never sends is the cheapest way to select one interface among
 /// several, and it answers without any network traffic. Behind NAT it yields the
-/// private address, since the hub cannot know its public one, which is why
-/// install-hub.sh prints the address it looked up instead.
+/// private address, since the hub cannot know its public one. The native Hub
+/// installer requires --site instead of guessing it.
 fn outbound_ip() -> Option<IpAddr> {
     [("0.0.0.0:0", "1.1.1.1:80"), ("[::]:0", "[2606:4700:4700::1111]:80")].into_iter().find_map(
         |(bind, route_to)| {
@@ -493,20 +554,56 @@ fn host_is_loopback(authority: &str) -> bool {
     host.is_empty() || host == "localhost" || host.parse::<IpAddr>().is_ok_and(|a| a.is_loopback())
 }
 
-/// Prints a one-time admin password when the database is first created, since a
-/// fresh hub is otherwise inaccessible until GitHub is configured.
+/// Creates the first administrator credential. Interactive development still
+/// prints it; a native service writes it to a 0600 file instead so it never
+/// reaches the journal through stdout.
 fn first_run(app: &App, url: &str) -> Result<()> {
     if app.db.get("admin_password_hash").is_some() {
         return Ok(());
     }
     let password = auth::random_token()[..24].to_owned();
-    app.db.set("admin_password_hash", &auth::hash_password(&password)?)?;
-    println!(
-        "\n  romi Hub is ready.\n\n  \
-         Sign in at {url}/admin\n  \
-         Emergency password: {password}\n\n  \
-         This is shown once. Change it, and set up GitHub sign-in, under Security.\n"
-    );
+    let hash = auth::hash_password(&password)?;
+    if let Some(path) = &app.bootstrap_password_file {
+        write_bootstrap_credential(path, &password)?;
+        if let Err(error) = app.db.set("admin_password_hash", &hash) {
+            // Do not leave a credential on disk for a database that does not
+            // know it. A crash between file write and database write leaves the
+            // file in place; the next start refuses to overwrite it, which is
+            // the safe direction for a one-time secret.
+            let _ = std::fs::remove_file(path);
+            return Err(error);
+        }
+        info!("bootstrap administrator credential written to {}", path.display());
+        println!("romi Hub is ready; the first-run credential is in {}", path.display());
+    } else {
+        app.db.set("admin_password_hash", &hash)?;
+        println!(
+            "\n  romi Hub is ready.\n\n  \
+             Sign in at {url}/admin\n  \
+             Emergency password: {password}\n\n  \
+             This is shown once. Change it, and set up GitHub sign-in, under Security.\n"
+        );
+    }
+    Ok(())
+}
+
+/// Write a one-time secret with `O_EXCL`, mode 0600, and no overwrite. The
+/// parent directory must already be writable by the Hub service account.
+fn write_bootstrap_credential(path: &StdPath, password: &str) -> Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true).mode(0o600);
+    let mut file = options.open(path).with_context(|| {
+        format!(
+            "cannot create bootstrap credential {} (it may already exist; refusing to overwrite)",
+            path.display()
+        )
+    })?;
+    file.write_all(password.as_bytes())
+        .with_context(|| format!("cannot write bootstrap credential {}", path.display()))?;
+    file.write_all(b"\n").with_context(|| format!("cannot write bootstrap credential {}", path.display()))?;
+    file.sync_all().with_context(|| format!("cannot sync bootstrap credential {}", path.display()))?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("cannot restrict bootstrap credential {}", path.display()))?;
     Ok(())
 }
 
@@ -737,9 +834,55 @@ mod tests {
         assert!(app.public_page());
     }
 
-    #[tokio::test]
-    async fn agent_distribution_requires_romi_release_artifacts() {
-        assert_eq!(agent_distribution_unavailable().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+    #[test]
+    fn agent_distribution_requires_a_validated_local_artifact() {
+        assert_eq!(distribution_unavailable().status(), StatusCode::SERVICE_UNAVAILABLE);
+        let app = app("http://x");
+        assert!(app.distribution.is_none(), "developer startup must not enable distribution");
+    }
+
+    #[test]
+    fn a_service_bootstrap_credential_is_a_private_file_not_stdout() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = std::env::temp_dir().join(format!(
+            "romi-bootstrap-{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("bootstrap-password");
+        let mut app = App::new(
+            Db::open(":memory:").unwrap(),
+            "http://x".into(),
+            PathBuf::from("themes"),
+            tokio::sync::mpsc::channel(1).0,
+        );
+        app.bootstrap_password_file = Some(path.clone());
+        first_run(&app, "http://x").unwrap();
+        let secret = std::fs::read_to_string(&path).unwrap();
+        assert!(secret.trim().len() >= 24);
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        let hash = app.db.get("admin_password_hash").unwrap();
+        // Restart must neither rotate the password nor overwrite the file.
+        first_run(&app, "http://x").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), secret);
+        assert_eq!(app.db.get("admin_password_hash").unwrap(), hash);
+
+        // A pre-existing file is never overwritten by a new first run.
+        let other = App::new(
+            Db::open(":memory:").unwrap(),
+            "http://x".into(),
+            PathBuf::from("themes"),
+            tokio::sync::mpsc::channel(1).0,
+        );
+        let mut other = other;
+        other.bootstrap_password_file = Some(path.clone());
+        assert!(first_run(&other, "http://x").is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), secret);
+
+        app.discard_bootstrap_credential();
+        assert!(!path.exists());
+        let _ = std::fs::remove_dir_all(&directory);
     }
 
     #[test]

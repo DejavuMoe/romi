@@ -59,9 +59,12 @@
   `id-token: write` / `attestations: write` 用于 GitHub 官方 attestation；
 - 不引入长期私钥；attestation 验证必须绑定 `DejavuMoe/romi`。
 
-本阶段只提交并验证工作流结构，不创建 `v0.1.0` 标签、不创建真实 Release。`GET /install.sh` 与
-`GET /agent/{arch}` 继续返回 503；Hub 不抓取 GitHub Release，Agent 不自动下载或自更新。原生
-部署与 Agent provisioning 属于 v0.4B。
+v0.4B 已在此发行链上实现原生部署：Hub 安装器只消费已验证 release，安装
+`/opt/romi/releases/<version>` 与 `/opt/romi/current`，并用同一 release 的 Agent 二进制建立
+root 控制的本地分发。Hub 在配置合法 `--distribution-dir` 后，才提供 `/install.sh`、公开元数据
+和精确版本的下载 URL；未配置时这些路由返回 503。Hub 从不访问 GitHub 获取 Agent，Agent 不
+自更新、不执行远程命令。首次管理员凭证在原生安装下写入 0600 文件而非 journal；`/healthz` 是
+免认证轻量健康接口。完整部署与信任边界见 [原生部署](deployment.md)。
 
 ## 当前存储安全基线
 
