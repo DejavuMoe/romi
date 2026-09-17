@@ -1,0 +1,16 @@
+/target/
+/.local/
+/dist/
+**/target/
+**/node_modules/
+**/dist/
+*.db
+*.db-shm
+*.db-wal
+*.log
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]

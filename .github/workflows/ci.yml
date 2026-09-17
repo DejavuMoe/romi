@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test and verify package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            admin/package-lock.json
+            web/package-lock.json
+
+      - name: Pin npm
+        run: npm install --global npm@11.19.0 --ignore-scripts --no-audit --no-fund
+
+      - name: Install pinned Rust toolchain
+        # rustup reads the exact version and components from rust-toolchain.toml.
+        run: rustup show active-toolchain
+
+      - name: Install locked dependencies
+        run: make setup
+
+      - name: Build frontends, lint and test
+        run: make check
+
+      - name: Build and verify release package
+        run: |
+          make package
+          (cd dist && sha256sum --check ./*.sha256)
+          romi_unpack=$(mktemp -d)
+          trap 'rm -rf "$romi_unpack"' EXIT
+          tar -xzf dist/romi-*.tar.gz -C "$romi_unpack"
+          python3 scripts/smoke.py --bin-dir "$romi_unpack/bin"

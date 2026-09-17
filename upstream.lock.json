@@ -1,0 +1,35 @@
+{
+  "sources": [
+    {
+      "repository": "https://github.com/monitor-probe/monitor",
+      "commit": "4147b8f8323bced199f108c5a1bf3df8bc08d87b",
+      "imported_at": "2026-09-17",
+      "paths": {
+        "server": ".",
+        "admin": "web-admin"
+      },
+      "license": "MIT",
+      "license_sha256": "a0b0e0d50d63b5663feedeea80a5973f2b70e9eda46bc58cd2f3b39875f947e2"
+    },
+    {
+      "repository": "https://github.com/monitor-probe/agent",
+      "commit": "633ca139a87df9dcebde78894e9807aa388d076c",
+      "imported_at": "2026-09-17",
+      "paths": {
+        "agent": "."
+      },
+      "license": "MIT",
+      "license_sha256": "a0b0e0d50d63b5663feedeea80a5973f2b70e9eda46bc58cd2f3b39875f947e2"
+    },
+    {
+      "repository": "https://github.com/monitor-probe/monitor-theme-default",
+      "commit": "c71d8260d841c97e909649383b5be0eb156c527b",
+      "imported_at": "2026-09-17",
+      "paths": {
+        "web": "."
+      },
+      "license": "MIT",
+      "license_sha256": "a0b0e0d50d63b5663feedeea80a5973f2b70e9eda46bc58cd2f3b39875f947e2"
+    }
+  ]
+}
