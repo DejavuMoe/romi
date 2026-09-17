@@ -94,6 +94,10 @@ def main():
                     assert error.code == 401
                 with request('/api/auth/login', {'password': password}) as response:
                     assert json.load(response)['ok']
+                with request('/api/db') as response:
+                    storage = json.load(response)
+                assert storage['engine'] == 'v1.5.5', storage['engine']
+                assert isinstance(storage.get('queue'), dict), 'writer queue diagnostics must be exposed'
                 # Simulate the trusted HTTPS proxy only on this temporary loopback server.
                 with request('/api/nodes', {'name': 'romi-smoke', 'traffic_reset_day': 1},
                              {'Host': 'romi.test', 'X-Forwarded-Proto': 'https'}) as response:
@@ -110,12 +114,10 @@ def main():
                 # process per file, so a second process -- this script -- may not
                 # open the hub's live database at all, and asking the hub to expose
                 # it over HTTP would be a debugging endpoint this project does not
-                # have. What is checked here is that the file really is DuckDB and
-                # carries no SQLite journal beside it.
+                # have. What is checked here is the on-disk identity and the lock.
                 path = work / 'romi.db'
-                assert path.read_bytes()[8:12] == b'DUCK', 'the hub must write a DuckDB database'
-                assert not (work / 'romi.db-wal').exists(), 'no SQLite write-ahead log'
-                assert not (work / 'romi.db-shm').exists(), 'no SQLite shared-memory file'
+                with path.open('rb') as database:
+                    assert database.read(12)[8:12] == b'DUCK', 'the hub must write a DuckDB database'
                 assert (work / 'romi.db.lock').exists(), 'the lock file is what refuses a second hub'
 
                 # One hub per database file, enforced across processes: DuckDB
@@ -154,7 +156,7 @@ def main():
                     except urllib.error.HTTPError as error:
                         assert error.code == 403
                 print('PASS: local frontends/assets, disabled upstream downloads, login, node creation, '
-                      'private defaults, DuckDB storage with no live SQLite handle, single-writer lock, '
+                      'private defaults, DuckDB storage, single-writer lock, '
                       'rotation, agent metrics and theme denials')
             finally:
                 for process in reversed(processes):

@@ -1,12 +1,12 @@
 //! What the storage layer assumes about the DuckDB engine, asserted against the
 //! engine itself rather than against a comment.
 //!
-//! These are the facts the schema and the query layer are built on. Several are
-//! differences from SQLite that would fail silently if they changed: `/` becoming
-//! integer division, a cast truncating instead of rounding, a primary key ceasing
-//! to reject duplicates, or an `INTEGER` column coming back as a 32-bit value.
+//! These are the facts the schema and the query layer are built on. Each one
+//! would fail silently if it changed: `/` becoming integer division, a cast
+//! stopping its rounding/truncation contract, a primary key ceasing to reject
+//! duplicates, or an `INTEGER` column coming back as a 32-bit value.
 //!
-//! `scripts/bench.py` and `docs/duckdb-migration.md` record the versions this was
+//! `scripts/bench.py` and `docs/bench.md` record the versions this was
 //! verified against; `db::tests` asserts the same version at runtime, so a
 //! dependency bump that changes it fails `make check` rather than an operator's
 //! first backup.
@@ -35,8 +35,8 @@ fn division_and_narrowing_casts_need_to_be_spelled_out() {
     let real: f64 = conn.query_row("SELECT 125 / 60", [], |r| r.get(0)).unwrap();
     assert!((real - 2.083_333).abs() < 1e-5, "/ is floating-point division");
 
-    // SQLite truncated `CAST(2.5 AS INTEGER)` to 2. DuckDB rounds it to 3, so the
-    // history queries cast through `TRUNC` to keep the old contract.
+    // DuckDB rounds `CAST(2.5 AS INTEGER)` to 3, while the API's history
+    // contract truncates. The history queries therefore cast through `TRUNC`.
     let rounded: i64 = conn.query_row("SELECT CAST(2.5 AS BIGINT)", [], |r| r.get(0)).unwrap();
     assert_eq!(rounded, 3, "the plain cast rounds; this is why the queries use TRUNC");
     let truncated: i64 = conn
@@ -48,7 +48,7 @@ fn division_and_narrowing_casts_need_to_be_spelled_out() {
         .unwrap();
     assert_eq!(truncated, 5, "(5+6)/2 is 5.5, and the contract truncates it");
     let negative: i64 = conn.query_row("SELECT CAST(TRUNC(-2.5) AS BIGINT)", [], |r| r.get(0)).unwrap();
-    assert_eq!(negative, -2, "truncation is toward zero, as SQLite's was");
+    assert_eq!(negative, -2, "truncation is toward zero, matching the history contract");
 }
 
 /// A primary key is the deduplication rule for `metric` and `ping_record`, so it
@@ -170,7 +170,7 @@ fn cloned_connections_share_one_database_and_read_a_stable_snapshot() {
 /// The conflict paths are correct but expensive, which is why the ingest path
 /// does not use them. Measured here rather than asserted as a timing: what the
 /// hub depends on is that a plain insert and an explicit replace are *available*,
-/// and `docs/duckdb-migration.md` records their measured cost.
+/// and `docs/bench.md` records their measured cost.
 #[test]
 fn an_insert_can_be_guarded_by_a_subquery_and_replace_explicitly() {
     let conn = Connection::open_in_memory().unwrap();

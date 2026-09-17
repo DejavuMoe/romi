@@ -30,15 +30,14 @@ mkdir data
 在 `bin/` 下执行后台给出的本地运行命令。
 
 包内 `monitor-hub` 链接的是内置的 DuckDB（crate `duckdb 1.10505.0`，引擎 v1.5.5，
-由源码编译进二进制），因此**不需要目标机安装 libduckdb**，也不再链接 SQLite。
-代价是体积：release `monitor-hub` 29.7 MB（SQLite 阶段 6.4 MB），归档 12.1 MB，
-展开后最大成员即该二进制。这些数字都在校验器上限之内（归档/展开 256 MiB、单成员
-128 MiB），因此 `scripts/package.py` 的界限**不需要调整**。
+由源码编译进二进制），因此**不需要目标机安装 libduckdb**。
+代价是体积：release `monitor-hub` 约 30 MB，归档约 12 MB，展开后最大成员即该二进制。
+这些数字都在校验器上限之内（归档/展开 256 MiB、单成员 128 MiB），因此
+`scripts/package.py` 的界限**不需要调整**。
 链接方面，解压出的 `monitor-hub` 只依赖 `libstdc++`、`libgcc_s`、`libm`、`libc`：
-不再链接 libsqlite3，也不依赖外部 libduckdb（引擎由 crate 编入二进制）。
-因此目标机需要系统的 C++ 运行库，但**不需要**安装 DuckDB 或 SQLite。
-包内附带 `docs/duckdb-migration.md`、`docs/bench.md` 与 `scripts/migrate-sqlite.py`，
-以便在目标机上完成旧 SQLite 数据库的离线迁移。
+不依赖外部 DuckDB 动态库（引擎由 crate 编入二进制）。因此目标机需要系统的 C++ 运行库，
+但**不需要**安装 DuckDB。
+包内附带 `docs/storage.md` 与 `docs/bench.md`，分别说明当前存储设计和基准方法。
 
 同目录的 `.sha256` 适合检查传输损坏，**不能独立证明来源真实性**。
 本阶段包没有签名，没有开放 Hub 在线分发，没有把上游 latest 用作回退。

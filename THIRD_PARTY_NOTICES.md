@@ -33,7 +33,4 @@ DuckDB source the crate vendors into the binary. Both are MIT licensed:
 
 Arrow crates arrive transitively through `libduckdb-sys`'s bundled build; they are
 Apache-2.0. `server/Cargo.lock` records the exact revisions, and
-`docs/duckdb-migration.md` records why this engine was chosen and what it replaces.
-SQLite is no longer linked into the Hub: `rusqlite` and `libsqlite3-sys` are absent from
-`server/Cargo.lock`. A legacy SQLite file is read only by `scripts/migrate-sqlite.py`,
-which uses the Python standard library's `sqlite3` module on an operator's machine.
+`docs/storage.md` documents how this engine is used.

@@ -3,8 +3,8 @@
 //! first, with self-describing frames readable via curl or a browser console.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -44,8 +44,22 @@ static SESSION: AtomicU64 = AtomicU64::new(0);
 pub struct Agent {
     /// Distinguishes one session on a node from the next; see [`release`].
     pub session: u64,
-    /// Outbound channel, used to push probe assignments.
+    /// Outbound channel, used to push probe assignments. Immutable, so the
+    /// node-list snapshot can clone it without taking the report lock.
     pub tx: mpsc::Sender<String>,
+    /// Set when this session is retired by rotation, deletion, replacement or
+    /// restore. A report that already left the map must observe this after it
+    /// takes the state lock; otherwise it would write after its session ended.
+    retired: AtomicBool,
+    /// Mutable report state. One mutex per Agent/session: different nodes never
+    /// wait for each other, while reports for the same session are serialized
+    /// across all their database writes.
+    state: Mutex<AgentState>,
+}
+
+/// The report state a connected Agent/session owns independently.
+#[derive(Debug)]
+pub(crate) struct AgentState {
     /// The latest report, or `Null` between connecting and the first one.
     pub metrics: serde_json::Value,
     pub last_seen: i64,
@@ -65,14 +79,12 @@ pub struct Agent {
     /// `std::time::Instant` for the same reason.
     pub mark: Option<(Instant, i64, i64)>,
     /// Running mean of the minute in progress, for the same reason.
-    minute: Minute,
+    pub minute: Minute,
 }
 
-impl Agent {
-    pub fn new(session: u64, tx: mpsc::Sender<String>) -> Self {
+impl Default for AgentState {
+    fn default() -> Self {
         Self {
-            session,
-            tx,
             metrics: serde_json::Value::Null,
             last_seen: 0,
             // The minute in progress rather than zero. Its row is already on
@@ -83,6 +95,43 @@ impl Agent {
             mark: None,
             minute: Minute::default(),
         }
+    }
+}
+
+impl Agent {
+    pub fn new(session: u64, tx: mpsc::Sender<String>) -> Self {
+        Self { session, tx, retired: AtomicBool::new(false), state: Mutex::new(AgentState::default()) }
+    }
+
+    /// The report state lock, with poison treated as recoverable: a malformed
+    /// report must not make the node permanently unreadable.
+    pub(crate) fn lock_state(&self) -> MutexGuard<'_, AgentState> {
+        self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// A point-in-time clone for node views, without holding the lock across the
+    /// rest of the panel's work.
+    pub(crate) fn snapshot(&self) -> (serde_json::Value, i64) {
+        let state = self.lock_state();
+        (state.metrics.clone(), state.last_seen)
+    }
+
+    /// Marks the session retired without waiting. A report that already cloned
+    /// the handle will observe this after it takes the state lock and abort.
+    pub(crate) fn mark_retired(&self) {
+        self.retired.store(true, Ordering::SeqCst);
+    }
+
+    /// Retires the session and waits for any in-flight report to finish. The
+    /// returned guard keeps the state locked, so the caller can perform the
+    /// database mutation knowing no old report can interleave with it.
+    pub(crate) fn retire_and_lock(&self) -> MutexGuard<'_, AgentState> {
+        self.mark_retired();
+        self.lock_state()
+    }
+
+    pub(crate) fn is_retired(&self) -> bool {
+        self.retired.load(Ordering::SeqCst)
     }
 }
 
@@ -98,7 +147,7 @@ const MEAN_INT: [&str; 6] = ["mem_used", "swap_used", "disk_used", "tcp", "udp",
 
 /// Running sums for the minute in progress, one slot per averaged field.
 #[derive(Debug, Default)]
-struct Minute {
+pub(crate) struct Minute {
     sums: [f64; MEAN_FLOAT.len() + MEAN_INT.len()],
     reports: f64,
 }
@@ -168,9 +217,26 @@ pub(crate) fn bearer(headers: &HeaderMap) -> Option<&str> {
 }
 
 fn activate(app: &App, node_id: i64, token: &str, session: u64, tx: mpsc::Sender<String>) -> Result<()> {
-    let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
+    // `agents_admin` serializes map-mutating operations that also change
+    // credentials or database contents: activation, rotation, deletion and
+    // restore. Reports do not take it, only the per-session state lock.
+    let _admin = app.agents_admin.lock().unwrap_or_else(|e| e.into_inner());
     anyhow::ensure!(app.db.node_by_token(token)? == Some(node_id), "token revoked during upgrade");
-    agents.insert(node_id, Agent::new(session, tx));
+    // Retire the previous session and wait out its in-flight report before the
+    // replacement becomes visible, so reports for this node stay ordered across
+    // a reconnect.
+    let old = {
+        let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
+        agents.remove(&node_id)
+    };
+    {
+        let _old_state = old.as_ref().map(|agent| agent.retire_and_lock());
+        // Release the old state lock before taking the map lock: a node-list
+        // snapshot can hold the map read lock while waiting on this session's
+        // state, and taking map.write() here would invert that order.
+    }
+    let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
+    agents.insert(node_id, Arc::new(Agent::new(session, tx)));
     Ok(())
 }
 
@@ -253,12 +319,56 @@ async fn serve(app: Shared, node_id: i64, token: String, ip: String, mut socket:
 /// reconnect may have installed a newer session under the same node id; clearing
 /// that one would mark a node offline while it is reporting normally.
 fn release(app: &App, node_id: i64, session: u64) -> bool {
-    let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
-    if !agents.get(&node_id).is_some_and(|a| a.session == session) {
-        return false;
+    let removed = {
+        let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
+        match agents.get(&node_id) {
+            Some(agent) if agent.session == session => agents.remove(&node_id),
+            _ => None,
+        }
+    };
+    match removed {
+        Some(agent) => {
+            agent.mark_retired();
+            true
+        }
+        None => false,
     }
-    agents.remove(&node_id);
-    true
+}
+
+/// Retires `node_id` (if connected), waits out its in-flight report, and runs
+/// `f` while the session's state lock is held. The caller's database mutation
+/// therefore cannot interleave with an old report, and a report that raced the
+/// map removal observes `retired` and aborts.
+pub(crate) fn retire_node_then<T>(app: &App, node_id: i64, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let _admin = app.agents_admin.lock().unwrap_or_else(|e| e.into_inner());
+    let agent = {
+        let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
+        agents.remove(&node_id)
+    };
+    let _state = agent.as_ref().map(|agent| agent.retire_and_lock());
+    f()
+}
+
+/// Retires every connected session and runs `f` (a database replacement) while
+/// every session state lock is held. This guarantees:
+///
+/// * reports already in flight finish before the replacement starts;
+/// * a report that had cloned its handle but not yet locked state observes
+///   `retired` after the replacement and aborts;
+/// * an old report cannot submit a fresh database write after the replacement.
+pub(crate) fn retire_all_then<T>(app: &App, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let _admin = app.agents_admin.lock().unwrap_or_else(|e| e.into_inner());
+    let agents: Vec<Arc<Agent>> = {
+        let mut map = app.agents.write().unwrap_or_else(|e| e.into_inner());
+        map.drain().map(|(_, agent)| agent).collect()
+    };
+    let mut guards = Vec::with_capacity(agents.len());
+    for agent in &agents {
+        guards.push(agent.retire_and_lock());
+    }
+    let outcome = f();
+    drop(guards);
+    outcome
 }
 
 /// Handles one inbound frame and reports whether the node is now owed a country
@@ -266,15 +376,26 @@ fn release(app: &App, node_id: i64, session: u64) -> bool {
 /// see `locate`.
 fn dispatch(app: &App, node_id: i64, session: u64, ip: &str, text: &str) -> Result<bool> {
     let rpc: Rpc = serde_json::from_str(text)?;
-    // Hold this through all writes: rotation, deletion, replacement and restore use the same guard.
-    let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
-    let entry = agents
-        .get_mut(&node_id)
-        .filter(|entry| entry.session == session)
-        .ok_or_else(|| anyhow::anyhow!("retired agent session"))?;
+    // The global map lock protects only membership/lookup. Clone the stable
+    // per-session handle and release it before any database work, so reports
+    // from different nodes never serialize on a global lock.
+    let agent = {
+        let agents = app.agents.read().unwrap_or_else(|e| e.into_inner());
+        agents
+            .get(&node_id)
+            .filter(|agent| agent.session == session)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("retired agent session"))?
+    };
+    // One lock per session: reports for the same node stay ordered, different
+    // nodes proceed concurrently. The retirement check comes after the lock, so
+    // a delete/rotation/restore that removed the map entry cannot be overwritten
+    // by a report that had already cloned the handle.
+    let mut entry = agent.lock_state();
+    anyhow::ensure!(!agent.is_retired(), "retired agent session");
     match rpc.method.as_str() {
         "hello" => return app.db.save_facts(node_id, &rpc.params, ip),
-        "report" => report(app, node_id, rpc.params, entry)?,
+        "report" => report(app, node_id, rpc.params, &mut entry)?,
         "ping.result" => {
             let task_id = rpc.params.get("task_id").and_then(|v| v.as_i64()).unwrap_or(0);
             // A missing reading is not a reading of -1: `close_bucket` counts
@@ -385,7 +506,7 @@ fn check_contract(node_id: i64, metrics: &serde_json::Value) {
     }
 }
 
-fn report(app: &App, node_id: i64, mut metrics: serde_json::Value, entry: &mut Agent) -> Result<()> {
+fn report(app: &App, node_id: i64, mut metrics: serde_json::Value, entry: &mut AgentState) -> Result<()> {
     // Missing fields remain compatible with older agents, while malformed values
     // must not become a live frame that can crash a browser. Counter validation
     // is separate: a missing or null kernel reading must not alter its
@@ -520,8 +641,24 @@ mod tests {
     fn connect(app: &App) -> (i64, mpsc::Receiver<String>) {
         let id = node(app);
         let (tx, rx) = mpsc::channel(4);
-        app.agents.write().unwrap().insert(id, Agent::new(1, tx));
+        app.agents.write().unwrap().insert(id, Arc::new(Agent::new(1, tx)));
         (id, rx)
+    }
+
+    /// The stable handle for a connected fixture node.
+    fn agent(app: &App, id: i64) -> Arc<Agent> {
+        app.agents.read().unwrap().get(&id).cloned().expect("fixture node is connected")
+    }
+
+    /// Locks one session's state for a test assertion or fixture edit.
+    fn with_state<R>(app: &App, id: i64, f: impl FnOnce(&mut AgentState) -> R) -> R {
+        let agent = agent(app, id);
+        let mut state = agent.lock_state();
+        f(&mut state)
+    }
+
+    fn live_metrics(app: &App, id: i64) -> serde_json::Value {
+        with_state(app, id, |state| state.metrics.clone())
     }
 
     fn report_json(boot: &str, rx: i64, tx: i64) -> String {
@@ -535,16 +672,23 @@ mod tests {
 
     // Existing metric tests exercise a currently active fixture session.
     fn dispatch(app: &App, id: i64, ip: &str, text: &str) -> Result<bool> {
-        let session = {
-            let mut agents = app.agents.write().unwrap();
-            agents.entry(id).or_insert_with(|| Agent::new(1, mpsc::channel(1).0)).session
+        let existing = app.agents.read().unwrap().get(&id).map(|agent| agent.session);
+        let session = match existing {
+            Some(session) => session,
+            None => {
+                let (tx, _rx) = mpsc::channel(1);
+                let session = 1;
+                app.agents.write().unwrap().insert(id, Arc::new(Agent::new(session, tx)));
+                session
+            }
         };
         super::dispatch(app, id, session, ip, text)
     }
 
     fn report(app: &App, id: i64, metrics: serde_json::Value) -> Result<()> {
-        let mut agents = app.agents.write().unwrap();
-        super::report(app, id, metrics, agents.get_mut(&id).unwrap())
+        let handle = agent(app, id);
+        let mut state = handle.lock_state();
+        super::report(app, id, metrics, &mut state)
     }
 
     #[test]
@@ -565,9 +709,9 @@ mod tests {
         }
         assert_eq!(app.db.all_traffic()[&id].total_rx, before);
         assert_ne!(app.db.node(id).unwrap().unwrap().hostname, "stale");
-        assert!(app.agents.read().unwrap()[&id].metrics.is_null());
+        assert!(live_metrics(&app, id).is_null());
         super::dispatch(&app, id, 2, "ip", &report_json("boot", 200, 20)).unwrap();
-        assert!(!app.agents.read().unwrap()[&id].metrics.is_null());
+        assert!(!live_metrics(&app, id).is_null());
     }
 
     #[test]
@@ -597,10 +741,10 @@ mod tests {
         let app = app();
         let (id, _held) = connect(&app);
         dispatch(&app, id, "ip", &report_json("boot", 1_000, 500)).unwrap();
-        let good = app.agents.read().unwrap()[&id].metrics.clone();
+        let good = live_metrics(&app, id);
         for bad in [json!({"load":null}), json!({"load":[1,"bad",3]}), json!({"cpu":"bad"}), json!([])] {
             assert!(report(&app, id, bad).is_err());
-            assert_eq!(app.agents.read().unwrap()[&id].metrics, good);
+            assert_eq!(live_metrics(&app, id), good);
         }
         dispatch(&app, id, "ip", &report_json("boot", 2_000, 600)).unwrap();
         assert_eq!(app.db.all_traffic()[&id].total_rx, 1_000);
@@ -682,20 +826,22 @@ mod tests {
         // A session already running when this minute opened: the first report of
         // a new one lands within a minute already accounted for, which is the
         // reconnect case below.
-        app.agents.write().unwrap().get_mut(&id).unwrap().last_minute -= 1;
+        with_state(&app, id, |state| state.last_minute -= 1);
 
         dispatch(&app, id, "1.2.3.4", &report_json("boot-a", 1_000, 500)).unwrap();
         dispatch(&app, id, "1.2.3.4", &report_json("boot-a", 3_000, 1_500)).unwrap();
 
-        let live = app.agents.read().unwrap();
-        let entry = live.get(&id).unwrap();
-        assert_eq!(entry.metrics["cpu"], 12.5);
+        let (metrics, last_minute) = {
+            let handle = agent(&app, id);
+            let state = handle.lock_state();
+            (state.metrics.clone(), state.last_minute)
+        };
+        assert_eq!(metrics["cpu"], 12.5);
         // The first report establishes the baseline, so only the second counts.
-        assert_eq!(entry.metrics["total_rx"], 2_000);
-        assert_eq!(entry.metrics["total_tx"], 1_000);
-        assert_eq!(entry.metrics["month_rx"], 2_000);
-        assert_eq!(entry.last_minute, minute / 60, "the minute already written is remembered");
-        drop(live);
+        assert_eq!(metrics["total_rx"], 2_000);
+        assert_eq!(metrics["total_tx"], 1_000);
+        assert_eq!(metrics["month_rx"], 2_000);
+        assert_eq!(last_minute, minute / 60, "the minute already written is remembered");
 
         // History rows are keyed by (node, ts), so counting them proves nothing on
         // its own: reports a second apart collapse onto one row with or without
@@ -730,12 +876,10 @@ mod tests {
         // `Instant` precisely because a wall-clock difference can be negative when
         // NTP steps the clock; reverting the field to a timestamp fails to
         // compile.
-        {
-            let mut agents = app.agents.write().unwrap();
-            let entry = agents.get_mut(&id).unwrap();
-            entry.last_minute -= 1;
-            entry.mark = Some((Instant::now() - Duration::from_secs(60), 0, 0));
-        }
+        with_state(&app, id, |state| {
+            state.last_minute -= 1;
+            state.mark = Some((Instant::now() - Duration::from_secs(60), 0, 0));
+        });
         // 60 MB arrived and the machine was busy for half the minute; by the next
         // sample both have ended.
         dispatch(&app, id, "ip", &burst(1_000 + 60_000_000, 0, 0.0, 201)).unwrap();
@@ -748,7 +892,7 @@ mod tests {
         assert_eq!(row["mem_used"], 151);
         // The live view still shows the instantaneous reading, which is its
         // purpose.
-        assert_eq!(app.agents.read().unwrap()[&id].metrics["net_rx"], 0);
+        assert_eq!(live_metrics(&app, id)["net_rx"], 0);
     }
 
     /// A reconnect arrives mid-minute, and that minute's row already holds the
@@ -759,14 +903,14 @@ mod tests {
     fn a_reconnect_leaves_the_minute_it_lands_in_alone() {
         let app = app();
         let (id, _held) = connect(&app);
-        app.agents.write().unwrap().get_mut(&id).unwrap().last_minute -= 1;
+        with_state(&app, id, |state| state.last_minute -= 1);
         dispatch(&app, id, "ip", &report_json("boot-a", 1_000, 500)).unwrap();
         let before = app.db.metrics(id, 0, 60).unwrap();
         assert_eq!(before.len(), 1, "the running session wrote the row for this minute");
 
         // The socket drops and the agent returns within the same minute.
         let (tx, _rx) = mpsc::channel(4);
-        app.agents.write().unwrap().insert(id, Agent::new(2, tx));
+        app.agents.write().unwrap().insert(id, Arc::new(Agent::new(2, tx)));
         let loud = json!({"jsonrpc": "2.0", "method": "report",
                           "params": {"boot_id": "boot-a", "cpu": 99.0, "net_rx_total": 9_000,
                                      "net_tx_total": 4_500}})
@@ -775,7 +919,7 @@ mod tests {
 
         assert_eq!(app.db.metrics(id, 0, 60).unwrap(), before, "the row keeps the minute it described");
         // The bytes are still booked; only the history row is left untouched.
-        assert_eq!(app.agents.read().unwrap()[&id].metrics["total_rx"], 8_000);
+        assert_eq!(live_metrics(&app, id)["total_rx"], 8_000);
     }
 
     /// An agent sending no boot_id -- an older build, or a host without the file
@@ -793,7 +937,7 @@ mod tests {
         };
         dispatch(&app, id, "ip", &report(1_000)).unwrap();
         dispatch(&app, id, "ip", &report(3_000)).unwrap();
-        assert_eq!(app.agents.read().unwrap()[&id].metrics["total_rx"], 2_000);
+        assert_eq!(live_metrics(&app, id)["total_rx"], 2_000);
 
         // A report with no counters books nothing and, crucially, leaves the
         // baseline unchanged so the next one is a delta.
@@ -801,7 +945,7 @@ mod tests {
         dispatch(&app, id, "ip", &blind).unwrap();
         dispatch(&app, id, "ip", &report(4_000)).unwrap();
         assert_eq!(
-            app.agents.read().unwrap()[&id].metrics["total_rx"],
+            live_metrics(&app, id)["total_rx"],
             3_000,
             "a missing reading must not re-baseline the counter to zero"
         );
@@ -899,7 +1043,7 @@ mod tests {
         // receiver changes nothing.
         let connect = |session| {
             let (tx, _) = mpsc::channel(1);
-            app.agents.write().unwrap().insert(id, Agent::new(session, tx));
+            app.agents.write().unwrap().insert(id, Arc::new(Agent::new(session, tx)));
         };
 
         // The ordinary case: the session ending is the one on record.
@@ -914,6 +1058,161 @@ mod tests {
         assert!(!release(&app, id, 1), "a stale session must release nothing");
         assert!(live(), "the reconnected agent stays online");
         assert!(app.agents.read().unwrap().contains_key(&id), "and keeps receiving probe pushes");
+    }
+
+    fn wait_until(mut done: impl FnMut() -> bool, what: &str) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// The global map protects membership only. One node's report lock must not
+    /// block another node, while reports for the same session stay serialized.
+    #[test]
+    fn different_nodes_report_concurrently_and_the_same_node_stays_ordered() {
+        let app = std::sync::Arc::new(app());
+        let (a, _ra) = connect(&app);
+        let b = app
+            .db
+            .create_node(&Node { name: "b".into(), traffic_reset_day: 1, ..Default::default() }, "tok-b")
+            .unwrap();
+        let (tx_b, _rb) = mpsc::channel(2);
+        app.agents.write().unwrap().insert(b, Arc::new(Agent::new(1, tx_b)));
+        // Simulate one report for A already inside its critical section.
+        let a_handle = agent(&app, a);
+        let guard = a_handle.lock_state();
+
+        let (b_done_tx, b_done_rx) = std::sync::mpsc::channel();
+        let app_b = app.clone();
+        let b_thread = std::thread::spawn(move || {
+            let out = dispatch(&app_b, b, "ip", &report_json("boot-b", 100, 10));
+            b_done_tx.send(()).unwrap();
+            out
+        });
+        assert!(
+            b_done_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+            "node B must not wait behind node A's report lock"
+        );
+        b_thread.join().unwrap().unwrap();
+
+        let (a_done_tx, a_done_rx) = std::sync::mpsc::channel();
+        let app_a = app.clone();
+        let a_thread = std::thread::spawn(move || {
+            let out = dispatch(&app_a, a, "ip", &report_json("boot-a", 100, 10));
+            a_done_tx.send(()).unwrap();
+            out
+        });
+        assert!(
+            a_done_rx.recv_timeout(Duration::from_millis(150)).is_err(),
+            "two reports for one session must be mutually exclusive"
+        );
+        drop(guard);
+        assert!(
+            a_done_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+            "the same-node report should proceed once the lock is released"
+        );
+        a_thread.join().unwrap().unwrap();
+    }
+
+    /// A delete that races an in-flight report must wait for that report and
+    /// then refuse it; the retired session cannot write again.
+    #[test]
+    fn delete_retires_an_in_flight_session_without_being_undone() {
+        let app = std::sync::Arc::new(app());
+        let (id, _rx) = connect(&app);
+        let handle = agent(&app, id);
+        let guard = handle.lock_state();
+
+        let app_delete = app.clone();
+        let deleter = std::thread::spawn(move || {
+            crate::agent_ws::retire_node_then(&app_delete, id, || app_delete.db.delete_node(id))
+        });
+        wait_until(|| app.agents.read().unwrap().is_empty(), "the session to leave the map");
+        assert!(
+            super::dispatch(&app, id, 1, "ip", &report_json("boot", 500, 5)).is_err(),
+            "a late report must be refused"
+        );
+
+        drop(guard);
+        deleter.join().unwrap().unwrap();
+        assert!(app.db.node(id).unwrap().is_none(), "the delete was not undone");
+        assert!(super::dispatch(&app, id, 1, "ip", &report_json("boot", 900, 9)).is_err());
+    }
+
+    /// Rotation drains the old session before the token changes, and the old
+    /// session cannot write into the replacement.
+    #[test]
+    fn rotation_drains_the_old_session_before_changing_the_token() {
+        let app = std::sync::Arc::new(app());
+        let (id, _rx) = connect(&app);
+        let handle = agent(&app, id);
+        let guard = handle.lock_state();
+
+        let app_rotate = app.clone();
+        let rotator = std::thread::spawn(move || {
+            crate::agent_ws::retire_node_then(&app_rotate, id, || {
+                app_rotate.db.reset_token(id, "replacement-token")
+            })
+        });
+        wait_until(|| app.agents.read().unwrap().is_empty(), "the session to leave the map");
+        assert!(
+            super::dispatch(&app, id, 1, "ip", &report_json("boot", 900, 9)).is_err(),
+            "the retired session must not write"
+        );
+
+        drop(guard);
+        rotator.join().unwrap().unwrap();
+        assert!(app.db.node_by_token("tok").unwrap().is_none(), "the old token is revoked");
+        assert_eq!(app.db.node_by_token("replacement-token").unwrap(), Some(id));
+
+        let (tx, _rx) = mpsc::channel(2);
+        activate(&app, id, "replacement-token", 2, tx).unwrap();
+        assert!(super::dispatch(&app, id, 1, "ip", &report_json("stale", 100, 1)).is_err());
+        super::dispatch(&app, id, 2, "ip", &report_json("fresh", 200, 2)).unwrap();
+    }
+
+    /// Restore retires every session before the file switch, so an old report
+    /// cannot submit a fresh write into the restored database.
+    #[test]
+    fn restore_retires_every_session_before_switching_the_database() {
+        let app = std::sync::Arc::new(app());
+        let (id, _rx) = connect(&app);
+        let backup = std::env::temp_dir().join(format!("romi-agent-restore-{}.db", rand::random::<u64>()));
+        app.db.backup_into(backup.to_str().unwrap()).unwrap();
+        // A node created after the archive must disappear on restore, proving
+        // the switch really happened while the sessions were paused.
+        let after_backup = app
+            .db
+            .create_node(
+                &Node { name: "after".into(), traffic_reset_day: 1, ..Default::default() },
+                "tok-after-backup",
+            )
+            .unwrap();
+
+        let handle = agent(&app, id);
+        let guard = handle.lock_state();
+        let app_restore = app.clone();
+        let source = backup.clone();
+        let restorer = std::thread::spawn(move || {
+            crate::agent_ws::retire_all_then(&app_restore, || {
+                app_restore.db.restore_from(source.to_str().unwrap())
+            })
+            .map(|_| ())
+        });
+        wait_until(|| app.agents.read().unwrap().is_empty(), "all sessions to leave the map");
+        assert!(
+            super::dispatch(&app, id, 1, "ip", &report_json("boot", 900, 9)).is_err(),
+            "an old report must not start a write during the replacement"
+        );
+
+        drop(guard);
+        restorer.join().unwrap().unwrap();
+        assert!(app.db.node(after_backup).unwrap().is_none(), "the restored file replaced the live one");
+        assert!(app.agents.read().unwrap().is_empty(), "no session survives a restore");
+        assert!(super::dispatch(&app, id, 1, "ip", &report_json("boot", 1_000, 10)).is_err());
+        let _ = std::fs::remove_file(&backup);
     }
 
     #[test]

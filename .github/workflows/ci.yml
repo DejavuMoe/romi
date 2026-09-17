@@ -55,5 +55,3 @@ jobs:
           trap 'rm -rf "$romi_unpack"' EXIT
           tar -xzf dist/romi-*.tar.gz -C "$romi_unpack"
           python3 scripts/smoke.py --bin-dir "$romi_unpack/bin"
-          # The offline SQLite -> DuckDB migration, against the packaged binary.
-          python3 scripts/test-legacy-migration.py --bin-dir "$romi_unpack/bin"

@@ -1672,8 +1672,21 @@ type DbInfo = {
   /** The storage engine and the application schema it is running, for the record. */
   engine: string
   schema: number | null
-  /** Writes accepted and not yet committed, and the queue's capacity. */
-  queue: { queued: number; committed: number; superseded: number; capacity: number }
+  /** Writer-queue counters. `committed_ops_total` counts operations, not batches. */
+  queue: {
+    queued_ops_current: number
+    queue_capacity: number
+    accepted_ops_total: number
+    committed_ops_total: number
+    refused_ops_total: number
+    failed_ops_total: number
+    batch_transactions_total: number
+    batch_ops_total: number
+    max_batch_size: number
+    average_batch_size: number
+    queue_wait_us_avg: number
+    transaction_us_avg: number
+  }
 }
 
 // The only two tables whose row count indicates anything about size. Every other
@@ -1686,7 +1699,7 @@ const DB_ROWS: [string, string][] = [
 function Data() {
   const [info, setInfo] = useState<DbInfo | null>(null)
   const [busy, setBusy] = useState("")
-  const [confirm, setConfirm] = useState<"vacuum" | null>(null)
+  const [confirm, setConfirm] = useState<"maintenance" | null>(null)
   const [pending, setPending] = useState<File | null>(null)
   const [sent, setSent] = useState(0)
   // Closing the dialog must stop the upload rather than merely hide it: restore
@@ -1698,18 +1711,18 @@ function Data() {
   const load = () => api<DbInfo>("/db").then(setInfo).catch((e: Error) => toast.error(e.message))
   useEffect(() => { load() }, [])
 
-  async function vacuum() {
-    setBusy("vacuum")
+  async function maintenance() {
+    setBusy("maintenance")
     try {
       const { pruned, freed, compacted, reusable } = await api<{
         pruned: number
         freed: number
         compacted: boolean
         reusable: number
-      }>("/db/vacuum", { method: "POST" })
+      }>("/db/maintenance", { method: "POST" })
       // `freed` is measured, not estimated: it is the difference in bytes on disk
-      // before and after. DuckDB's own VACUUM does not return space, so when a
-      // rewrite was not worth it the count says so rather than inventing a figure.
+      // before and after. When a rewrite was not worth it the count says so rather
+      // than inventing a figure.
       toast.success(
         compacted
           ? `已清理 ${pruned} 行，重写文件后实际回收 ${bytes(freed)}`
@@ -1763,7 +1776,22 @@ function Data() {
           {stat("可复用空间", bytes(info.free))}
           {stat("保留天数", `${info.retention} 天`)}
           {stat("引擎", `${info.engine} · schema ${info.schema ?? "?"}`)}
-          {stat("待提交写入", `${info.queue?.queued ?? 0} / ${info.queue?.capacity ?? 0}`)}
+          {stat("待提交写入", `${info.queue?.queued_ops_current ?? 0} / ${info.queue?.queue_capacity ?? 0}`)}
+          {stat("已提交操作", (info.queue?.committed_ops_total ?? 0).toLocaleString())}
+          {stat(
+            "批量提交",
+            `${info.queue?.batch_transactions_total ?? 0} 批 · 均 ${(info.queue?.average_batch_size ?? 0).toFixed(1)}`,
+          )}
+          {stat(
+            "队列平均等待",
+            `${((info.queue?.queue_wait_us_avg ?? 0) / 1000).toFixed(1)} ms · 事务均 ${(
+              (info.queue?.transaction_us_avg ?? 0) / 1000
+            ).toFixed(1)} ms`,
+          )}
+          {stat(
+            "拒绝 / 失败",
+            `${info.queue?.refused_ops_total ?? 0} / ${info.queue?.failed_ops_total ?? 0}`,
+          )}
           {/* 和保留天数并排：跨度小于保留期是还没攒够，大于保留期就是每小时
               那次 prune 没在跑。 */}
           {stat("历史跨度", info.oldest ? `${Math.floor((Date.now() / 1000 - info.oldest) / 86400)} 天` : "—")}
@@ -1776,17 +1804,16 @@ function Data() {
 
       <Card className="gap-4 p-5">
         <div>
-          <h3 className="text-sm font-medium">回收空间</h3>
+          <h3 className="text-sm font-medium">数据库维护</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            按保留天数清掉过期明细，然后做一次 CHECKPOINT 把预写日志折进主文件。
-            DuckDB 的 VACUUM 并不归还磁盘空间，所以只有当可复用空间超过阈值时才把整个数据库
-            复制到新文件并切换过去，报告的是前后实测的磁盘差值。重写需要与数据库等量的空闲磁盘，
-            期间写入会短暂等待。
+            按保留天数清理过期明细，执行一次 CHECKPOINT 并检查文件内可复用空间。
+            只有当可复用空间超过阈值时才把整个数据库复制到新文件并切换过去，报告的 freed
+            是重写前后实测的磁盘差值。重写需要与数据库等量的空闲磁盘，期间写入会短暂等待。
           </p>
         </div>
         <div>
-          <Button size="sm" variant="secondary" disabled={!!busy} onClick={() => setConfirm("vacuum")}>
-            {busy === "vacuum" ? "回收中…" : "立即回收"}
+          <Button size="sm" variant="secondary" disabled={!!busy} onClick={() => setConfirm("maintenance")}>
+            {busy === "maintenance" ? "维护中…" : "立即维护"}
           </Button>
         </div>
       </Card>
@@ -1827,14 +1854,14 @@ function Data() {
         </div>
       </Card>
 
-      {confirm === "vacuum" && (
+      {confirm === "maintenance" && (
         <ConfirmDialog
-          title="回收空间？"
-          description="超出保留天数的历史明细会被删除，然后重建数据库文件。累计流量不受影响。"
-          confirmLabel="开始回收"
+          title="运行数据库维护？"
+          description="超出保留天数的历史明细会被删除，随后检查点并只在实际值得时重写数据库文件。累计流量不受影响。"
+          confirmLabel="开始维护"
           busy={!!busy}
           onClose={() => setConfirm(null)}
-          onConfirm={vacuum}
+          onConfirm={maintenance}
         />
       )}
       {pending && (

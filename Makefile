@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export CARGO_TARGET_DIR := $(CURDIR)/target
-.PHONY: help setup frontend build release package check smoke bench legacy dev-server dev-admin dev-web
+.PHONY: help setup frontend build release package check smoke bench dev-server dev-admin dev-web
 
 help:
 	@echo 'make setup       Install locked frontend dependencies and fetch Rust dependencies'
@@ -8,7 +8,6 @@ help:
 	@echo 'make check       Lint, typecheck/build frontends and run existing tests'
 	@echo 'make smoke       Build and verify server + agent over loopback'
 	@echo 'make bench       Run the storage benchmark against target/release (see scripts/bench.py)'
-	@echo 'make legacy      Verify the offline SQLite -> DuckDB migration end to end'
 	@echo 'make dev-server  Run server on 127.0.0.1:9911, data under .local/'
 	@echo 'make dev-admin   Run admin HMR on 127.0.0.1:5173/admin/'
 	@echo 'make dev-web     Run public web HMR on 127.0.0.1:5174/'
@@ -59,11 +58,6 @@ check: frontend
 
 smoke: build
 	python3 scripts/smoke.py
-	python3 scripts/test-legacy-migration.py
-
-# The offline migration, on its own, against the debug binaries.
-legacy: build
-	python3 scripts/test-legacy-migration.py
 
 # Release binaries, because an unoptimized DuckDB is roughly twenty times slower
 # per row and the numbers would say nothing about a deployed hub.

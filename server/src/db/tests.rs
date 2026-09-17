@@ -1,13 +1,20 @@
 //! Storage tests.
 //!
-//! Ported from the SQLite build wherever the behaviour is the application's
-//! rather than the engine's, and extended for the properties DuckDB changes: the
-//! identity allocator, transactional deletion without cascading foreign keys, the
-//! Parquet backup format, the maintenance barrier, and the engine's own version
-//! and file-format checks.
+//! They cover the application's own behaviour -- identity allocation,
+//! transactional deletion without cascading foreign keys, traffic folding, the
+//! Parquet archive format, restore ordering, queue accounting and clean shutdown
+//! -- plus the DuckDB facts this build depends on: MVCC reads, the maintenance
+//! barrier, and the engine version and file-format checks.
 
 use super::*;
 use crate::auth::sha256;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
+
+/// Test-only writer delay, set by the group-commit accounting test. It makes the
+/// writer hold the first batch job long enough for callers to queue behind it,
+/// so a multi-job batch is deterministic instead of timing-dependent.
+pub(super) static TEST_BATCH_HOLD_NANOS: AtomicU64 = AtomicU64::new(0);
 
 fn db() -> Db {
     Db::open(":memory:").unwrap()
@@ -109,7 +116,7 @@ fn the_engine_runs_with_the_configured_limits_and_no_autoloading() {
     assert!(read("temp_directory").starts_with(&scratch.0), "{}", read("temp_directory"));
 
     // The spill directory and the database are owner-only: both hold the same
-    // rows, and neither carries SQLite's -wal/-shm names.
+    // rows.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -177,22 +184,20 @@ fn a_database_is_created_once_reopened_and_refuses_a_future_schema() {
     assert!(Db::open(&junk.0).is_err());
 }
 
-/// The reviewed build's `--db` may point at the SQLite database the previous
-/// version left behind. It must be refused with instructions, and it must not be
-/// touched: silently creating an empty DuckDB database next to it would look like
-/// every node disappeared.
+/// An existing file that is not a DuckDB database must be refused with one
+/// concise generic error and left byte-for-byte alone: no migration path, no
+/// format-specific handling, no silently creating an empty database beside it.
 #[test]
-fn a_legacy_sqlite_file_is_refused_with_a_migration_message_and_left_alone() {
+fn a_foreign_file_is_refused_with_one_generic_error_and_left_alone() {
     let scratch = Scratch::new();
-    let mut legacy = b"SQLite format 3\0".to_vec();
-    legacy.extend_from_slice(&[0u8; 128]);
-    std::fs::write(&scratch.0, &legacy).unwrap();
+    let foreign = b"this is somebody else's file, not a database".repeat(4);
+    std::fs::write(&scratch.0, &foreign).unwrap();
 
-    let refused = Db::open(&scratch.0).unwrap_err().to_string();
-    assert!(refused.contains("SQLite"), "{refused}");
-    assert!(refused.contains("migrate-sqlite.py"), "{refused}");
-    assert!(refused.contains("--import-legacy"), "{refused}");
-    assert_eq!(std::fs::read(&scratch.0).unwrap(), legacy, "the file is unchanged byte for byte");
+    let refused = format!("{:#}", Db::open(&scratch.0).unwrap_err());
+    assert!(refused.contains("DuckDB"), "{refused}");
+    assert!(refused.contains("romi"), "{refused}");
+    assert!(!refused.contains("migrate") && !refused.contains("import"), "{refused}");
+    assert_eq!(std::fs::read(&scratch.0).unwrap(), foreign, "the file is unchanged byte for byte");
 }
 
 /// One hub per database file, enforced before the engine is handed the path.
@@ -249,9 +254,9 @@ fn settings_round_trip_and_overwrite() {
     assert_eq!(db.get("theme").as_deref(), Some("default"));
 }
 
-/// Identifiers come from the allocator, so a deleted node's id is never handed
-/// out again. The SQLite build relied on the opposite -- rowids were reused -- and
-/// swept history to compensate; here the sweep and the fresh id both apply.
+/// Identifiers come from the monotonic allocator, so a deleted node's id is never
+/// handed out again; deleting a node also sweeps its rows. The two together mean
+/// a new node can never inherit a removed machine's history.
 #[test]
 fn deleting_a_node_takes_its_data_with_it_and_frees_no_id_for_reuse() {
     let db = db();
@@ -451,9 +456,9 @@ fn tokens_are_hashed_and_rotation_retires_the_old_one() {
     let db = db();
     let id = db.create_node(&Node { name: "n".into(), ..Default::default() }, "first-token").unwrap();
 
-    // The storage-level assertion `scripts/smoke.py` used to make through a
-    // second process's SQLite handle. Native DuckDB allows one read-write process
-    // per file, so the check belongs here, in the process that owns the database.
+    // DuckDB allows one read-write process per file, so the check belongs here,
+    // in the process that owns the database rather than in an external smoke
+    // script.
     let stored: String = db
         .read(|conn| Ok(conn.query_row("SELECT token_hash FROM node WHERE id=?1", [id], |r| r.get(0))?))
         .unwrap();
@@ -1157,7 +1162,7 @@ fn restore_refuses_anything_that_is_not_a_backup_of_this_hub() {
 
     // A manifest from a newer build.
     let manifest =
-        br#"{"format":1,"kind":"romi-duckdb-backup","schema":9999,"engine":"v9","created_at":0,"tables":{}}"#;
+        br#"{"format":2,"kind":"romi-duckdb-backup","schema":9999,"engine":"v9","created_at":0,"tables":{}}"#;
     let newer = build_archive(&[("manifest.json", manifest.to_vec())]);
     std::fs::write(&bad, &newer).unwrap();
     let refused = db.check_backup(&bad).unwrap_err().to_string();
@@ -1256,8 +1261,11 @@ fn accepted_writes_are_committed_before_close() {
         db.insert_metric(id, 60 * i, &serde_json::json!({"cpu": 1.0})).unwrap();
     }
     let stats = db.queue_stats();
-    assert_eq!(stats["queued"], 0, "every accepted write has been answered");
-    assert!(stats["committed"].as_u64().unwrap() >= 500);
+    assert_eq!(stats["queued_ops_current"], 0, "every accepted write has been answered");
+    assert_eq!(stats["committed_ops_total"], stats["accepted_ops_total"], "every accepted write committed");
+    assert_eq!(stats["refused_ops_total"], 0);
+    assert_eq!(stats["failed_ops_total"], 0);
+    assert!(stats["committed_ops_total"].as_u64().unwrap() >= 500);
     db.close().unwrap();
 
     // The rows are in the file, not in the process that wrote them.
@@ -1312,99 +1320,274 @@ fn a_write_queued_across_a_restore_does_not_land_in_the_restored_database() {
     let _ = std::fs::remove_file(&copy);
 }
 
-// ---- legacy import ----
+// ---- new phase tests: snapshot backup, limits, queue accounting, shutdown ----
 
-/// The only place a legacy token digest may be handled: copied verbatim. Hashing
-/// it again would lock every agent out, and it is the failure mode the exporter
-/// and importer exist to avoid.
-#[test]
-fn a_legacy_import_preserves_ids_credentials_and_history() {
-    let scratch = Scratch::new();
-    let export = scratch.copy(".jsonl");
-    let dest = scratch.copy(".imported");
-    let digest = sha256("the-agent-token");
-    let lines = vec![
-        r#"{"table":"setting","row":{"key":"admin_password_hash","value":"$argon2id$v=19$m=1,t=1,p=1$abc$def"}}"#.to_owned(),
-        r#"{"table":"setting","row":{"key":"public_page","value":"on"}}"#.to_owned(),
-        format!(
-            r#"{{"table":"node","row":{{"id":7,"name":"legacy","token_hash":"{digest}","sort":0,"public":true,"price":19.99,"currency":"USD","billing_cycle":"monthly","expires_at":null,"remark":"","traffic_limit":0,"traffic_mode":"sum","traffic_reset_day":1,"hostname":"h","os":"Linux","kernel":"k","arch":"x86_64","virt":"kvm","cpu_name":"c","cpu_cores":4,"mem_total":8589934592,"swap_total":0,"disk_total":107374182400,"agent_version":"1","ip":"198.51.100.4","ipv4":"198.51.100.4","ipv6":"","country":"JP","last_seen":1700000000,"notify":false,"down_since":0,"created_at":1699999999}}}}"#
-        ),
-        r#"{"table":"traffic","row":{"node_id":7,"boot_id":"boot","last_rx":5000000000,"last_tx":4000000000,"total_rx":9223372036854775806,"total_tx":4611686018427387904,"month_rx":100,"month_tx":200,"month_start":"2026-01-01","day_rx":1,"day_tx":2,"day_start":"2026-01-02"}}"#.to_string(),
-        r#"{"table":"ping_task","row":{"id":3,"name":"cf","target":"1.1.1.1:443","interval":60}}"#.to_owned(),
-        r#"{"table":"ping_node","row":{"task_id":3,"node_id":7}}"#.to_owned(),
-        r#"{"table":"metric","row":{"node_id":7,"ts":4102444800,"cpu":1.5,"mem_used":5368709120,"swap_used":0,"disk_used":1,"net_rx":2,"net_tx":3,"tcp":4,"udp":5,"procs":6}}"#.to_owned(),
-        r#"{"table":"ping_record","row":{"node_id":7,"task_id":3,"ts":1700000000,"latency":42}}"#.to_owned(),
-        // Sessions are exported but must not be carried over.
-        r#"{"table":"session","row":{"token_hash":"deadbeef","expires_at":99}}"#.to_owned(),
-        r##"{"table":"#export","source_schema":5,"rows":{"setting":2,"node":1,"traffic":1,"ping_task":1,"ping_node":1,"metric":1,"ping_record":1}}"##.to_owned(),
-        String::new(),
-    ];
-    std::fs::write(&export, lines.join("\n")).unwrap();
+/// Resets every test-only writer/backup hook even if an assertion fails, so one
+/// failed test cannot slow or break the next one.
+struct ResetTestHooks;
 
-    let report = Db::import_legacy(&export, &dest).unwrap();
-    assert_eq!(report.source_schema, 5);
-    assert_eq!(report.rows["node"], 1);
-    assert!(report.sessions_invalidated);
-
-    let db = Db::open(&dest).unwrap();
-    let imported = db.node(7).unwrap().unwrap();
-    assert_eq!(imported.id, 7, "identifiers are preserved");
-    assert_eq!(imported.name, "legacy");
-    assert_eq!(imported.price, 19.99);
-    assert!(imported.public);
-    assert_eq!(imported.country, "JP");
-    // The digest is stored exactly as it was: presenting it is still not a
-    // credential, and presenting the original token still is.
-    assert_eq!(db.node_by_token("the-agent-token").unwrap(), Some(7));
-    assert_eq!(db.node_by_token(&digest).unwrap(), None);
-    // A lifetime counter near i64::MAX survives the intermediate JSON.
-    let traffic = db.all_traffic()[&7].clone();
-    assert_eq!(traffic.total_rx, 9_223_372_036_854_775_806);
-    assert_eq!(traffic.total_tx, 4_611_686_018_427_387_904);
-    // A timestamp past 2038, and a 5 GiB counter past 32 bits.
-    let rows = db.metrics(7, 0, 3_600).unwrap();
-    assert_eq!(rows[0]["ts"], 4_102_444_800i64);
-    assert_eq!(rows[0]["mem_used"], 5_368_709_120i64);
-    assert_eq!(db.ping_records(7, 0, 60).unwrap().0.len(), 1);
-    // Configuration, including the password hash, arrives verbatim.
-    assert_eq!(db.get("public_page").as_deref(), Some("on"));
-    assert!(db.get("admin_password_hash").unwrap().starts_with("$argon2id$"));
-    assert!(db.sessions().unwrap().is_empty(), "sessions are not carried over");
-
-    // New identities continue past the imported ones rather than colliding.
-    let next = db.create_node(&Node { name: "new".into(), ..Default::default() }, "t").unwrap();
-    assert_eq!(next, 8, "the allocator moved past the highest imported id");
-    assert_eq!(probe(&db, vec![next]), 4, "and so did the probe allocator");
-    db.close().unwrap();
-
-    assert!(Db::import_legacy(&export, &dest).is_err(), "an existing destination is refused");
-    let old = scratch.copy(".old");
-    std::fs::write(&old, "{\"table\":\"#export\",\"source_schema\":4,\"rows\":{}}\n").unwrap();
-    let refused = Db::import_legacy(&old, &scratch.copy(".older")).unwrap_err().to_string();
-    assert!(refused.contains("schema 4"), "{refused}");
+impl Drop for ResetTestHooks {
+    fn drop(&mut self) {
+        TEST_BATCH_HOLD_NANOS.store(0, Ordering::Relaxed);
+        crate::db::backup::TEST_BACKUP_HOLD_NANOS.store(0, Ordering::Relaxed);
+        crate::db::backup::FAIL_AFTER_EXPORT.store(-1, Ordering::Relaxed);
+    }
 }
 
-/// A value that does not fit its column stops the import instead of becoming a
-/// zero, and nothing is published.
+fn wait_until(mut done: impl FnMut() -> bool, what: &str) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !done() {
+        assert!(Instant::now() < deadline, "timed out waiting for {what}");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// A snapshot export must not take the replacement path: no queued telemetry is
+/// refused, the generation does not move, and every table is read from one MVCC
+/// snapshot even while a writer mutation commits between exports.
 #[test]
-fn a_legacy_import_refuses_a_value_it_cannot_decode() {
+fn a_snapshot_export_does_not_refuse_telemetry_and_reads_one_mvcc_snapshot() {
     let scratch = Scratch::new();
-    let export = scratch.copy(".jsonl");
-    let dest = scratch.copy(".imported");
-    std::fs::write(
-        &export,
-        concat!(
-            r#"{"table":"node","row":{"id":1,"name":"n","token_hash":"h","sort":0,"public":false,"price":0,"currency":"USD","billing_cycle":"monthly","expires_at":null,"remark":"","traffic_limit":0,"traffic_mode":"sum","traffic_reset_day":1,"hostname":"","os":"","kernel":"","arch":"","virt":"","cpu_name":"","cpu_cores":0,"mem_total":0,"swap_total":0,"disk_total":0,"agent_version":"","ip":"","ipv4":"","ipv6":"","country":"","last_seen":"","notify":false,"down_since":0,"created_at":0}}"#,
-            "\n",
-            r##"{"table":"#export","source_schema":5,"rows":{"node":1}}"##,
-            "\n"
-        ),
-    )
-    .unwrap();
-    let refused = format!("{:#}", Db::import_legacy(&export, &dest).unwrap_err());
-    assert!(refused.contains("last_seen"), "{refused}");
-    assert!(!std::path::Path::new(&dest).exists(), "a failed import publishes nothing");
-    assert!(!std::path::Path::new(&format!("{dest}.partial")).exists(), "and leaves no partial file");
+    let copy = scratch.copy(".copy");
+    let db = Db::open(&scratch.0).unwrap();
+    let id = node(&db, 1);
+    db.insert_metric(id, 60, &serde_json::json!({"cpu": 1.0})).unwrap();
+    db.touch_seen(id, 60).unwrap();
+
+    let before = db.queue_stats();
+    let refused_before = before["refused_ops_total"].as_u64().unwrap();
+    let _reset = ResetTestHooks;
+    crate::db::backup::TEST_BACKUP_HOLD_NANOS.store(400_000_000, Ordering::Relaxed);
+
+    let backup_db = db.clone();
+    let backup_path = copy.clone();
+    let worker = std::thread::spawn(move || backup_db.backup_into(&backup_path));
+    wait_until(
+        || crate::db::backup::TEST_BACKUP_ACTIVE.load(Ordering::SeqCst),
+        "the snapshot to reach its hold point",
+    );
+
+    // Accepted while the snapshot transaction is open: normal telemetry, not a
+    // replacement, so it must commit rather than be marked superseded.
+    db.insert_metric(id, 120, &serde_json::json!({"cpu": 2.0})).unwrap();
+    db.set("snapshot_probe", "yes").unwrap();
+    // A multi-table mutation between two exports. A single MVCC snapshot means
+    // the report below sees the state before this delete for every table.
+    db.delete_node(id).unwrap();
+    crate::db::backup::TEST_BACKUP_HOLD_NANOS.store(0, Ordering::Relaxed);
+
+    let report = worker.join().unwrap().unwrap();
+    assert_eq!(report.rows["node"], 1, "the snapshot predates the delete");
+    assert_eq!(report.rows["traffic"], 1);
+    assert_eq!(report.rows["metric"], 1, "and predates the telemetry committed during the hold");
+    assert!(!report.rows.contains_key("session"), "session is not a backup table");
+    let after = db.queue_stats();
+    assert_eq!(
+        after["refused_ops_total"].as_u64().unwrap(),
+        refused_before,
+        "a backup snapshot must never mark accepted telemetry superseded"
+    );
+    assert_eq!(after["queued_ops_current"], 0);
+
+    // The live database remains writable afterwards, and the archive restores
+    // as a consistent database.
+    let fresh = node(&db, 1);
+    db.insert_metric(fresh, 180, &serde_json::json!({"cpu": 3.0})).unwrap();
+    let inspected = db.check_backup(&copy).unwrap();
+    assert_eq!(inspected.format, 2);
+    let restored = Db::open(":memory:").unwrap();
+    restored.restore_from(&copy).map_err(|e| format!("{e:#}")).unwrap();
+    assert_eq!(restored.nodes().unwrap().len(), 1, "the snapshot was internally consistent");
+    assert_eq!(restored.metrics(1, 0, 60).unwrap().len(), 1);
+    let _ = std::fs::remove_file(&copy);
+}
+
+/// If an export fails after `BEGIN`, rollback-on-drop must leave the reader
+/// connection immediately reusable: no open transaction, and normal storage
+/// operations continue.
+#[test]
+fn a_failed_backup_rolls_back_and_leaves_the_pool_reusable() {
+    let scratch = Scratch::new();
+    let copy = scratch.copy(".copy");
+    let db = Db::open(&scratch.0).unwrap();
+    let id = node(&db, 1);
+    let _reset = ResetTestHooks;
+    // Fail when the first table has been exported and the next begins: that is
+    // unambiguously inside the transaction.
+    crate::db::backup::FAIL_AFTER_EXPORT.store(1, Ordering::Relaxed);
+    let refused = db.backup_into(&copy);
+    assert!(refused.is_err(), "the injected export failure must surface");
+    assert!(!std::path::Path::new(&copy).exists(), "a failed backup publishes nothing");
+
+    // Normal reads and writes still work.
+    db.set("after_failed_backup", "yes").unwrap();
+    assert_eq!(db.get("after_failed_backup").as_deref(), Some("yes"));
+    db.insert_metric(id, 60, &serde_json::json!({"cpu": 1.0})).unwrap();
+
+    crate::db::backup::FAIL_AFTER_EXPORT.store(-1, Ordering::Relaxed);
+    // The failed transaction ran on one pooled reader. `backup_into` cycles the
+    // pool, so repeating the export proves every reader -- including the one
+    // that failed -- can start a transaction again. A leaked `BEGIN` would make
+    // one of these fail.
+    for _ in 0..(READERS + 1) {
+        db.backup_into(&copy).map_err(|e| format!("{e:#}")).unwrap();
+    }
+    assert!(db.check_backup(&copy).is_ok());
+    let _ = std::fs::remove_file(&copy);
+}
+
+/// Each archive resource limit is enforced independently. Limits are lowered
+/// here so the fixtures stay tiny.
+#[test]
+fn the_archive_validator_enforces_member_count_size_and_total_limits() {
+    let scratch = Scratch::new();
+    let archive_path = scratch.copy(".limits");
+    let work = std::env::temp_dir().join(format!("romi-limits-{}", rand::random::<u64>()));
+    std::fs::create_dir_all(&work).unwrap();
+    let limits = |compressed, members, member, total| crate::db::backup::ArchiveLimits {
+        compressed,
+        members,
+        member,
+        total,
+        manifest: 1024,
+    };
+    let write = |members: &[(&str, Vec<u8>)]| {
+        std::fs::write(&archive_path, build_archive(members)).unwrap();
+    };
+    let check = |limits| {
+        crate::db::backup::extract_and_validate_with(&archive_path, work.to_str().unwrap(), limits)
+            .unwrap_err()
+            .to_string()
+    };
+
+    // Compressed upload ceiling.
+    write(&[("setting.parquet", vec![0u8; 64])]);
+    assert!(check(limits(8, 8, 1024, 1024)).contains("上传上限"));
+    // Member count ceiling.
+    write(&[("setting.parquet", vec![0u8; 4]), ("node.parquet", vec![0u8; 4])]);
+    assert!(check(limits(1024, 1, 1024, 1024)).contains("成员数"));
+    // Per-member expanded ceiling.
+    write(&[("setting.parquet", vec![0u8; 32])]);
+    assert!(check(limits(1024, 8, 16, 1024)).contains("单个成员上限"));
+    // Total expanded ceiling: each member is valid on its own, the sum is not.
+    write(&[("setting.parquet", vec![0u8; 32]), ("node.parquet", vec![0u8; 32])]);
+    assert!(check(limits(1024, 8, 64, 48)).contains("展开总量"));
+    // Duplicate member.
+    write(&[("setting.parquet", vec![0u8; 4]), ("setting.parquet", vec![0u8; 4])]);
+    assert!(check(limits(1024, 8, 1024, 1024)).contains("重复"));
+    // Unknown member and path traversal are refused before anything is built.
+    write(&[("notes.txt", vec![0u8; 4])]);
+    assert!(check(limits(1024, 8, 1024, 1024)).contains("未知"));
+    write(&[("../outside.parquet", vec![0u8; 4])]);
+    assert!(check(limits(1024, 8, 1024, 1024)).contains("路径不安全"));
+    let _ = std::fs::remove_dir_all(&work);
+    let _ = std::fs::remove_file(&archive_path);
+}
+
+/// One batch transaction with N telemetry jobs commits N operations and one
+/// transaction. The writer is held briefly so the jobs queue deterministically.
+#[test]
+fn one_batch_counts_every_operation_and_one_transaction() {
+    let db = db();
+    let id = node(&db, 1);
+    let _reset = ResetTestHooks;
+    let before = db.queue_stats();
+    TEST_BATCH_HOLD_NANOS.store(200_000_000, Ordering::Relaxed);
+
+    let writers: Vec<_> = (0..8)
+        .map(|i| {
+            let db = db.clone();
+            std::thread::spawn(move || db.insert_metric(id, 100 + i, &serde_json::json!({"cpu": 1.0})))
+        })
+        .collect();
+    for writer in writers {
+        writer.join().unwrap().unwrap();
+    }
+    TEST_BATCH_HOLD_NANOS.store(0, Ordering::Relaxed);
+    let after = db.queue_stats();
+    let delta = |key: &str| after[key].as_u64().unwrap() - before[key].as_u64().unwrap();
+    assert_eq!(delta("batch_transactions_total"), 1);
+    assert_eq!(delta("batch_ops_total"), 8);
+    assert_eq!(delta("committed_ops_total"), 8, "one committed operation per telemetry job");
+    assert_eq!(delta("transactions_total"), 1, "the whole group commit is one transaction");
+    assert_eq!(after["queued_ops_current"], 0);
+    assert!(after["max_batch_size"].as_u64().unwrap() >= 8);
+    assert_eq!(after["average_batch_size"].as_f64().unwrap(), 8.0);
+    assert!(after["transaction_us_total"].as_u64().unwrap() > 0);
+}
+
+/// A queued job whose database generation became stale is refused, never
+/// counted as committed.
+#[test]
+fn a_generation_change_refuses_queued_work_without_counting_it_committed() {
+    let db = db();
+    let id = node(&db, 1);
+    let _reset = ResetTestHooks;
+    let before = db.queue_stats();
+    TEST_BATCH_HOLD_NANOS.store(300_000_000, Ordering::Relaxed);
+    let writer_db = db.clone();
+    let writer = std::thread::spawn(move || writer_db.insert_metric(id, 1, &serde_json::json!({"cpu": 1.0})));
+    wait_until(
+        || db.queue_stats()["queued_ops_current"].as_u64().unwrap() > 0,
+        "the telemetry job to be accepted",
+    );
+    db.inner_handle().generation.fetch_add(1, Ordering::SeqCst);
+    assert!(writer.join().unwrap().is_err(), "a superseded job must not report success");
+    TEST_BATCH_HOLD_NANOS.store(0, Ordering::Relaxed);
+
+    let after = db.queue_stats();
+    assert_eq!(
+        after["refused_ops_total"].as_u64().unwrap() - before["refused_ops_total"].as_u64().unwrap(),
+        1
+    );
+    assert_eq!(after["committed_ops_total"], before["committed_ops_total"]);
+    assert_eq!(after["queued_ops_current"], 0);
+}
+
+/// `close` refuses new work, drains accepted work, and releases the custom lock
+/// only after the writer and reader handles are done. While it is closing, a
+/// second hub cannot take the file; afterwards it can.
+#[test]
+fn close_drains_accepted_writes_and_releases_the_lock_last() {
+    let scratch = Scratch::new();
+    let db = Db::open(&scratch.0).unwrap();
+    let id = node(&db, 1);
+    let _reset = ResetTestHooks;
+    TEST_BATCH_HOLD_NANOS.store(400_000_000, Ordering::Relaxed);
+    let writer_db = db.clone();
+    let writer = std::thread::spawn(move || writer_db.insert_metric(id, 1, &serde_json::json!({"cpu": 1.0})));
+    wait_until(|| db.queue_stats()["queued_ops_current"].as_u64().unwrap() > 0, "the write to be accepted");
+
+    let closer = db.clone();
+    let closing = std::thread::spawn(move || closer.close());
+    wait_until(|| db.inner_handle().closed.load(Ordering::SeqCst), "close to start");
+    assert!(Db::open(&scratch.0).is_err(), "the lock must still be held while close drains the writer");
+
+    closing.join().unwrap().unwrap();
+    writer.join().unwrap().unwrap();
+    assert!(db.set("after_close", "refused").is_err(), "a closed handle accepts no work");
+
+    let reopened = Db::open(&scratch.0).unwrap();
+    assert_eq!(reopened.scalar("SELECT COUNT(*) FROM metric").unwrap(), 1, "the accepted write committed");
+    reopened.close().unwrap();
+}
+
+/// Format detection reads a fixed-size header, never the whole file. A large
+/// sparse foreign file is refused immediately and left at its original length.
+#[test]
+fn format_detection_does_not_depend_on_file_size() {
+    let scratch = Scratch::new();
+    let mut file = std::fs::File::create(&scratch.0).unwrap();
+    std::io::Write::write_all(&mut file, b"not a duckdb file at all").unwrap();
+    let bytes = 4u64 * 1024 * 1024 * 1024;
+    file.set_len(bytes).unwrap();
+    drop(file);
+
+    let started = Instant::now();
+    let refused = format!("{:#}", Db::open(&scratch.0).unwrap_err());
+    assert!(refused.contains("romi"), "{refused}");
+    assert!(started.elapsed() < Duration::from_secs(5), "a header read must not scan four GiB");
+    assert_eq!(std::fs::metadata(&scratch.0).unwrap().len(), bytes, "the file was not modified");
 }
 
 // ---- helpers ----

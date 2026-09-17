@@ -1,4 +1,4 @@
-//! The native DuckDB schema and its migration mechanism.
+//! The native DuckDB schema and its versioning mechanism.
 //!
 //! Three different versions have to be kept apart:
 //!
@@ -11,24 +11,27 @@
 //! * **The DuckDB storage format version** belongs to the engine and is checked
 //!   by DuckDB itself when the file is opened; a file written by a newer storage
 //!   format is rejected by the engine before any of our code runs.
-//!
-//! The SQLite schema version 5 this repository previously used has no meaning
-//! here. It is read only by the offline migration tool (`db::legacy`).
 
 use anyhow::{Context, Result};
 use duckdb::Connection;
 
-/// Revision of the *DuckDB* schema. This is not the SQLite `user_version`: the
-/// legacy number 5 describes a schema that no longer exists in this binary.
+/// Revision of the native DuckDB schema.
 ///
 /// Increment it and add a `migrate_to_N` step when a database already in service
 /// has to change shape.
 pub const SCHEMA_VERSION: i64 = 1;
 
-/// Every application table. A backup must carry all of them, and a restore
-/// rebuilds exactly these.
+/// Every application table, including runtime state. Used by diagnostics and
+/// schema initialization.
 pub const TABLES: [&str; 8] =
     ["setting", "node", "traffic", "metric", "ping_task", "ping_node", "ping_record", "session"];
+
+/// Tables a backup carries and a restore rebuilds. Sessions are runtime/security
+/// state, never durable user data: a restored database always starts with an
+/// empty `session` table, so restoring cannot revive a login that was revoked
+/// after the archive was taken.
+pub const BACKUP_TABLES: [&str; 7] =
+    ["setting", "node", "traffic", "metric", "ping_task", "ping_node", "ping_record"];
 
 /// The engine release this build was compiled and tested against.
 ///
@@ -42,17 +45,17 @@ pub const ID_SOURCES: [&str; 2] = ["node", "ping_task"];
 
 /// DDL, applied in one transaction to a database that has no `romi_schema` row.
 ///
-/// Written for DuckDB rather than translated from SQLite:
+/// Written for DuckDB's own type system:
 ///
 /// * `BIGINT` for every column the application reads as `i64` -- identifiers,
 ///   byte counters, unix timestamps. `INTEGER` is 32-bit in DuckDB and would
 ///   silently truncate a lifetime counter or a post-2038 timestamp.
-/// * `DOUBLE` for the one column that carries `f64` precision (`node.price`, and
-///   the averaged `metric.cpu`).
-/// * `BOOLEAN` for `node.public` and `node.notify`; SQLite stored 0/1 and the API
-///   converted on the way out.
-/// * No `WITHOUT ROWID`: DuckDB has no such clause, and a `PRIMARY KEY` becomes an
-///   ART index, which is what makes `metric` and `ping_record` reject duplicates.
+/// * `DOUBLE` for the columns that carry `f64` precision (`node.price`, and the
+///   averaged `metric.cpu`).
+/// * `BOOLEAN` for `node.public` and `node.notify`, so the API reads a real
+///   boolean instead of converting an integer on the way out.
+/// * A `PRIMARY KEY` becomes an ART index, which is what makes `metric` and
+///   `ping_record` reject duplicates.
 /// * No `ON DELETE CASCADE`: DuckDB's parser rejects it outright, and its
 ///   foreign-key check does not observe child deletes made earlier in the same
 ///   transaction. Relationships are therefore enforced by the application inside
@@ -69,8 +72,8 @@ CREATE TABLE IF NOT EXISTS setting (
 );
 
 -- Identity allocation. A table rather than a CREATE SEQUENCE because DuckDB has
--- no `setval`: a sequence cannot be advanced past the highest id an import or a
--- restore brought in, and `nextval` would then hand out ids that already exist.
+-- no `setval`: a sequence cannot be advanced past the highest id a restore
+-- brought in, and `nextval` would then hand out ids that already exist.
 -- `UPDATE ... RETURNING` is atomic, and it runs inside the writer's transaction,
 -- so two allocations can never collide. `next` is the next id to hand out.
 CREATE TABLE IF NOT EXISTS romi_id (
@@ -274,8 +277,7 @@ fn stamp(conn: &Connection, written_by: &str) -> Result<()> {
 /// Steps run in ascending order on a version that predates them, and each one is
 /// written to be harmless if the shape it expects is already there -- a database
 /// an operator restored from a backup taken mid-upgrade must not be left
-/// unusable. Nothing here mechanically copies the SQLite migrations: those
-/// described a schema that no longer exists.
+/// unusable.
 fn migrate(conn: &Connection, from: i64) -> Result<()> {
     anyhow::ensure!(from <= SCHEMA_VERSION, "database schema is newer than this server");
     // No steps yet: version 1 is the schema this migration mechanism was
@@ -284,7 +286,7 @@ fn migrate(conn: &Connection, from: i64) -> Result<()> {
     Ok(())
 }
 
-/// Moves an identity source past every id an import or a restore brought in.
+/// Moves an identity source past every id a restore brought in.
 ///
 /// Called with the highest id present in `table`; the next allocation is that
 /// plus one. `MAX` over an empty table is NULL, which leaves the counter at 1.

@@ -2,9 +2,15 @@
 //!
 //! # Format
 //!
-//! A backup is a gzipped tar holding one Parquet file per application table and a
-//! `manifest.json` that records the application schema version, the engine that
-//! wrote it, and each member's row count and SHA-256.
+//! A backup is a gzipped tar holding one Parquet file per **persistent** table
+//! plus a `manifest.json` that records the application schema version, the engine
+//! that wrote it, and each member's row count and SHA-256.
+//!
+//! Sessions are deliberately absent. They are runtime/security state, not user
+//! data: restoring must never revive a login that the operator revoked after the
+//! archive was taken. A restored database creates an empty `session` table from
+//! the current schema, and backup/restore transforms never touch login state
+//! after activation.
 //!
 //! It is deliberately **not** a copy of the DuckDB file:
 //!
@@ -17,22 +23,46 @@
 //! Restoring therefore reads the archive as *data*, into a schema this build
 //! creates for itself, and never executes anything the archive contains.
 //!
-//! # Restore
+//! # Backup snapshot
 //!
-//! 1. The archive is validated member by member (paths, sizes, digests, types).
-//! 2. A complete new database is built in a scratch file and checked: row counts
-//!    against the manifest, column names and types against this build's schema,
-//!    and referential integrity across the rebuilt rows.
-//! 3. Only then is the live file replaced, under the maintenance barrier: readers
-//!    stopped, the writer's connection closed, the original renamed aside, the
-//!    new file renamed into place and reopened.
-//! 4. If step 3 fails at any point the original is renamed back and reopened, and
-//!    the failure is reported. The original is deleted only once the replacement
-//!    is open and answering.
+//! An export runs on a pooled reader inside one DuckDB read transaction, so every
+//! table is read from the same MVCC snapshot. It is a normal read: the writer
+//! keeps committing telemetry, queued writes are neither drained nor refused, the
+//! database generation is not advanced, and no connected agent is disturbed. The
+//! only barrier involved is the read side of the file-replacement gate, which
+//! keeps the database file from being renamed underneath the transaction.
+//!
+//! # Restore ordering
+//!
+//! 1. The archive is validated member by member (paths, counts, sizes, digests,
+//!    types) without reading a large member into memory.
+//! 2. A complete new database is built in a scratch file: every persistent table
+//!    is imported, the session table is forced empty, and row counts, column
+//!    names/types and referential integrity are checked.
+//! 3. The staging database is checkpointed and closed.
+//! 4. Only then is the live file replaced, under the replacement barrier: readers
+//!    stopped, writer's connection closed, original renamed aside, new file
+//!    renamed into place and reopened.
+//! 5. If step 4 fails at any point the original is renamed back and reopened, and
+//!    the failure is reported. Once activation has reopened the new file, no
+//!    further database mutation is required and nothing that can materially fail
+//!    remains.
+//!
+//! # Archive limits
+//!
+//! The validator enforces all four resource dimensions explicitly: the compressed
+//! upload size, the number of members, the expanded size of each member, and the
+//! total expanded size. Members are streamed through a fixed 64 KiB buffer. An
+//! archive built by this build has seven Parquet members plus the manifest, so
+//! conservative limits reject a compression bomb, several individually valid
+//! large members, or an archive with excessive member count before a staging
+//! database is built.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::sync::atomic::Ordering;
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64};
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure, Context, Result};
@@ -41,15 +71,57 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
-use super::{checkpoint, open_connection, own_only, restrict, schema, Exclusive, Inner, ReaderPool, TABLES};
+use super::{
+    checkpoint, open_connection, own_only, restrict, schema, Exclusive, Inner, ReaderPool, BACKUP_TABLES,
+    MAX_ARCHIVE,
+};
 
-/// Bumped when the layout of the archive itself changes.
-const BACKUP_FORMAT: i64 = 1;
+/// Bumped when the layout of the archive itself changes. Version 2 excludes the
+/// `session` table; version 1 archives are not accepted.
+const BACKUP_FORMAT: i64 = 2;
 const KIND: &str = "romi-duckdb-backup";
-/// Ceiling on the manifest, which is the only member held in memory.
+
+/// The manifest is the only member held in memory; its size is bounded twice
+/// (declared tar size and bytes actually read).
 const MAX_MANIFEST: u64 = 1024 * 1024;
 /// One Parquet member may not exceed this once expanded.
-const MAX_MEMBER: u64 = 512 * 1024 * 1024;
+const MAX_MEMBER: u64 = 256 * 1024 * 1024;
+/// Total expanded size across every member, including the manifest.
+const MAX_TOTAL_EXPANDED: u64 = 1024 * 1024 * 1024;
+/// Maximum member count. The format needs exactly `BACKUP_TABLES + manifest`;
+/// a little headroom keeps the constant stable as tables are added.
+const MAX_MEMBERS: usize = BACKUP_TABLES.len() + 1;
+
+/// Every resource limit the archive validator applies. Tests lower these to
+/// exercise each refusal with small fixtures instead of multi-megabyte archives.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct ArchiveLimits {
+    pub compressed: u64,
+    pub members: usize,
+    pub member: u64,
+    pub total: u64,
+    pub manifest: u64,
+}
+
+pub(super) const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = ArchiveLimits {
+    compressed: MAX_ARCHIVE,
+    members: MAX_MEMBERS,
+    member: MAX_MEMBER,
+    total: MAX_TOTAL_EXPANDED,
+    manifest: MAX_MANIFEST,
+};
+
+/// Injected failure point for the backup transaction test: when it equals the
+/// number of tables already exported, the next export fails. Test-only.
+#[cfg(test)]
+pub(super) static FAIL_AFTER_EXPORT: AtomicI64 = AtomicI64::new(-1);
+/// Holds an in-progress snapshot after the first table, so a test can mutate the
+/// live database and prove the remaining tables still read one snapshot.
+/// Test-only.
+#[cfg(test)]
+pub(super) static TEST_BACKUP_HOLD_NANOS: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+pub(super) static TEST_BACKUP_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// What a backup holds. Returned to the panel after a backup or a restore, and
 /// used by `check_backup`.
@@ -83,8 +155,17 @@ pub struct MaintenanceReport {
     pub compacted: bool,
     /// Size on disk afterwards, main file plus log.
     pub size: i64,
-    /// The connection generation, so a caller can tell a rebuild happened.
+    /// The connection generation after the operation.
     pub generation: u64,
+}
+
+/// The checkpoint/measurement half of maintenance, produced on the writer
+/// connection without taking the replacement barrier. `rewrite` says whether a
+/// second, replacing step is worth taking.
+pub(super) struct MaintenancePlan {
+    pub report: MaintenanceReport,
+    pub rewrite: bool,
+    checkpointed: i64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -106,10 +187,11 @@ struct Member {
 
 // ---- backup ----
 
-/// Writes `dest` from the live database. Runs on the writer thread with the
-/// maintenance barrier held, so the rows it copies are one consistent snapshot.
-pub(super) fn write_archive(conn: &mut Option<Connection>, dest: &str) -> Result<BackupReport> {
-    let conn = conn.as_ref().ok_or_else(|| anyhow!("数据库已关闭"))?;
+/// Writes `dest` from the live database. The caller runs this on a reader
+/// connection inside the read side of the replacement gate, so the rows it
+/// copies are one consistent MVCC snapshot and the file cannot be renamed
+/// underneath it.
+pub(super) fn write_archive(conn: &Connection, dest: &str) -> Result<BackupReport> {
     let work = scratch_dir(dest, "backup")?;
     let outcome = write_archive_inner(conn, dest, &work);
     let _ = std::fs::remove_dir_all(&work);
@@ -118,25 +200,46 @@ pub(super) fn write_archive(conn: &mut Option<Connection>, dest: &str) -> Result
 
 fn write_archive_inner(conn: &Connection, dest: &str, work: &str) -> Result<BackupReport> {
     // One snapshot for every table: without the transaction each COPY would see
-    // whatever had been committed by the time it started.
-    conn.execute_batch("BEGIN")?;
+    // whatever had been committed by the time it started. `Transaction` rolls
+    // back on drop, so an error in the middle leaves this connection clean and
+    // immediately reusable for normal reads.
+    let tx = conn.unchecked_transaction().context("starting the backup read transaction")?;
     let mut members = BTreeMap::new();
     let mut rows = BTreeMap::new();
-    for table in TABLES {
+    for (number, table) in BACKUP_TABLES.into_iter().enumerate() {
+        #[cfg(test)]
+        {
+            if FAIL_AFTER_EXPORT.load(Ordering::Relaxed) == number as i64 {
+                anyhow::bail!("injected backup export failure after {number} table(s)");
+            }
+            // Hold between statements of one read transaction: the first table
+            // has established the MVCC snapshot, and a test mutating the live
+            // database here proves later tables still see it.
+            if number == 1 {
+                let hold = TEST_BACKUP_HOLD_NANOS.load(Ordering::Relaxed);
+                if hold > 0 {
+                    TEST_BACKUP_ACTIVE.store(true, Ordering::SeqCst);
+                    std::thread::sleep(std::time::Duration::from_nanos(hold));
+                    TEST_BACKUP_ACTIVE.store(false, Ordering::SeqCst);
+                }
+            }
+        }
+        #[cfg(not(test))]
+        let _ = number;
         let path = format!("{work}/{table}.parquet");
-        let columns = native_columns(conn, table)?;
+        let columns = native_columns(&tx, table)?;
         let list = columns.iter().map(|c| c.0.clone()).collect::<Vec<_>>().join(", ");
-        conn.execute_batch(&format!(
+        tx.execute_batch(&format!(
             "COPY (SELECT {list} FROM {table}) TO '{}' (FORMAT PARQUET)",
             escape(&path)
         ))
         .with_context(|| format!("exporting table {table}"))?;
-        let count: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))?;
+        let count: i64 = tx.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))?;
         let bytes = std::fs::metadata(&path)?.len();
         members.insert(table.to_owned(), Member { rows: count, sha256: file_sha256(&path)?, bytes });
         rows.insert(table.to_owned(), count);
     }
-    conn.execute_batch("COMMIT")?;
+    tx.commit()?;
 
     let report = BackupReport {
         format: BACKUP_FORMAT,
@@ -165,8 +268,10 @@ fn write_archive_inner(conn: &Connection, dest: &str, work: &str) -> Result<Back
         let file = std::fs::File::create(&partial)?;
         let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
         let mut tar = tar::Builder::new(encoder);
-        for name in
-            TABLES.iter().map(|t| format!("{t}.parquet")).chain(std::iter::once("manifest.json".to_owned()))
+        for name in BACKUP_TABLES
+            .iter()
+            .map(|t| format!("{t}.parquet"))
+            .chain(std::iter::once("manifest.json".to_owned()))
         {
             let path = format!("{work}/{name}");
             let mut file = std::fs::File::open(&path)?;
@@ -192,7 +297,7 @@ fn write_archive_inner(conn: &Connection, dest: &str, work: &str) -> Result<Back
 /// Validates an archive without touching anything.
 pub fn inspect(src: &str) -> Result<BackupReport> {
     let work = scratch_dir(src, "inspect")?;
-    let outcome = extract_and_validate(src, &work);
+    let outcome = extract_and_validate_with(src, &work, DEFAULT_ARCHIVE_LIMITS).map(|(report, _)| report);
     let _ = std::fs::remove_dir_all(&work);
     outcome
 }
@@ -202,27 +307,44 @@ pub fn inspect(src: &str) -> Result<BackupReport> {
 ///
 /// Two passes on purpose: the manifest is one member among many and may be the
 /// last one in the archive, so the digests cannot be checked while the members
-/// are being read.
-fn extract_and_validate(src: &str, work: &str) -> Result<BackupReport> {
+/// are being read. No member larger than [`ArchiveLimits::manifest`] is ever
+/// held in memory; all others stream to disk through a fixed buffer.
+pub(super) fn extract_and_validate_with(
+    src: &str,
+    work: &str,
+    limits: ArchiveLimits,
+) -> Result<(BackupReport, u64)> {
+    let compressed = std::fs::metadata(src).map(|m| m.len()).unwrap_or(0);
+    ensure!(
+        compressed <= limits.compressed,
+        "备份文件 {} 超过 {} MiB 的上传上限",
+        compressed / 1024 / 1024,
+        limits.compressed / 1024 / 1024
+    );
     let mut members: Vec<String> = Vec::new();
+    let mut expanded_total = 0u64;
     {
         let file = std::fs::File::open(src).with_context(|| format!("reading the backup {src}"))?;
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(file));
+        let mut count = 0usize;
         for entry in archive.entries().context("this file is not a gzipped tar archive")? {
             let mut entry = entry?;
+            count += 1;
+            ensure!(count <= limits.members, "备份成员数超过上限 {}", limits.members);
             let name = entry.path()?.to_string_lossy().into_owned();
             ensure!(entry.header().entry_type().is_file(), "备份包含非普通文件成员：{name}");
-            if name == "manifest.json" {
-                ensure!(entry.size() <= MAX_MANIFEST, "manifest 过大");
-            }
             ensure!(
                 !name.starts_with('/') && !name.contains("..") && !name.contains('\\'),
                 "备份成员路径不安全：{name}"
             );
+            let is_manifest = name == "manifest.json";
+            ensure!(
+                is_manifest || BACKUP_TABLES.iter().any(|t| name == format!("{t}.parquet")),
+                "备份包含未知成员：{name}"
+            );
             ensure!(!members.contains(&name), "备份包含重复成员：{name}");
-            let expected = name == "manifest.json" || TABLES.iter().any(|t| name == format!("{t}.parquet"));
-            ensure!(expected, "备份包含未知成员：{name}");
-            ensure!(entry.size() <= MAX_MEMBER, "{name} 超过单个成员上限");
+            let member_limit = if is_manifest { limits.manifest } else { limits.member };
+            ensure!(entry.size() <= member_limit, "{name} 超过单个成员上限");
             let path = format!("{work}/{name}");
             let mut out = std::fs::File::create(&path)?;
             let mut buffer = vec![0u8; 64 * 1024];
@@ -233,16 +355,27 @@ fn extract_and_validate(src: &str, work: &str) -> Result<BackupReport> {
                     break;
                 }
                 written += n as u64;
-                ensure!(written <= MAX_MEMBER, "{name} 超过单个成员上限");
+                ensure!(written <= member_limit, "{name} 超过单个成员上限");
+                expanded_total =
+                    expanded_total.checked_add(n as u64).ok_or_else(|| anyhow!("备份展开总量溢出"))?;
+                ensure!(
+                    expanded_total <= limits.total,
+                    "备份展开总量超过 {} MiB 的上限",
+                    limits.total / 1024 / 1024
+                );
                 out.write_all(&buffer[..n])?;
             }
+            ensure!(written == entry.size(), "{name} 的实际大小与归档记录不符");
             out.flush()?;
+            drop(out);
             members.push(name);
         }
     }
 
     ensure!(members.iter().any(|m| m == "manifest.json"), "备份缺少 manifest.json");
-    let text = std::fs::read(format!("{work}/manifest.json"))?;
+    let manifest_path = format!("{work}/manifest.json");
+    ensure!(std::fs::metadata(&manifest_path)?.len() <= limits.manifest, "manifest 过大");
+    let text = std::fs::read(&manifest_path)?;
     let manifest: Manifest = serde_json::from_slice(&text).context("manifest.json 无法解析")?;
     ensure!(manifest.format == BACKUP_FORMAT, "不支持的备份格式 {}", manifest.format);
     ensure!(manifest.kind == KIND, "这不是 romi 的备份");
@@ -252,28 +385,32 @@ fn extract_and_validate(src: &str, work: &str) -> Result<BackupReport> {
         manifest.schema,
         schema::SCHEMA_VERSION
     );
-    for table in TABLES {
-        ensure!(members.contains(&format!("{table}.parquet")), "备份缺少 {table}.parquet");
-        let member = manifest.tables.get(table).ok_or_else(|| anyhow!("manifest 里没有 {table} 的记录"))?;
-        let digest = file_sha256(&format!("{work}/{table}.parquet"))?;
-        ensure!(member.sha256 == digest, "{table}.parquet 的摘要与 manifest 不符");
-        let size = std::fs::metadata(format!("{work}/{table}.parquet"))?.len();
-        ensure!(member.bytes == size, "{table}.parquet 的大小与 manifest 不符");
+    for table in manifest.tables.keys() {
+        ensure!(BACKUP_TABLES.contains(&table.as_str()), "manifest 提到未知表 {table}");
     }
     let mut rows = BTreeMap::new();
-    for (table, member) in &manifest.tables {
-        ensure!(TABLES.contains(&table.as_str()), "manifest 提到未知表 {table}");
-        rows.insert(table.clone(), member.rows);
+    for table in BACKUP_TABLES {
+        ensure!(members.contains(&format!("{table}.parquet")), "备份缺少 {table}.parquet");
+        let member = manifest.tables.get(table).ok_or_else(|| anyhow!("manifest 里没有 {table} 的记录"))?;
+        let path = format!("{work}/{table}.parquet");
+        let digest = file_sha256(&path)?;
+        ensure!(member.sha256 == digest, "{table}.parquet 的摘要与 manifest 不符");
+        let size = std::fs::metadata(&path)?.len();
+        ensure!(member.bytes == size, "{table}.parquet 的大小与 manifest 不符");
+        rows.insert(table.to_owned(), member.rows);
     }
-    Ok(BackupReport {
-        format: manifest.format,
-        kind: manifest.kind,
-        schema: manifest.schema,
-        engine: manifest.engine,
-        created_at: manifest.created_at,
-        bytes: std::fs::metadata(src).map(|m| m.len()).unwrap_or(0),
-        rows,
-    })
+    Ok((
+        BackupReport {
+            format: manifest.format,
+            kind: manifest.kind,
+            schema: manifest.schema,
+            engine: manifest.engine,
+            created_at: manifest.created_at,
+            bytes: std::fs::metadata(src).map(|m| m.len()).unwrap_or(0),
+            rows,
+        },
+        expanded_total,
+    ))
 }
 
 /// The names and types of one table as this build declares them.
@@ -296,13 +433,10 @@ pub(super) fn restore(ex: &mut Exclusive<'_>, inner: &Arc<Inner>, src: &str) -> 
     let outcome = (|| -> Result<BackupReport> {
         let report = build_staging(inner, src, &staging)?;
         activate(ex, inner, &staging)?;
-        // The archive carries whatever sessions it held when it was taken, and
-        // restoring it must not revive a login the operator ended. Done here
-        // rather than by the caller so no path into a restore can skip it; the
-        // panel then issues the caller a fresh session.
-        if let Some(conn) = ex.conn.as_ref() {
-            conn.execute("DELETE FROM session", [])?;
-        }
+        // Everything a restore has to change -- including session invalidation --
+        // happened in the staging database. After activation there is nothing
+        // left to mutate, so a successful restore cannot fail after the live
+        // file has already been discarded.
         Ok(report)
     })();
     let _ = std::fs::remove_file(&staging);
@@ -317,12 +451,24 @@ pub(super) fn restore(ex: &mut Exclusive<'_>, inner: &Arc<Inner>, src: &str) -> 
 fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str) -> Result<BackupReport> {
     let work = scratch_dir(dest, "staging")?;
     let outcome = (|| -> Result<BackupReport> {
-        let report = extract_and_validate(src, &work)?;
+        let (report, expanded) = extract_and_validate_with(src, &work, DEFAULT_ARCHIVE_LIMITS)?;
+        // Advisory, not a reservation: the archive's expanded size is known, and
+        // a staging database usually needs a small multiple of the Parquet bytes.
+        // If statvfs is unavailable this check is skipped; the write path still
+        // reports a real failure if the filesystem fills up.
+        let staging_dir = std::path::Path::new(dest).parent().and_then(|p| p.to_str()).unwrap_or(".");
+        if let Some(free) = available_bytes(staging_dir) {
+            let needed = expanded.saturating_mul(2).saturating_add(16 * 1024 * 1024);
+            ensure!(
+                free >= needed,
+                "构建恢复 staging 数据库的可用磁盘空间不足：剩余 {free} 字节，预计至少需要 {needed} 字节"
+            );
+        }
         let _ = std::fs::remove_file(dest);
         let _ = std::fs::remove_file(format!("{dest}.wal"));
         let mut conn = open_connection(dest, &inner.options, false)?;
         schema::initialize(&mut conn, true, env!("CARGO_PKG_VERSION"))?;
-        for table in TABLES {
+        for table in BACKUP_TABLES {
             let file = format!("{work}/{table}.parquet");
             // The archive is untrusted input. Comparing the Parquet schema with
             // the one this build declares means a member whose columns are
@@ -348,6 +494,10 @@ fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str) -> Result<BackupRepo
             let claimed = report.rows.get(table).copied().unwrap_or(0);
             ensure!(count == claimed, "{table} 期望 {claimed} 行，实际装入 {count} 行");
         }
+        // Restore transformation, performed before validation/checkpoint while
+        // this is still a scratch database. The format carries no session rows,
+        // and this makes the empty state deliberate rather than incidental.
+        conn.execute("DELETE FROM session", [])?;
         verify_relationships(&conn)?;
         schema::resync_ids(&conn)?;
         checkpoint(&conn)?;
@@ -368,8 +518,7 @@ fn describe_parquet(conn: &Connection, file: &str) -> Result<Vec<(String, String
     Ok(rows.collect::<duckdb::Result<Vec<_>>>()?)
 }
 
-/// Every relationship the SQLite build expressed as a foreign key, checked on the
-/// rebuilt rows.
+/// Every relationship the application enforces, checked on the rebuilt rows.
 ///
 /// DuckDB cannot declare a cascading foreign key, so the hub enforces these in
 /// the application instead; this is where a backup that would introduce an orphan
@@ -475,14 +624,15 @@ fn activate(ex: &mut Exclusive<'_>, inner: &Arc<Inner>, staging: &str) -> Result
 pub(super) fn activate_for_test(db: &super::Db, staging: &str) -> Result<()> {
     let inner = db.inner_handle();
     let staging = staging.to_owned();
-    db.write_exclusive(move |ex| activate(ex, &inner, &staging))
+    db.write_replace(move |ex| activate(ex, &inner, &staging))
 }
 
 /// Replaces an in-memory database's rows with the ones in `staging`, atomically.
 ///
 /// There is no file to swap, so the contents are replaced inside one transaction
-/// instead: the same validation, a different mechanism. Both paths are exercised
-/// by the tests.
+/// instead: the same validation, a different mechanism. `staging` already has no
+/// session rows, so copying every persistent table and leaving `session` empty
+/// completes the restore transform before the transaction commits.
 fn replace_contents(ex: &mut Exclusive<'_>, staging: &str) -> Result<()> {
     let conn = ex.conn.as_ref().ok_or_else(|| anyhow!("数据库已关闭"))?;
     conn.execute_batch(&format!("ATTACH '{}' AS restored (READ_ONLY)", escape(staging)))
@@ -490,21 +640,23 @@ fn replace_contents(ex: &mut Exclusive<'_>, staging: &str) -> Result<()> {
     let outcome = (|| -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         let copied = (|| -> Result<()> {
-            for table in TABLES {
+            for table in schema::TABLES {
                 tx.execute(&format!("DELETE FROM {table}"), [])?;
             }
-            for table in TABLES {
+            for table in BACKUP_TABLES {
                 let list = native_column_names(&tx, table)?.join(", ");
                 tx.execute_batch(&format!(
                     "INSERT INTO {table} ({list}) SELECT {list} FROM restored.{table}"
                 ))?;
             }
+            // All fallible mutations happen before the commit: activation must not
+            // be followed by another step that can fail.
+            schema::resync_ids(&tx)?;
             Ok(())
         })();
         match copied {
             Ok(()) => {
                 tx.commit()?;
-                schema::resync_ids(conn)?;
                 Ok(())
             }
             Err(e) => {
@@ -513,10 +665,21 @@ fn replace_contents(ex: &mut Exclusive<'_>, staging: &str) -> Result<()> {
             }
         }
     })();
-    let detached = conn.execute_batch("DETACH restored");
-    outcome?;
-    detached.context("detaching the restored database")?;
-    Ok(())
+    // DETACH is release of a temporary attachment, not part of the restore's
+    // durability contract; a failure to detach must not turn a committed restore
+    // into a reported failure.
+    match outcome {
+        Ok(()) => {
+            if let Err(e) = conn.execute_batch("DETACH restored") {
+                warn!("detaching the restored scratch database failed: {e:#}");
+            }
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("DETACH restored");
+            Err(e)
+        }
+    }
 }
 
 /// Opens every handle again on `inner.path`, after the file there changed.
@@ -545,48 +708,50 @@ fn reopen(inner: &Arc<Inner>, writer: Option<&mut Option<Connection>>) -> Result
     Ok(())
 }
 
-// ---- compaction ----
+// ---- maintenance ----
 
-/// Retention has already run; this folds the log, and rewrites the file when
-/// DuckDB reports enough reusable space to be worth it.
-pub(super) fn compact(
-    ex: &mut Exclusive<'_>,
+/// Checkpoints the live database, measures reusable space, and decides whether a
+/// rewrite is worth it. Runs on the writer connection in autocommit, without the
+/// replacement barrier: queued telemetry is neither drained nor refused.
+pub(super) fn plan_maintenance(
+    conn: &Connection,
     inner: &Arc<Inner>,
     pruned: usize,
-) -> Result<MaintenanceReport> {
+) -> Result<MaintenancePlan> {
     let mut report = MaintenanceReport { pruned, ..Default::default() };
+    report.generation = inner.generation.load(Ordering::SeqCst);
     if inner.path.is_empty() {
         // Nothing on disk to reclaim.
-        if let Some(conn) = ex.conn.as_ref() {
-            checkpoint(conn)?;
-        }
-        return Ok(report);
+        checkpoint(conn)?;
+        return Ok(MaintenancePlan { report, rewrite: false, checkpointed: 0 });
     }
     let before = on_disk(&inner.path);
-    {
-        let conn = ex.conn.as_ref().ok_or_else(|| anyhow!("数据库已关闭"))?;
-        checkpoint(conn)?;
-    }
+    checkpoint(conn)?;
     let after_checkpoint = on_disk(&inner.path);
-    {
-        let conn = ex.conn.as_ref().ok_or_else(|| anyhow!("数据库已关闭"))?;
-        let (block, free): (i64, i64) =
-            conn.query_row("SELECT block_size, free_blocks FROM pragma_database_size()", [], |r| {
-                Ok((r.get(0)?, r.get(1)?))
-            })?;
-        report.reusable = block * free;
-    }
+    let (block, free): (i64, i64) =
+        conn.query_row("SELECT block_size, free_blocks FROM pragma_database_size()", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })?;
+    report.reusable = block * free;
     report.freed = (before - after_checkpoint).max(0);
+    report.size = after_checkpoint;
     // A copy costs a full rewrite and needs room for a second file. Below one
     // block-sized MiB of reusable space that is not worth doing, and the caller is
     // told the space was not returned rather than being given an estimate.
     let threshold = 4 * 1024 * 1024;
-    if report.reusable < threshold {
-        report.size = after_checkpoint;
-        report.generation = inner.generation.load(Ordering::SeqCst);
-        return Ok(report);
-    }
+    let rewrite = report.reusable >= threshold;
+    Ok(MaintenancePlan { report, rewrite, checkpointed: after_checkpoint })
+}
 
+/// Performs the replacing half of maintenance: copy the live database into a
+/// fresh file and switch to it. Only called when [`plan_maintenance`] decided a
+/// rewrite is worth it, and therefore only when queued writes may be refused.
+pub(super) fn apply_maintenance(
+    ex: &mut Exclusive<'_>,
+    inner: &Arc<Inner>,
+    plan: MaintenancePlan,
+) -> Result<MaintenanceReport> {
+    let MaintenancePlan { mut report, checkpointed, .. } = plan;
     let staging = scratch_file(&inner.path, "compacting");
     let outcome = (|| -> Result<()> {
         let conn = ex.conn.as_ref().ok_or_else(|| anyhow!("数据库已关闭"))?;
@@ -610,8 +775,10 @@ pub(super) fn compact(
 
     report.compacted = true;
     report.size = on_disk(&inner.path);
-    report.freed += (after_checkpoint - report.size).max(0);
-    report.generation = inner.generation.load(Ordering::SeqCst);
+    report.freed += (checkpointed - report.size).max(0);
+    // `run_replace` advances the generation after this returns; reporting the
+    // post-operation value makes the figure consistent with what callers see.
+    report.generation = inner.generation.load(Ordering::SeqCst) + 1;
     info!(
         "database compacted: {} bytes returned to the filesystem, {} bytes now on disk",
         report.freed, report.size
@@ -620,6 +787,34 @@ pub(super) fn compact(
 }
 
 // ---- helpers ----
+
+/// Advisory free space for the filesystem holding `path`, in bytes.
+///
+/// `statvfs` is a snapshot, not a reservation: another writer can consume the
+/// space between this check and the rename. It is still useful to reject an
+/// archive whose expanded size plainly cannot fit before building a staging
+/// database. `None` means the platform cannot answer and the check is skipped.
+#[cfg(unix)]
+fn available_bytes(path: &str) -> Option<u64> {
+    use std::ffi::CString;
+    let path = CString::new(path).ok()?;
+    // SAFETY: `statvfs` initializes the struct on success; on failure the zeroed
+    // value is never read.
+    let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
+    let rc = unsafe { libc::statvfs(path.as_ptr(), &mut stats) };
+    if rc != 0 {
+        return None;
+    }
+    // `f_frsize` is the fragment size on Linux; some filesystems report zero
+    // there and expect `f_bsize` instead.
+    let unit = if stats.f_frsize > 0 { stats.f_frsize as u64 } else { stats.f_bsize as u64 };
+    (stats.f_bavail as u64).checked_mul(unit)
+}
+
+#[cfg(not(unix))]
+fn available_bytes(_: &str) -> Option<u64> {
+    None
+}
 
 fn on_disk(file: &str) -> i64 {
     bytes_of(file) + bytes_of(&format!("{file}.wal"))

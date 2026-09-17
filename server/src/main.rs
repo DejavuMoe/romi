@@ -3,11 +3,7 @@
 //! No configuration is required to start. Everything beyond the listen address
 //! and the database path is configured in the panel and stored in the embedded
 //! DuckDB database, leaving no config file to track and no secrets in plaintext
-//! TOML.
-//!
-//! `--import-legacy` is the one offline mode: it turns an export of a pre-DuckDB
-//! romi database into a new DuckDB file and exits without listening. See
-//! `docs/duckdb-migration.md`.
+//! TOML. The storage design is documented in `docs/storage.md`.
 
 mod agent_ws;
 mod api;
@@ -39,9 +35,15 @@ pub type Shared = Arc<App>;
 pub struct App {
     pub db: Db,
     /// Every connected agent: its outbound channel, the session that opened it,
-    /// and its latest report. A single map, since connectivity and current
-    /// figures are one fact about a node rather than two. See `agent_ws`.
-    pub agents: RwLock<HashMap<i64, Agent>>,
+    /// and its independently locked report state. The map lock protects only
+    /// membership/lookup; a report clones the per-session handle and releases
+    /// the map before any database work. See `agent_ws`.
+    pub agents: RwLock<HashMap<i64, Arc<Agent>>>,
+    /// Serializes map-mutating operations that also touch credentials or the
+    /// database contents: activation, token rotation, node deletion and restore.
+    /// It is deliberately separate from `agents`, so waiting for an in-flight
+    /// report or a database write never holds the global membership lock.
+    pub agents_admin: Mutex<()>,
     /// Last rendered node list per audience, `[public, admin]`, with the
     /// millisecond it was built. Shared by every browser stream so viewers do
     /// not multiply the query load. See `api::live_snapshot`.
@@ -70,6 +72,7 @@ impl App {
         Self {
             db,
             agents: RwLock::default(),
+            agents_admin: Mutex::new(()),
             snapshot: Mutex::new([(0, Default::default()), (0, Default::default())]),
             throttle: auth::Throttle::default(),
             registrations: auth::Throttle::default(),
@@ -145,8 +148,6 @@ struct Args {
     site: String,
     themes: PathBuf,
     allow_custom_themes: bool,
-    /// Offline mode: an export produced by `scripts/migrate-sqlite.py`.
-    import_legacy: Option<String>,
     db_memory: Option<String>,
     db_threads: Option<i64>,
     db_temp: Option<String>,
@@ -178,7 +179,6 @@ fn parse_args() -> Result<Args> {
     let mut site = String::new();
     let mut themes = None;
     let mut allow_custom_themes = false;
-    let mut import_legacy = None;
     let mut db_memory = None;
     let mut db_threads = None;
     let mut db_temp = None;
@@ -191,7 +191,6 @@ fn parse_args() -> Result<Args> {
             "--site" => site = value(),
             "--themes" => themes = Some(PathBuf::from(value())),
             "--allow-custom-themes" => allow_custom_themes = true,
-            "--import-legacy" => import_legacy = Some(value()),
             "--db-memory" => db_memory = Some(value()),
             "--db-threads" => {
                 let text = value();
@@ -203,8 +202,7 @@ fn parse_args() -> Result<Args> {
             "-h" | "--help" => {
                 println!(
                     "monitor-hub {}\n\n\
-                     Usage: monitor-hub [--listen 127.0.0.1:28080] [--db monitor.db] [--themes themes] [--site https://hub.example.com]\n\
-                     \x20      monitor-hub --import-legacy export.jsonl --db new.duckdb\n\n\
+                     Usage: monitor-hub [--listen 127.0.0.1:28080] [--db monitor.db] [--themes themes] [--site https://hub.example.com]\n\n\
                      --listen defaults to 127.0.0.1:28080.\n\
                      --allow-custom-themes trusts external theme JavaScript with the admin origin.\n\
                      --themes defaults to a themes/ directory beside the database.\n\
@@ -215,9 +213,7 @@ fn parse_args() -> Result<Args> {
                      --db-memory caps DuckDB's own memory use (default 512MB); it is not a\n\
                      ceiling on the process's resident set.\n\
                      --db-threads caps DuckDB's worker threads (default: up to 4).\n\
-                     --db-temp is where DuckDB spills; defaults to <db>.tmp.\n\
-                     --import-legacy runs the offline migration and exits; see\n\
-                     docs/duckdb-migration.md.",
+                     --db-temp is where DuckDB spills; defaults to <db>.tmp.\n",
                     env!("CARGO_PKG_VERSION")
                 );
                 std::process::exit(0);
@@ -241,7 +237,6 @@ fn parse_args() -> Result<Args> {
         site: site.trim_end_matches('/').to_owned(),
         themes,
         allow_custom_themes,
-        import_legacy,
         db_memory,
         db_threads,
         db_temp,
@@ -258,18 +253,6 @@ async fn main() -> Result<()> {
         .init();
 
     let args = parse_args()?;
-    if let Some(export) = &args.import_legacy {
-        // Offline: no listener, no themes directory, no housekeeping. Reads only
-        // the JSONL export the Python exporter wrote; the legacy SQLite file
-        // itself is never opened by this binary.
-        let report = Db::import_legacy(export, &args.database)?;
-        println!("{}", serde_json::to_string_pretty(&report)?);
-        println!(
-            "\n  迁移完成：{} 已就绪，可以停止旧 Hub 后用 --db {} 启动本服务。\n               所有旧登录会话都已失效，请重新登录。原 SQLite 文件没有被修改。",
-            args.database, args.database
-        );
-        return Ok(());
-    }
     std::fs::create_dir_all(&args.themes)?;
     let (notes, inbox) = tokio::sync::mpsc::channel(notify::QUEUE);
     let mut options = db::Options::default();
@@ -370,7 +353,7 @@ async fn main() -> Result<()> {
         .route("/api/themes/{short}/update", post(api::update_theme))
         .route("/api/db", get(api::db_stats))
         .route("/api/db/backup", get(api::db_backup))
-        .route("/api/db/vacuum", post(api::db_vacuum))
+        .route("/api/db/maintenance", post(api::db_maintenance))
         .fallback(frontend::serve)
         // A report is a few hundred bytes; anything larger is not a report.
         .layer(tower_http::limit::RequestBodyLimitLayer::new(64 * 1024))
@@ -389,7 +372,7 @@ async fn main() -> Result<()> {
         )
         // Excludes the agent binary and database backups: both are already
         // compressed and both are megabytes, so deflating them would consume the
-        // cores argon2 and the SQLite writer share for no gain.
+        // cores argon2 and the DuckDB writer share for no gain.
         .layer(
             tower_http::compression::CompressionLayer::new().compress_when(
                 tower_http::compression::predicate::DefaultPredicate::new()

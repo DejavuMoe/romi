@@ -85,8 +85,7 @@ pnpm --filter @romi/web test
 | --- | --- |
 | `make setup` | 安装锁定的前端与 Rust 依赖 |
 | `make check` | 前端构建、lint、测试，Rust fmt、Clippy、测试及打包拒绝检查 |
-| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发、主题限制和离线迁移 |
-| `make legacy` | 单独跑一遍 SQLite → DuckDB 离线迁移的端到端验证 |
+| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发、主题限制和 DuckDB 单写者约束 |
 | `make bench` | 对 release 二进制跑存储基准（见 [docs/bench.md](docs/bench.md)） |
 | `make release` | 编译本机 release 二进制并记录构建输入 |
 | `make package` | 生成带清单与 SHA-256 校验文件的本地快照包 |
@@ -119,13 +118,13 @@ Agent 使用后台创建或换发时给出的本地运行命令；关闭凭证�
 
 数据保存在 `--db` 指定的单个 DuckDB 文件里（默认 `monitor.db`）。启动时：
 
-- 若该文件不存在则新建；若是旧版 SQLite 文件或非 romi 的 DuckDB 文件，会**拒绝启动并给出迁移提示**，
-  不会就地转换、覆盖或删除它；
+- 若该文件不存在则新建；若存在但不是有效的 romi DuckDB 数据库，会**拒绝启动且不改动该文件**；
 - 同一文件同时只允许一个 Hub 进程读写（DuckDB 的限制），第二个进程会被 `<db>.lock` 拒绝；
 - 可用 `--db-memory`（默认 512MB，**不是进程 RSS 上限**）、`--db-threads`（默认最多 4）、
   `--db-temp`（默认 `<db>.tmp`）调整引擎资源。
 
-从旧版 SQLite 迁移、备份格式、恢复流程与维护语义见 [docs/duckdb-migration.md](docs/duckdb-migration.md)。
+引擎版本、写入队列与 group commit、备份快照、恢复顺序与维护语义见
+[docs/storage.md](docs/storage.md)。
 
 ## 安全与数据
 

@@ -73,6 +73,10 @@ pub(crate) const PUBLIC_METRICS: [&str; 18] = [
 /// One node as the UI consumes it: stored config, live metrics and the hub's
 /// accumulated traffic in a single object.
 fn node_view(node: &Node, current: Option<&Agent>, traffic: &Traffic, full: bool) -> Value {
+    // One lock and one clone per connected node. The rest of this view is built
+    // without touching the per-session report lock.
+    let snapshot = current.map(|agent| agent.snapshot());
+    let live_metrics = snapshot.as_ref().map(|(metrics, _)| metrics);
     // The three capacities arrive twice: once in `Facts`, sent at the handshake
     // and stored, and again in every `Metrics`. A machine that gains a disk while
     // the agent is running -- the agent re-reads its mount table every sample so
@@ -85,7 +89,7 @@ fn node_view(node: &Node, current: Option<&Agent>, traffic: &Traffic, full: bool
     // reports zero and means it. A node connected but not yet reporting holds
     // `Null`, where `get` returns nothing and the stored figure stands.
     let live = |key: &str, stored: i64| {
-        current.and_then(|a| a.metrics.get(key).and_then(serde_json::Value::as_i64)).unwrap_or(stored)
+        live_metrics.and_then(|m| m.get(key).and_then(serde_json::Value::as_i64)).unwrap_or(stored)
     };
     let mut view = json!({
         "id": node.id,
@@ -100,8 +104,8 @@ fn node_view(node: &Node, current: Option<&Agent>, traffic: &Traffic, full: bool
         // The live entry while connected, the stored one afterwards. Zero means
         // connected but not yet reporting, which is not a timestamp, so it falls
         // back to the stored value and "offline since" survives the gap.
-        "last_seen": current.map(|a| a.last_seen).filter(|t| *t > 0).unwrap_or(node.last_seen),
-        "metrics": current.map(|a| a.metrics.clone()).unwrap_or(Value::Null),
+        "last_seen": snapshot.as_ref().map(|(_, seen)| *seen).filter(|t| *t > 0).unwrap_or(node.last_seen),
+        "metrics": snapshot.as_ref().map(|(metrics, _)| metrics.clone()).unwrap_or(Value::Null),
         "os": node.os,
         "kernel": node.kernel,
         "arch": node.arch,
@@ -154,12 +158,21 @@ fn visible_nodes(app: &App, full: bool) -> Result<Vec<Value>, anyhow::Error> {
     // visitor to the public page loads.
     let nodes = app.db.nodes()?;
     let traffic = app.db.all_traffic();
-    let agents = app.agents.read().unwrap_or_else(|e| e.into_inner());
+    // Clone the handles under the map lock and release it before taking any
+    // per-session report lock: report state and map mutation must never wait in
+    // opposite orders.
+    let connected: Vec<(i64, std::sync::Arc<Agent>)> = {
+        let agents = app.agents.read().unwrap_or_else(|e| e.into_inner());
+        agents.iter().map(|(id, agent)| (*id, agent.clone())).collect()
+    };
     let none = Traffic::default();
     Ok(nodes
         .iter()
         .filter(|n| full || n.public)
-        .map(|n| node_view(n, agents.get(&n.id), traffic.get(&n.id).unwrap_or(&none), full))
+        .map(|n| {
+            let current = connected.iter().find(|(id, _)| *id == n.id).map(|(_, agent)| agent.as_ref());
+            node_view(n, current, traffic.get(&n.id).unwrap_or(&none), full)
+        })
         .collect())
 }
 
@@ -745,21 +758,14 @@ pub async fn reorder_nodes(_: Admin, State(app): State<Shared>, Json(order): Jso
 
 pub async fn delete_node(_: Admin, State(app): State<Shared>, Path(id): Path<i64>) -> Response {
     // The token is checked only at the handshake, so deleting the row does not
-    // end a connection already open on it; dropping the sender does. Without
-    // this the agent would keep reporting under an id SQLite reassigns to the
-    // next node created, which would then appear online on another node's
-    // metrics. The same reasoning applies in `reset_token` below.
-    // The agents lock is taken inside the blocking call rather than held across
-    // the await: dropping the sender is what ends a connection already open on
-    // the deleted row, and it must happen with the delete, but no async worker
-    // may hold a std guard while it waits for the writer.
+    // end a connection already open on it; retiring the session does. The agent
+    // must not keep reporting under an id, and a report already in flight must
+    // not land after the delete. `retire_node_then` waits out the in-flight
+    // report and holds its state lock across the database delete; the helper's
+    // admin gate also serializes this against activation and token rotation.
     let owner = app.clone();
-    let result = storage(&app, move |db| {
-        db.delete_node(id)?;
-        owner.agents.write().unwrap_or_else(|e| e.into_inner()).remove(&id);
-        Ok(())
-    })
-    .await;
+    let result =
+        storage(&app, move |db| crate::agent_ws::retire_node_then(&owner, id, || db.delete_node(id))).await;
     match result {
         Ok(()) => {
             invalidate_snapshot(&app);
@@ -780,12 +786,12 @@ pub async fn reset_token(_: Admin, State(app): State<Shared>, Path(id): Path<i64
     if !exists {
         return (StatusCode::NOT_FOUND, "no such node").into_response();
     }
-    // The same agents lock guards activation after upgrade, closing the handshake/rotation race.
+    // The admin gate in `retire_node_then` serializes this rotation against
+    // activation, so an upgrade that checked the old token cannot install a
+    // session between the token change and the session retirement.
     let owner = app.clone();
     let result = storage(&app, move |db| {
-        db.reset_token(id, &issued)?;
-        owner.agents.write().unwrap_or_else(|e| e.into_inner()).remove(&id);
-        Ok(())
+        crate::agent_ws::retire_node_then(&owner, id, || db.reset_token(id, &issued))
     })
     .await;
     invalidate_snapshot(&app);
@@ -923,12 +929,11 @@ pub const MAX_CHUNK: usize = 8 * 1024 * 1024;
 /// the first request rather than by counting bytes as they arrive, so an
 /// oversized upload is refused before a byte is sent.
 ///
-/// The backup ceiling is set where it is because restoring holds the connection
-/// every read and write passes through: at the measured ~40 MB/s that is roughly
-/// 6.5 seconds during which the panel and the public page also wait. Database
-/// sizes reachable with a few hundred nodes sit two orders of magnitude below
-/// it.
-pub const MAX_RESTORE: u64 = 256 * 1024 * 1024;
+/// The backup ceiling is shared with the archive validator (`db::MAX_ARCHIVE`),
+/// so the HTTP limit and the storage limit cannot drift apart. Restoring copies
+/// the file into a staging database and then replaces the live one; that is
+/// bounded work appropriate for a small self-hosted hub.
+pub const MAX_RESTORE: u64 = crate::db::MAX_ARCHIVE;
 pub const MAX_THEME: u64 = 32 * 1024 * 1024;
 
 /// One request of an upload: `total` is the whole file, `offset` where this piece
@@ -1023,7 +1028,7 @@ async fn append(
 
 /// A scratch file beside the database, so the copy lands on the same filesystem
 /// the database has room on. The random component keeps two concurrent calls
-/// apart, since `VACUUM INTO` refuses an existing file.
+/// apart, since the copy refuses an existing file.
 fn scratch_path(app: &App, kind: &str) -> String {
     // Beside the database, so the copy lands on a filesystem that has room for
     // it; inside the temporary directory when the hub is in memory. See
@@ -1051,14 +1056,17 @@ pub async fn db_stats(_: Admin, State(app): State<Shared>) -> Response {
 
 /// Returns a consistent, data-only archive of the whole database.
 ///
-/// The copy is written beside the live file and then unlinked while still open,
-/// so it exists only for the duration of this response: a client that
-/// disconnects partway through leaves nothing behind, and nothing on disk
-/// outlives the download. The format is documented in `db::backup`.
+/// The copy is data-only (one Parquet member per persistent table plus a
+/// manifest), written while a reader transaction sees one MVCC snapshot. Normal
+/// telemetry keeps committing and no Agent is disconnected; only a file
+/// replacement waits behind the read side of the gate. The copy is then unlinked
+/// while still open, so it exists only for the duration of this response. The
+/// format is documented in `db::backup`.
 pub async fn db_backup(_: Admin, State(app): State<Shared>) -> Response {
     let path = scratch_path(&app, "backup");
-    // Off the runtime: this reads every table and holds the maintenance barrier
-    // for the duration, so the archive is one consistent snapshot.
+    // Off the runtime: this reads every table inside one reader transaction and
+    // only holds the read side of the replacement gate, so the archive is one
+    // consistent snapshot without blocking normal writes.
     let copied = {
         let (app, path) = (app.clone(), path.clone());
         tokio::task::spawn_blocking(move || app.db.backup_into(&path)).await
@@ -1095,10 +1103,10 @@ pub async fn db_backup(_: Admin, State(app): State<Shared>) -> Response {
 /// Replaces the live database with an uploaded backup, one chunk per request.
 ///
 /// The upload streams to a file beside the database and is validated in full
-/// before a single page is copied; see `Db::check_backup`. Afterwards every
-/// session in the restored file is dropped and the caller is issued a new one: a
-/// backup carries the session rows it held when taken, and restoring it must not
-/// revive logged-out sessions.
+/// before a single page is copied; see `Db::check_backup`. The archive contains
+/// no session rows and the staging database starts with an empty `session`
+/// table, so restoring cannot revive a login that was revoked after the archive
+/// was taken. The caller is issued a fresh session after the switch.
 pub async fn db_restore(
     _: Admin,
     State(app): State<Shared>,
@@ -1124,11 +1132,10 @@ pub async fn db_restore(
     // Moved off the upload name before a byte is read. Splicing costs an upload;
     // what it must not cost is the live database, which without this it could:
     // the other upload would continue appending through its own handle while
-    // `check_backup` reads the file and the page copy follows, and SQLite cannot
-    // observe a write it did not make. A file that passed every gate would then
-    // be copied over in a different state. Afterwards the other upload's next
-    // chunk finds nothing and is told to restart, which is the error it already
-    // has for an upload that disappeared.
+    // the archive is validated and the staging database is built, and a file
+    // that passed every gate could then be copied over in a different state.
+    // Afterwards the other upload's next chunk finds nothing and is told to
+    // restart, which is the error it already has for an upload that disappeared.
     //
     // ponytail: the rename itself is not covered by a test. What it changes is
     // which path is open during the read, and reaching that would require a
@@ -1163,28 +1170,25 @@ pub async fn db_restore(
 ///
 /// The whole thing is one storage call: validating a 256 MiB upload is not
 /// runtime work, the rebuild reads and writes the whole file, and the switch
-/// itself closes and reopens every connection. `Db::restore_from` drops every
-/// session in the restored data before returning, so a backup cannot revive a
-/// logged-out login whichever caller reaches it.
+/// itself closes and reopens every connection. `retire_all_then` pauses every
+/// connected session and lets its in-flight report finish before the file is
+/// replaced, so no old agent write can outlive the restore. The archive carries
+/// no session rows and the staging database starts with an empty session table,
+/// so the restored data cannot revive a logged-out login.
 async fn restore(app: &Shared, path: &str) -> Result<crate::db::BackupReport, anyhow::Error> {
     let (app, source) = (app.clone(), path.to_owned());
-    let outcome = tokio::task::spawn_blocking(move || {
-        let report = app.db.restore_from(&source)?;
-        app.agents.write().unwrap_or_else(|e| e.into_inner()).clear();
-        Ok(report)
+    tokio::task::spawn_blocking(move || {
+        crate::agent_ws::retire_all_then(&app, || app.db.restore_from(&source))
     })
-    .await?;
-    outcome
+    .await?
 }
 
 /// Drops history beyond the retention window, checkpoints, and rewrites the file
 /// when DuckDB reports enough reusable space to justify a copy.
 ///
-/// The name is kept for the panel, but the operation is not SQLite's `VACUUM`:
-/// DuckDB documents that `VACUUM` does not reclaim space, so this reports what
-/// was actually returned to the filesystem -- measured, not estimated -- and says
-/// whether the file was rewritten at all.
-pub async fn db_vacuum(_: Admin, State(app): State<Shared>) -> Response {
+/// The operation reports what was actually returned to the filesystem --
+/// measured, not estimated -- and says whether the file was rewritten at all.
+pub async fn db_maintenance(_: Admin, State(app): State<Shared>) -> Response {
     let keep = app.db.retention_days();
     let app = app.clone();
     let done = tokio::task::spawn_blocking(move || app.db.maintenance(keep)).await;
@@ -1862,7 +1866,7 @@ mod tests {
 
         // The database and the files DuckDB keeps beside it -- its write-ahead
         // log, its spill directory and the lock -- are the only ones that may
-        // remain. None of them carries SQLite's names.
+        // remain.
         let left: Vec<String> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
@@ -1879,10 +1883,13 @@ mod tests {
     /// for.
     fn connect(app: &App, id: i64, metrics: Value) -> tokio::sync::mpsc::Receiver<String> {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
-        let mut agent = crate::agent_ws::Agent::new(7, tx);
-        agent.metrics = metrics;
-        agent.last_seen = Utc::now().timestamp();
-        app.agents.write().unwrap().insert(id, agent);
+        let agent = crate::agent_ws::Agent::new(7, tx);
+        {
+            let mut state = agent.lock_state();
+            state.metrics = metrics;
+            state.last_seen = Utc::now().timestamp();
+        }
+        app.agents.write().unwrap().insert(id, std::sync::Arc::new(agent));
         rx
     }
 
@@ -2014,7 +2021,7 @@ mod tests {
         assert_eq!(m["ts"], base, "stamped with the bucket, so every series shares a grid");
 
         // Keyed by task rather than index: the rows share a timestamp, so
-        // `ORDER BY ts` leaves their order to SQLite.
+        // their relative order within the timestamp is not part of the contract.
         let (rows, window_loss) = app.db.ping_records(id, base, 120).unwrap();
         let probe = |task: i64| {
             rows.iter().find(|r| r["task_id"] == task).unwrap_or_else(|| panic!("no probe {task}"))
@@ -2167,10 +2174,10 @@ mod tests {
     }
 
     /// Deleting a node must reach the connection it opened, for the same reason
-    /// rotating its token does, and more urgently: SQLite reassigns the freed id
-    /// to the next node created. Left connected, the old machine reports under
-    /// that id, so an undeployed node appears online with another machine's
-    /// metrics, and its traffic and history are booked to it.
+    /// rotating its token does: the allocator never reissues the deleted id, so
+    /// a left-connected old machine would keep writing rows for an id that no
+    /// longer exists (or, after some future schema change, for whatever row a
+    /// new allocation happened to receive).
     #[tokio::test]
     async fn deleting_a_node_closes_its_session_so_the_next_id_does_not_inherit_it() {
         let app = std::sync::Arc::new(app());

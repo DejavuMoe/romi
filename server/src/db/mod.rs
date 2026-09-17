@@ -4,8 +4,8 @@
 //!
 //! DuckDB allows exactly one read-write process per database file, and within
 //! that process it uses MVCC: many connections, one writer at a time. That maps
-//! onto a hub directly, and this module implements it as three separate paths
-//! rather than one global mutex.
+//! onto a hub directly, and this module implements it as separate paths rather
+//! than one global mutex.
 //!
 //! * **One writer thread** owns the writing connection. Every mutation is a
 //!   closure sent down a bounded channel ([`WRITER_QUEUE`]) and answered after
@@ -14,13 +14,17 @@
 //!   jobs behind it, and commits them in **one transaction** -- group commit.
 //!   Filling the channel is the backpressure: `send` blocks rather than growing
 //!   an unbounded queue.
-//! * **A small pool of read connections** ([`READERS`]) serves the analytical
+//! * **A small pool of read connections** ([`READERS`]) serves analytical
 //!   queries. A reader never waits for the writer's transaction, and a long
 //!   history query cannot park every other reader behind one connection lock.
-//!   DuckDB's MVCC gives each query a consistent snapshot.
-//! * **A maintenance barrier** (`RwLock`) excludes readers while the database
-//!   file is replaced, and the writer thread drains and rejects everything
-//!   already queued at that point.
+//!   DuckDB's MVCC gives each query a consistent snapshot. A backup export also
+//!   runs here: [a multi-table read transaction](backup::write_archive) sees one
+//!   committed snapshot without refusing or replacing queued telemetry.
+//! * **A replacement barrier** (`RwLock`) excludes readers while the database
+//!   file is replaced, and the writer thread drains and refuses everything
+//!   already queued at that point. Only operations that really replace the file
+//!   take this path; a backup snapshot, a checkpoint and retention pruning do
+//!   not.
 //!
 //! Nothing here blocks a Tokio core worker: the API layer calls these methods
 //! from `spawn_blocking` (or `block_in_place` on the ingest path), and the
@@ -43,16 +47,16 @@
 //! `SELECT id, flag, n FROM t` sees `n = 232` after a writer sets `n = 999400`,
 //! and keeps seeing it while a freshly prepared statement returns the committed
 //! value. Every statement here is therefore prepared per use; the cost is one
-//! plan per statement, which `docs/duckdb-migration.md` measures.
+//! plan per statement, which `docs/storage.md` measures.
 //! `server/tests/duckdb_engine.rs` keeps the reproduction.
 
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TryRecvError};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 use chrono::{Datelike, Local, NaiveDate, Utc};
@@ -61,14 +65,12 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
 mod backup;
-mod legacy;
 mod schema;
 #[cfg(test)]
 mod tests;
 
 pub use backup::{BackupReport, MaintenanceReport};
-pub use legacy::ImportReport;
-pub use schema::{ENGINE_VERSION, TABLES};
+pub use schema::{BACKUP_TABLES, ENGINE_VERSION, TABLES};
 
 /// Operations accepted from callers but not yet committed. Bounded: a caller
 /// blocks here rather than letting the queue grow.
@@ -84,10 +86,10 @@ const READERS: usize = 3;
 /// blocking task once it started, so the query itself is interrupted instead of
 /// being left to run to completion.
 const QUERY_TIMEOUT: Duration = Duration::from_secs(30);
-/// How long a graceful shutdown waits for accepted work to commit.
-const SHUTDOWN_GRACE: Duration = Duration::from_secs(10);
-/// Rows per commit when an offline import streams a legacy export in.
-const IMPORT_BATCH: usize = 20_000;
+/// The largest archive this build will inspect or restore. The API checks the
+/// declared upload total before accepting a byte; the storage layer checks the
+/// file again, so a caller that reaches it by another route sees the same limit.
+pub const MAX_ARCHIVE: u64 = 256 * 1024 * 1024;
 
 /// Default memory ceiling. A hub is a long-running process on a small VPS, and
 /// DuckDB sizes itself from the host otherwise.
@@ -104,15 +106,16 @@ type Reply = SyncSender<Result<Payload>>;
 
 /// What a job needs from its execution context.
 enum Target<'a> {
-    /// A connection: the batch transaction for [`Kind::Batch`], the writer's own
-    /// connection in autocommit for [`Kind::Solo`].
+    /// The writer's own connection: inside the batch transaction for
+    /// [`Kind::Batch`], in autocommit for [`Kind::Solo`] and
+    /// [`Kind::Maintenance`].
     Conn(&'a Connection),
     /// The writer connection itself plus the queue, for an operation that
     /// replaces the database file.
-    Exclusive(&'a mut Exclusive<'a>),
+    Replace(&'a mut Exclusive<'a>),
 }
 
-/// State a maintenance operation needs: the writer's connection, which it may
+/// State a replacement operation needs: the writer's connection, which it may
 /// close and reopen on another file.
 pub(crate) struct Exclusive<'a> {
     conn: &'a mut Option<Connection>,
@@ -126,8 +129,13 @@ enum Kind {
     /// Configuration. Runs alone, so a refusal it produces cannot roll back
     /// anyone else's write.
     Solo,
-    /// Replaces the database file or reorganizes it. Runs with readers excluded.
-    Exclusive,
+    /// Maintenance that does not replace the file (checkpoint, measuring
+    /// reusable space). Runs in autocommit like [`Kind::Solo`], but queued
+    /// telemetry is neither drained nor invalidated.
+    Maintenance,
+    /// Replaces the database file. Runs with readers excluded, drains queued
+    /// writes and advances the database generation.
+    Replace,
 }
 
 struct Job {
@@ -136,6 +144,9 @@ struct Job {
     /// generation is stale is refused instead of being applied to a database
     /// that replaced the one it was written for.
     generation: u64,
+    /// When the caller submitted it, so the queue-wait instrumentation measures
+    /// from submission to final outcome rather than from dequeue.
+    enqueued: Instant,
     run: Box<dyn for<'a> FnOnce(Target<'a>) -> Result<Payload> + Send>,
     reply: Reply,
 }
@@ -316,8 +327,15 @@ impl Default for Options {
 pub(crate) struct Inner {
     /// The file this database lives in; empty for an in-memory database.
     path: String,
-    /// Held from `open` until `close`, which is what makes the lock a lock.
+    /// Held from `open` until the last `Db` handle finishes, which is what makes
+    /// the lock a lock.
     lock: Mutex<Option<std::fs::File>>,
+    /// Number of live `Db` clones. The writer thread itself only holds a weak
+    /// reference, so the count reaching zero is the signal to drain and close.
+    handles: std::sync::atomic::AtomicUsize,
+    /// Receives one message when the writer has dropped its connection. The
+    /// channel is closed on a writer panic too, so a waiter cannot hang.
+    writer_done: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
     /// Shared with the job closures, which outlive a borrow of `Inner`.
     guard: Arc<Mutex<Guard>>,
     options: Options,
@@ -327,14 +345,74 @@ pub(crate) struct Inner {
     readers: RwLock<Arc<ReaderPool>>,
     /// Excludes readers while the file is replaced.
     gate: RwLock<()>,
-    /// Advanced by every maintenance operation that replaces the file.
+    /// Advanced by every operation that replaces the file.
     generation: AtomicU64,
+    /// Set when graceful shutdown starts. New reads and writes are refused
+    /// from then on; work already accepted is drained by `close`.
+    closed: AtomicBool,
+    /// Accepted by the writer queue and not yet answered. This is the bounded
+    /// uncommitted window (`accepted - completed` while the writer is alive).
     queued: AtomicU64,
+    /// Jobs successfully handed to the writer queue.
+    accepted: AtomicU64,
+    /// Accepted jobs whose result was committed. One increment per operation,
+    /// never one per batch.
     committed: AtomicU64,
+    /// Accepted jobs that never ran because the database underneath them was
+    /// replaced, closed, or refused by the replacement barrier.
     refused: AtomicU64,
+    /// Accepted jobs that ran and whose statement or commit failed.
+    failed: AtomicU64,
+    /// Accepted jobs that have received a final outcome, whatever it was.
+    completed: AtomicU64,
+    /// Submission attempts that failed before reaching the queue (hub already
+    /// closed or writer thread gone).
+    submit_failed: AtomicU64,
+    /// Successful commit units: each batch `COMMIT` and each successful solo or
+    /// maintenance autocommit counts once.
+    transactions: AtomicU64,
+    /// Group-commit transactions, a subset of `transactions`.
+    batch_transactions: AtomicU64,
+    /// Operations committed inside batch transactions.
+    batch_ops: AtomicU64,
+    /// Largest batch ever committed. Failed or refused batches do not set it.
+    max_batch_size: AtomicU64,
+    /// Submission-to-final-outcome wait over completed jobs, in nanoseconds.
+    queue_wait_nanos: AtomicU64,
+    queue_wait_max_nanos: AtomicU64,
+    /// Transaction duration over successful transaction units, in nanoseconds.
+    transaction_nanos: AtomicU64,
+    transaction_max_nanos: AtomicU64,
 }
 
 impl Inner {
+    /// Called by the last `Db` handle. Stops the queue, waits for the writer
+    /// connection to drop, then closes readers and the custom lock, in that
+    /// order. This is the non-graceful twin of [`Db::close`]: a caller that
+    /// simply drops the last handle still cannot release the file while the
+    /// writer is using it.
+    fn shutdown_after_last_handle(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+        if let Some(sender) = self.sender.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            drop(sender);
+        }
+        // The writer sends on this channel only after dropping its connection;
+        // if it panicked instead, the sender's drop closes the channel.
+        if let Some(done) = self.writer_done.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = done.recv();
+        }
+        if let Some(writer) = self.writer.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = writer.join();
+        }
+        *self.prototype.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        let pool = std::mem::replace(
+            &mut *self.readers.write().unwrap_or_else(|e| e.into_inner()),
+            Arc::new(ReaderPool::empty()),
+        );
+        drop(pool);
+        let _ = self.lock.lock().unwrap_or_else(|e| e.into_inner()).take();
+    }
+
     /// A handle to the writer's relationship cache, so a job closure can carry it
     /// without holding a borrow of `Inner` for its whole life.
     fn guard_handle(&self) -> Arc<Mutex<Guard>> {
@@ -359,8 +437,24 @@ impl Inner {
 
 /// The storage engine. Cheap to clone: every clone shares one writer thread and
 /// one read pool.
-#[derive(Clone)]
 pub struct Db(Arc<Inner>);
+
+impl Clone for Db {
+    fn clone(&self) -> Self {
+        self.0.handles.fetch_add(1, Ordering::SeqCst);
+        Db(self.0.clone())
+    }
+}
+
+impl Drop for Db {
+    fn drop(&mut self) {
+        if self.0.handles.fetch_sub(1, Ordering::SeqCst) == 1 {
+            // Last handle: deterministic drain and handle shutdown, even though
+            // `close` was not called explicitly.
+            self.0.shutdown_after_last_handle();
+        }
+    }
+}
 
 impl Db {
     /// The maximum number of probes one node may be assigned. See
@@ -373,18 +467,19 @@ impl Db {
 
     pub fn open_with(path: &str, options: Options) -> Result<Self> {
         let memory = path == ":memory:" || path.is_empty();
+        // Refused before the engine is handed the file. Only the 12-byte header
+        // is read: a multi-gigabyte database must not be loaded into memory just
+        // to learn that it is not ours, and a file with somebody else's bytes is
+        // left exactly as it was.
+        if !memory {
+            refuse_foreign_format(path)?;
+        }
         // Held for the life of the process. DuckDB locks the database file too,
         // but POSIX advisory locks are per process, so a second hub started from
         // the same process -- or a test that opens the same file twice -- would
         // otherwise get a second, independent database at the same path. This is
         // the check that fails, and it fails before the file is touched.
         let lock = if memory { None } else { Some(exclusive_lock(path)?) };
-        // Refused before the engine is handed the file. DuckDB would report a
-        // generic "not a valid DuckDB database file" and an operator would have
-        // no way to tell a legacy romi database from a corrupt one.
-        if !memory {
-            refuse_foreign_format(path)?;
-        }
 
         let mut options = options;
         if options.temp_directory.is_empty() {
@@ -415,7 +510,7 @@ impl Db {
         // tables is not ours to initialize; `schema::initialize` refuses it.
         let fresh = schema::user_tables(&conn)? == 0;
         schema::initialize(&mut conn, fresh, env!("CARGO_PKG_VERSION"))?;
-        // An imported database is stamped when it is built, so this only repairs
+        // A restored database is stamped when it is built, so this only repairs
         // a counter that somehow lagged the rows -- cheap, and it removes the one
         // way a later insert could collide with an existing id.
         schema::resync_ids(&conn)?;
@@ -424,6 +519,8 @@ impl Db {
         let inner = Arc::new(Inner {
             path: if memory { String::new() } else { path.to_owned() },
             lock: Mutex::new(lock),
+            handles: std::sync::atomic::AtomicUsize::new(1),
+            writer_done: Mutex::new(None),
             guard: Arc::new(Mutex::new(Guard::load(&conn)?)),
             options,
             sender: Mutex::new(None),
@@ -432,12 +529,27 @@ impl Db {
             readers: RwLock::new(Arc::new(ReaderPool::new(&conn)?)),
             gate: RwLock::new(()),
             generation: AtomicU64::new(0),
+            closed: AtomicBool::new(false),
             queued: AtomicU64::new(0),
+            accepted: AtomicU64::new(0),
             committed: AtomicU64::new(0),
             refused: AtomicU64::new(0),
+            failed: AtomicU64::new(0),
+            completed: AtomicU64::new(0),
+            submit_failed: AtomicU64::new(0),
+            transactions: AtomicU64::new(0),
+            batch_transactions: AtomicU64::new(0),
+            batch_ops: AtomicU64::new(0),
+            max_batch_size: AtomicU64::new(0),
+            queue_wait_nanos: AtomicU64::new(0),
+            queue_wait_max_nanos: AtomicU64::new(0),
+            transaction_nanos: AtomicU64::new(0),
+            transaction_max_nanos: AtomicU64::new(0),
         });
 
         let (sender, queue) = sync_channel::<Job>(WRITER_QUEUE);
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+        *inner.writer_done.lock().unwrap_or_else(|e| e.into_inner()) = Some(done_rx);
         // A weak handle, not a strong one: the writer must not keep the database
         // alive by itself. With a strong reference the thread would hold the
         // sender that is supposed to end it, and dropping the last `Db` would
@@ -445,7 +557,7 @@ impl Db {
         let writer_inner = Arc::downgrade(&inner);
         let handle = std::thread::Builder::new()
             .name("romi-db-writer".into())
-            .spawn(move || writer_loop(Some(conn), writer_inner, queue))
+            .spawn(move || writer_loop(Some(conn), writer_inner, queue, done_tx))
             .context("spawning the database writer thread")?;
         *inner.sender.lock().unwrap_or_else(|e| e.into_inner()) = Some(sender);
         *inner.writer.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
@@ -461,7 +573,15 @@ impl Db {
 
     // ---- plumbing ----
 
+    fn ensure_open(&self) -> Result<()> {
+        if self.0.closed.load(Ordering::SeqCst) {
+            anyhow::bail!("数据库已关闭");
+        }
+        Ok(())
+    }
+
     fn read<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+        self.ensure_open()?;
         let _guard = self.0.gate.read().unwrap_or_else(|e| e.into_inner());
         let pool = self.0.readers.read().unwrap_or_else(|e| e.into_inner()).clone();
         pool.query(None, f)
@@ -471,9 +591,34 @@ impl Db {
     /// data-page queries, which are the only ones whose cost grows with how much
     /// history an operator has kept.
     fn read_bounded<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+        self.ensure_open()?;
         let _guard = self.0.gate.read().unwrap_or_else(|e| e.into_inner());
         let pool = self.0.readers.read().unwrap_or_else(|e| e.into_inner()).clone();
         pool.query(Some(QUERY_TIMEOUT), f)
+    }
+
+    /// Queues an already-built job. `queued` is incremented before the send so
+    /// the writer can never answer a job this process still believes is unseen;
+    /// `accepted` is incremented only once the send succeeded, so a refused
+    /// submission never appears as accepted work.
+    fn submit<T: Send + 'static>(&self, job: Job, rx: Receiver<Result<Payload>>) -> Result<T> {
+        self.ensure_open()?;
+        self.0.queued.fetch_add(1, Ordering::Relaxed);
+        let sent = self
+            .0
+            .sender
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .ok_or_else(|| anyhow!("数据库已关闭"))
+            .and_then(|tx| tx.send(job).map_err(|_| anyhow!("数据库写入线程已退出")));
+        if let Err(e) = sent {
+            self.0.queued.fetch_sub(1, Ordering::Relaxed);
+            self.0.submit_failed.fetch_add(1, Ordering::Relaxed);
+            return Err(e);
+        }
+        self.0.accepted.fetch_add(1, Ordering::Relaxed);
+        await_reply(rx)
     }
 
     fn write<T: Send + 'static>(
@@ -485,66 +630,35 @@ impl Db {
         let job = Job {
             kind,
             generation: self.0.generation.load(Ordering::SeqCst),
+            enqueued: Instant::now(),
             run: Box::new(move |target| match target {
                 Target::Conn(conn) => Ok(Box::new(f(conn)?) as Payload),
-                Target::Exclusive(_) => unreachable!("a work job is never run exclusively"),
+                Target::Replace(_) => unreachable!("a connection job is never run as a replacement"),
             }),
             reply,
         };
-        self.0.queued.fetch_add(1, Ordering::Relaxed);
-        let sent = self
-            .0
-            .sender
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
-            .ok_or_else(|| anyhow!("数据库已关闭"))
-            .and_then(|tx| tx.send(job).map_err(|_| anyhow!("数据库写入线程已退出")));
-        if let Err(e) = sent {
-            self.0.queued.fetch_sub(1, Ordering::Relaxed);
-            return Err(e);
-        }
-        let out = await_reply(rx);
-        if out.is_ok() {
-            self.0.committed.fetch_add(1, Ordering::Relaxed);
-        }
-        out
+        self.submit(job, rx)
     }
 
     /// Runs `f` with the readers stopped and the writer's connection in hand.
-    /// See [`Exclusive`].
-    fn write_exclusive<T: Send + 'static>(
+    /// Only operations that really replace the database file take this path; see
+    /// [`Kind::Replace`].
+    fn write_replace<T: Send + 'static>(
         &self,
         f: impl FnOnce(&mut Exclusive<'_>) -> Result<T> + Send + 'static,
     ) -> Result<T> {
         let (reply, rx) = sync_channel(1);
         let job = Job {
-            kind: Kind::Exclusive,
+            kind: Kind::Replace,
             generation: self.0.generation.load(Ordering::SeqCst),
+            enqueued: Instant::now(),
             run: Box::new(move |target| match target {
-                Target::Exclusive(ex) => Ok(Box::new(f(ex)?) as Payload),
-                Target::Conn(_) => unreachable!("an exclusive job is never run on a batch"),
+                Target::Replace(ex) => Ok(Box::new(f(ex)?) as Payload),
+                Target::Conn(_) => unreachable!("a replacement job is never run on a writer connection"),
             }),
             reply,
         };
-        self.0.queued.fetch_add(1, Ordering::Relaxed);
-        let sent = self
-            .0
-            .sender
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
-            .ok_or_else(|| anyhow!("数据库已关闭"))
-            .and_then(|tx| tx.send(job).map_err(|_| anyhow!("数据库写入线程已退出")));
-        if let Err(e) = sent {
-            self.0.queued.fetch_sub(1, Ordering::Relaxed);
-            return Err(e);
-        }
-        let out = await_reply(rx);
-        if out.is_ok() {
-            self.0.committed.fetch_add(1, Ordering::Relaxed);
-        }
-        out
+        self.submit(job, rx)
     }
 
     /// The shared cache of relationships the ingest path is guarded by.
@@ -554,44 +668,86 @@ impl Db {
         self.0.guard_handle()
     }
 
-    /// Stops accepting work, drains what was already accepted, and returns once
-    /// the writer has committed it.
+    /// Stops accepting work, drains every accepted job, and returns only once
+    /// the writer has stopped using the file.
     ///
-    /// Failure policy: whatever the writer could not commit is reported here and
-    /// logged, and the process still exits. Nothing is silently reported as
-    /// written.
+    /// The custom `<db>.lock` is released last, after the writer, the prototype
+    /// connection and every reader have been dropped; another hub can therefore
+    /// open the same database the moment this returns, and not before. Draining
+    /// is deterministic: a hung writer blocks shutdown for the process
+    /// supervisor to kill rather than returning success with work unfinished.
     pub fn close(&self) -> Result<()> {
-        let sender = self.0.sender.lock().unwrap_or_else(|e| e.into_inner()).take();
-        drop(sender);
-        // Released here rather than at the end of the process so a test -- or a
-        // supervisor restarting the hub in place -- can open the same file again
-        // once this has returned.
-        drop(self.0.lock.lock().unwrap_or_else(|e| e.into_inner()).take());
+        // New reads and writes are refused from here on. Jobs already in the
+        // channel are still owned by the writer and are drained below.
+        self.0.closed.store(true, Ordering::SeqCst);
+        let _ = self.0.sender.lock().unwrap_or_else(|e| e.into_inner()).take();
         let handle = self.0.writer.lock().unwrap_or_else(|e| e.into_inner()).take();
-        let Some(handle) = handle else { return Ok(()) };
-        let deadline = std::time::Instant::now() + SHUTDOWN_GRACE;
-        while !handle.is_finished() && std::time::Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        if !handle.is_finished() {
-            warn!(
-                "database writer did not finish within {SHUTDOWN_GRACE:?}; pending writes are not committed"
-            );
-            return Ok(());
-        }
-        handle.join().map_err(|_| anyhow!("database writer thread panicked"))?;
-        Ok(())
+        let outcome = match handle {
+            Some(handle) => handle.join().map_err(|_| anyhow!("database writer thread panicked")),
+            None => Ok(()),
+        };
+        // Wait for every read already in flight, then close the remaining
+        // handles. Taking the write side of the gate is what makes "readers are
+        // no longer active" true when this returns; the lock is released only
+        // after that.
+        let _gate = self.0.gate.write().unwrap_or_else(|e| e.into_inner());
+        *self.0.prototype.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        let pool = std::mem::replace(
+            &mut *self.0.readers.write().unwrap_or_else(|e| e.into_inner()),
+            Arc::new(ReaderPool::empty()),
+        );
+        drop(pool);
+        let _ = self.0.lock.lock().unwrap_or_else(|e| e.into_inner()).take();
+        outcome
     }
 
-    /// Counters that distinguish telemetry queued in memory from telemetry
-    /// committed. `queued` is the bounded uncommitted window.
+    /// Storage instrumentation with precise semantics.
+    ///
+    /// * `queued_ops_current` -- accepted and not yet answered.
+    /// * `accepted_ops_total` -- handed to the writer queue successfully.
+    /// * `committed_ops_total` -- accepted jobs whose commit succeeded. A batch
+    ///   with N telemetry jobs contributes N, not one.
+    /// * `refused_ops_total` -- accepted jobs that never ran because the
+    ///   database was replaced or closed, or because the replacement barrier
+    ///   drained them.
+    /// * `failed_ops_total` -- accepted jobs that ran and then failed.
+    /// * `completed_ops_total` -- all accepted jobs with a final outcome
+    ///   (`committed + refused + failed`).
+    /// * `transactions_total` -- successful commit units: one per successful
+    ///   batch transaction or autocommit operation.
+    /// * `batch_transactions_total` -- successful group commits.
+    /// * `batch_ops_total` -- operations committed inside those group commits.
+    /// * `max_batch_size` / `average_batch_size` -- observed group-commit size.
+    /// * `queue_wait_us_*` -- submission-to-outcome wait over completed jobs.
+    /// * `transaction_us_*` -- duration of successful commit units.
     pub fn queue_stats(&self) -> serde_json::Value {
+        let load = |value: &AtomicU64| value.load(Ordering::Relaxed);
+        let micros = |nanos: u64| nanos / 1_000;
+        let completed = load(&self.0.completed);
+        let transactions = load(&self.0.transactions);
+        let batch_transactions = load(&self.0.batch_transactions);
+        let average = |num: u64, den: u64| if den == 0 { 0.0 } else { num as f64 / den as f64 };
         serde_json::json!({
-            "queued": self.0.queued.load(Ordering::Relaxed),
-            "committed": self.0.committed.load(Ordering::Relaxed),
-            "superseded": self.0.refused.load(Ordering::Relaxed),
-            "capacity": WRITER_QUEUE,
-            "batch": BATCH_OPS,
+            "queued_ops_current": load(&self.0.queued),
+            "accepted_ops_total": load(&self.0.accepted),
+            "committed_ops_total": load(&self.0.committed),
+            "refused_ops_total": load(&self.0.refused),
+            "failed_ops_total": load(&self.0.failed),
+            "completed_ops_total": completed,
+            "submit_failed_ops_total": load(&self.0.submit_failed),
+            "transactions_total": transactions,
+            "batch_transactions_total": batch_transactions,
+            "batch_ops_total": load(&self.0.batch_ops),
+            "max_batch_size": load(&self.0.max_batch_size),
+            "average_batch_size": average(load(&self.0.batch_ops), batch_transactions),
+            "queue_wait_us_total": micros(load(&self.0.queue_wait_nanos)),
+            "queue_wait_us_max": micros(load(&self.0.queue_wait_max_nanos)),
+            "queue_wait_us_avg": average(micros(load(&self.0.queue_wait_nanos)), completed),
+            "transaction_us_total": micros(load(&self.0.transaction_nanos)),
+            "transaction_us_max": micros(load(&self.0.transaction_max_nanos)),
+            "transaction_us_avg": average(micros(load(&self.0.transaction_nanos)), transactions),
+            "queue_capacity": WRITER_QUEUE,
+            "batch_capacity": BATCH_OPS,
         })
     }
 
@@ -645,9 +801,9 @@ impl Db {
     ///
     /// Both rows or neither: `accumulate` reads the `traffic` row on every
     /// report, so a node lacking one cannot report. The id comes from the
-    /// allocator rather than from a rowid, so an id freed by a deletion is not
-    /// handed out again -- which is what the SQLite build relied on to keep a
-    /// removed machine's history from being inherited (see `delete_node`).
+    /// monotonic allocator, so an id freed by a deletion is never handed out
+    /// again; `delete_node` also sweeps the old rows, so a later node cannot
+    /// inherit a removed machine's history either way.
     pub fn create_node(&self, n: &Node, token: &str) -> Result<i64> {
         let n = n.clone();
         let token = token.to_owned();
@@ -1057,10 +1213,11 @@ impl Db {
     /// for a stamp falling between grid lines.
     ///
     /// Averaged over the bucket rather than sampled from it, and truncated rather
-    /// than rounded: DuckDB's `CAST(double AS BIGINT)` rounds to nearest while
-    /// SQLite's truncated, so the truncation is written out with `TRUNC` and the
-    /// integer division with `//` -- `/` in DuckDB is floating-point division and
-    /// would leave the bucket arithmetic to floating point.
+    /// than rounded: the API contract is truncation, while DuckDB's
+    /// `CAST(double AS BIGINT)` rounds to nearest. The truncation is therefore
+    /// written out with `TRUNC`, and integer division with `//` -- `/` in DuckDB
+    /// is floating-point division and would leave the bucket arithmetic to
+    /// floating point.
     pub fn metrics(&self, node_id: i64, since: i64, step: i64) -> Result<Vec<serde_json::Value>> {
         self.read_bounded(move |conn| {
             let mut stmt = conn.prepare(
@@ -1417,15 +1574,21 @@ impl Db {
 
     /// Writes a consistent, data-only copy of the live database to `dest`.
     ///
-    /// The format is a gzipped tar of one Parquet file per table plus a
-    /// `manifest.json` describing the application schema version, the engine that
-    /// wrote it, and the row count and SHA-256 of every member. It is not a copy
-    /// of the database file: DuckDB's file is only consistent together with its
-    /// WAL, and a restored catalogue would carry whatever the archive put there.
-    /// See `db::backup`.
+    /// The format is a gzipped tar of one Parquet file per persistent table plus
+    /// a `manifest.json` describing the application schema version, the engine
+    /// that wrote it, and the row count and SHA-256 of every member. It is not a
+    /// copy of the database file: DuckDB's file is only consistent together with
+    /// its WAL, and a restored catalogue would carry whatever the archive put
+    /// there. See `db::backup`.
+    ///
+    /// This runs on a pooled reader inside one MVCC read transaction. It does
+    /// not queue behind the writer, does not drain or refuse telemetry, does not
+    /// advance the database generation, and does not disconnect any agent; the
+    /// read barrier it holds only prevents the file from being replaced while
+    /// the multi-table export is in progress.
     pub fn backup_into(&self, dest: &str) -> Result<BackupReport> {
         let dest = dest.to_owned();
-        self.write_exclusive(move |ex| backup::write_archive(ex.conn, &dest))
+        self.read(move |conn| backup::write_archive(conn, &dest))
     }
 
     /// Validates an uploaded archive and reports what it holds. Nothing is built
@@ -1448,21 +1611,28 @@ impl Db {
     pub fn restore_from(&self, src: &str) -> Result<BackupReport> {
         let src = src.to_owned();
         let inner = self.0.clone();
-        self.write_exclusive(move |ex| backup::restore(ex, &inner, &src))
+        self.write_replace(move |ex| backup::restore(ex, &inner, &src))
     }
 
     /// Retention deletion, WAL checkpoint, and -- when the file still holds
     /// enough reusable space to be worth it -- a real compaction by copying the
     /// database into a fresh file and switching to it.
     ///
-    /// `freed` is measured, never estimated: it is the difference between the
-    /// bytes on disk before and after. `VACUUM` alone cannot produce it, because
-    /// DuckDB documents that it does not reclaim space; only `CHECKPOINT` plus a
-    /// copy does.
+    /// The prune and the checkpoint are ordinary non-replacing maintenance: they
+    /// do not advance the generation or refuse queued telemetry. Only the
+    /// optional final copy replaces the file, and it takes the replacement
+    /// barrier for real. `freed` is measured, never estimated: it is the
+    /// difference between the bytes on disk before and after.
     pub fn maintenance(&self, keep_days: i64) -> Result<MaintenanceReport> {
         let pruned = self.prune(keep_days)?;
         let inner = self.0.clone();
-        self.write_exclusive(move |ex| backup::compact(ex, &inner, pruned))
+        let plan =
+            self.write(Kind::Maintenance, move |conn| backup::plan_maintenance(conn, &inner, pruned))?;
+        if !plan.rewrite {
+            return Ok(plan.report);
+        }
+        let inner = self.0.clone();
+        self.write_replace(move |ex| backup::apply_maintenance(ex, &inner, plan))
     }
 
     // ---- sessions ----
@@ -1529,11 +1699,6 @@ impl Db {
         })
     }
 
-    /// Offline import of a legacy SQLite export. See `db::legacy`.
-    pub fn import_legacy(export: &str, dest: &str) -> Result<ImportReport> {
-        legacy::import(export, dest)
-    }
-
     /// Runs one statement on the writer thread. Test-only: it exists so the tests
     /// can put a row into a state the public API has no reason to produce (a
     /// billing period that ended in 1999, a counter a reboot would have reset).
@@ -1582,7 +1747,12 @@ const NODE_COLUMNS: &str = "id, name, token_hash, sort, public, price, currency,
      country, last_seen, notify, down_since, created_at";
 
 /// Ends the writer thread's loop: the queue is empty and no sender is left.
-fn writer_loop(mut conn: Option<Connection>, inner: std::sync::Weak<Inner>, queue: Receiver<Job>) {
+fn writer_loop(
+    mut conn: Option<Connection>,
+    inner: std::sync::Weak<Inner>,
+    queue: Receiver<Job>,
+    done: std::sync::mpsc::Sender<()>,
+) {
     let mut deferred: Option<Job> = None;
     loop {
         let first = match deferred.take() {
@@ -1600,6 +1770,16 @@ fn writer_loop(mut conn: Option<Connection>, inner: std::sync::Weak<Inner>, queu
         let Some(inner) = inner.upgrade() else { break };
         match first.kind {
             Kind::Batch => {
+                // Test-only: hold the first batch job long enough for callers to
+                // queue behind it, so a deterministic group commit can be
+                // observed without adding production latency.
+                #[cfg(test)]
+                {
+                    let hold = tests::TEST_BATCH_HOLD_NANOS.load(Ordering::Relaxed);
+                    if hold > 0 {
+                        std::thread::sleep(Duration::from_nanos(hold));
+                    }
+                }
                 let mut batch = vec![first];
                 while batch.len() < BATCH_OPS {
                     match queue.try_recv() {
@@ -1613,8 +1793,8 @@ fn writer_loop(mut conn: Option<Connection>, inner: std::sync::Weak<Inner>, queu
                 }
                 run_batch(&mut conn, &inner, batch);
             }
-            Kind::Solo => run_one(&conn, &inner, first),
-            Kind::Exclusive => run_exclusive(&mut conn, &inner, &queue, first),
+            Kind::Solo | Kind::Maintenance => run_one(&conn, &inner, first),
+            Kind::Replace => run_replace(&mut conn, &inner, &queue, first),
         }
         drop(inner);
     }
@@ -1625,6 +1805,42 @@ fn writer_loop(mut conn: Option<Connection>, inner: std::sync::Weak<Inner>, queu
             warn!("final checkpoint failed: {e:#}");
         }
     }
+    // Drop the connection before announcing completion: a waiter must not be
+    // told the writer is done while it still has the database file open.
+    drop(conn);
+    let _ = done.send(());
+}
+
+/// The final outcome of one accepted operation, for the queue counters.
+#[derive(Clone, Copy)]
+enum Status {
+    Committed,
+    Refused,
+    Failed,
+}
+
+/// Sends one job's answer, after recording its counters. The counters are
+/// updated before the reply so a caller that sees its result also sees the
+/// matching committed totals.
+fn resolve(inner: &Inner, reply: &Reply, enqueued: Instant, outcome: Result<Payload>, status: Status) {
+    let wait = u64::try_from(enqueued.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    inner.queue_wait_nanos.fetch_add(wait, Ordering::Relaxed);
+    inner.queue_wait_max_nanos.fetch_max(wait, Ordering::Relaxed);
+    inner.queued.fetch_sub(1, Ordering::Relaxed);
+    inner.completed.fetch_add(1, Ordering::Relaxed);
+    match status {
+        Status::Committed => inner.committed.fetch_add(1, Ordering::Relaxed),
+        Status::Refused => inner.refused.fetch_add(1, Ordering::Relaxed),
+        Status::Failed => inner.failed.fetch_add(1, Ordering::Relaxed),
+    };
+    let _ = reply.send(outcome);
+}
+
+/// Records one successful transaction's wall-clock duration.
+fn record_transaction(inner: &Inner, started: Instant) {
+    let nanos = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    inner.transaction_nanos.fetch_add(nanos, Ordering::Relaxed);
+    inner.transaction_max_nanos.fetch_max(nanos, Ordering::Relaxed);
 }
 
 /// One transaction for the whole batch, then one reply per job.
@@ -1639,8 +1855,7 @@ fn run_batch(conn: &mut Option<Connection>, inner: &Inner, jobs: Vec<Job>) {
     let mut live = Vec::with_capacity(jobs.len());
     for job in jobs {
         if job.generation != generation {
-            inner.refused.fetch_add(1, Ordering::Relaxed);
-            answer(inner, &job.reply, Err(anyhow!(SUPERSEDED)));
+            resolve(inner, &job.reply, job.enqueued, Err(anyhow!(SUPERSEDED)), Status::Refused);
         } else {
             live.push(job);
         }
@@ -1650,123 +1865,143 @@ fn run_batch(conn: &mut Option<Connection>, inner: &Inner, jobs: Vec<Job>) {
     }
     let Some(conn) = conn.as_mut() else {
         for job in live {
-            answer(inner, &job.reply, Err(anyhow!("数据库已关闭")));
+            resolve(inner, &job.reply, job.enqueued, Err(anyhow!("数据库已关闭")), Status::Refused);
         }
         return;
     };
-    let mut results: Vec<(Reply, Result<Payload>)> = Vec::with_capacity(live.len());
-    let mut failure = None;
-    match conn.transaction() {
-        Ok(tx) => {
-            for job in live {
-                let outcome = (job.run)(Target::Conn(&tx));
-                if let Err(e) = &outcome {
-                    // The transaction is now poisoned, so the rest of the batch
-                    // shares this failure rather than reporting a success that
-                    // cannot be committed.
-                    failure = Some(format!("{e:#}"));
-                    results.push((job.reply, Err(anyhow!(failure.clone().unwrap()))));
-                } else {
-                    results.push((job.reply, outcome));
-                }
-            }
-            match failure {
-                Some(reason) => {
-                    let _ = tx.rollback();
-                    inner.reload_guard();
-                    let rolled_back = results.len();
-                    for (reply, _) in results {
-                        let _ = reply.send(Err(anyhow!("{reason}")));
-                    }
-                    inner.queued.fetch_sub(rolled_back as u64, Ordering::Relaxed);
-                    error!("a telemetry batch rolled back ({reason}); {rolled_back} operation(s) were not written");
-                }
-                None => match tx.commit() {
-                    Ok(()) => {
-                        let done = results.len() as u64;
-                        for (reply, result) in results {
-                            let _ = reply.send(result);
-                        }
-                        inner.queued.fetch_sub(done, Ordering::Relaxed);
-                        inner.committed.fetch_add(1, Ordering::Relaxed);
-                    }
-                    Err(e) => {
-                        let reason = format!("commit failed: {e:#}");
-                        error!("{reason}");
-                        inner.reload_guard();
-                        let lost = results.len() as u64;
-                        for (reply, _) in results {
-                            let _ = reply.send(Err(anyhow!("{reason}")));
-                        }
-                        inner.queued.fetch_sub(lost, Ordering::Relaxed);
-                    }
-                },
-            }
-        }
+    let started = Instant::now();
+    let tx = match conn.transaction() {
+        Ok(tx) => tx,
         Err(e) => {
             let reason = format!("could not open a transaction: {e:#}");
             for job in live {
-                answer(inner, &job.reply, Err(anyhow!("{reason}")));
+                resolve(inner, &job.reply, job.enqueued, Err(anyhow!("{reason}")), Status::Failed);
+            }
+            return;
+        }
+    };
+    // `None` means the job never ran because an earlier job in the batch failed;
+    // those are refused, not failed, so the counters keep their stated meaning.
+    let mut results: Vec<(Instant, Reply, Option<Result<Payload>>)> = Vec::with_capacity(live.len());
+    let mut failure: Option<String> = None;
+    for job in live {
+        if failure.is_some() {
+            // The transaction is already poisoned; a statement run after the
+            // failure could only produce a misleading second error.
+            results.push((job.enqueued, job.reply, None));
+            continue;
+        }
+        match (job.run)(Target::Conn(&tx)) {
+            Ok(payload) => results.push((job.enqueued, job.reply, Some(Ok(payload)))),
+            Err(e) => {
+                let reason = format!("{e:#}");
+                failure = Some(reason.clone());
+                results.push((job.enqueued, job.reply, Some(Err(anyhow!(reason)))));
+            }
+        }
+    }
+    if let Some(reason) = failure {
+        let _ = tx.rollback();
+        inner.reload_guard();
+        let rolled_back = results.len();
+        for (enqueued, reply, outcome) in results {
+            let status = if outcome.is_some() { Status::Failed } else { Status::Refused };
+            resolve(inner, &reply, enqueued, Err(anyhow!("{reason}")), status);
+        }
+        error!("a telemetry batch rolled back ({reason}); {rolled_back} operation(s) were not written");
+        return;
+    }
+    match tx.commit() {
+        Ok(()) => {
+            let count = results.len() as u64;
+            record_transaction(inner, started);
+            inner.transactions.fetch_add(1, Ordering::Relaxed);
+            inner.batch_transactions.fetch_add(1, Ordering::Relaxed);
+            inner.batch_ops.fetch_add(count, Ordering::Relaxed);
+            inner.max_batch_size.fetch_max(count, Ordering::Relaxed);
+            for (enqueued, reply, outcome) in results {
+                match outcome {
+                    Some(outcome) => resolve(inner, &reply, enqueued, outcome, Status::Committed),
+                    // Unreachable while the failure branch above owns every
+                    // half-executed batch; treating it as refused is still the
+                    // honest accounting if that invariant ever breaks.
+                    None => resolve(inner, &reply, enqueued, Err(anyhow!("这一批没有执行")), Status::Refused),
+                }
+            }
+        }
+        Err(e) => {
+            let reason = format!("commit failed: {e:#}");
+            error!("{reason}");
+            inner.reload_guard();
+            for (enqueued, reply, _) in results {
+                resolve(inner, &reply, enqueued, Err(anyhow!("{reason}")), Status::Failed);
             }
         }
     }
 }
 
 fn run_one(conn: &Option<Connection>, inner: &Inner, job: Job) {
-    if job.generation != inner.generation.load(Ordering::SeqCst) {
-        inner.refused.fetch_add(1, Ordering::Relaxed);
-        answer(inner, &job.reply, Err(anyhow!(SUPERSEDED)));
+    let Job { generation, enqueued, run, reply, .. } = job;
+    let started = Instant::now();
+    if generation != inner.generation.load(Ordering::SeqCst) {
+        resolve(inner, &reply, enqueued, Err(anyhow!(SUPERSEDED)), Status::Refused);
         return;
     }
     let Some(conn) = conn.as_ref() else {
-        answer(inner, &job.reply, Err(anyhow!("数据库已关闭")));
+        resolve(inner, &reply, enqueued, Err(anyhow!("数据库已关闭")), Status::Refused);
         return;
     };
-    let reply = job.reply;
-    let outcome = (job.run)(Target::Conn(conn));
-    if outcome.is_err() {
-        inner.reload_guard();
+    match run(Target::Conn(conn)) {
+        Ok(payload) => {
+            record_transaction(inner, started);
+            inner.transactions.fetch_add(1, Ordering::Relaxed);
+            resolve(inner, &reply, enqueued, Ok(payload), Status::Committed);
+        }
+        Err(e) => {
+            inner.reload_guard();
+            resolve(inner, &reply, enqueued, Err(e), Status::Failed);
+        }
     }
-    answer(inner, &reply, outcome);
 }
 
-/// Sends one job's answer and closes it out of the accepted-but-unanswered count.
-/// Every path that finishes a job goes through here, so `queued` means exactly
-/// what it says: work this process has taken responsibility for and not yet
-/// committed or refused.
-fn answer(inner: &Inner, reply: &Reply, outcome: Result<Payload>) {
-    let _ = reply.send(outcome);
-    inner.queued.fetch_sub(1, Ordering::Relaxed);
-}
-
-/// A maintenance operation, with the readers stopped and everything already
-/// queued refused.
+/// An operation that replaces the database file, with the readers stopped and
+/// everything already queued refused.
 ///
 /// The drain is what keeps a write that was accepted before the switch from
-/// landing in the database that replaced it. The generation bump afterwards is
-/// the backstop: a job submitted while the switch was running carries the old
-/// generation and is refused rather than applied to a database it was not written
-/// for. Nothing straddles the switch.
-fn run_exclusive(conn: &mut Option<Connection>, inner: &Inner, queue: &Receiver<Job>, job: Job) {
+/// landing in the database that replaced it. The generation check is the
+/// backstop for the operation itself: a replacement queued behind another one
+/// carries the old generation and is refused rather than replacing the
+/// replacement. Nothing straddles the switch.
+fn run_replace(conn: &mut Option<Connection>, inner: &Inner, queue: &Receiver<Job>, job: Job) {
+    let Job { generation, enqueued, run, reply, .. } = job;
+    if generation != inner.generation.load(Ordering::SeqCst) {
+        resolve(inner, &reply, enqueued, Err(anyhow!(SUPERSEDED)), Status::Refused);
+        return;
+    }
     let _gate = inner.gate.write().unwrap_or_else(|e| e.into_inner());
     let mut refused = 0u64;
     while let Ok(pending) = queue.try_recv() {
+        resolve(inner, &pending.reply, pending.enqueued, Err(anyhow!(SUPERSEDED)), Status::Refused);
         refused += 1;
-        let _ = pending.reply.send(Err(anyhow!(SUPERSEDED)));
     }
-    inner.refused.fetch_add(refused, Ordering::Relaxed);
     if refused > 0 {
-        inner.queued.fetch_sub(refused.min(inner.queued.load(Ordering::Relaxed)), Ordering::Relaxed);
         warn!("{refused} queued write(s) were refused because the database is being replaced");
     }
-    let reply = job.reply;
+    let started = Instant::now();
     let mut ex = Exclusive { conn };
-    let outcome = (job.run)(Target::Exclusive(&mut ex));
+    let outcome = run(Target::Replace(&mut ex));
     // Whatever the database now contains, the relationship cache describes the
     // one it replaced.
     inner.reload_guard();
     inner.generation.fetch_add(1, Ordering::SeqCst);
-    answer(inner, &reply, outcome);
+    match outcome {
+        Ok(payload) => {
+            record_transaction(inner, started);
+            inner.transactions.fetch_add(1, Ordering::Relaxed);
+            resolve(inner, &reply, enqueued, Ok(payload), Status::Committed);
+        }
+        Err(e) => resolve(inner, &reply, enqueued, Err(e), Status::Failed),
+    }
 }
 
 /// Waits for one job's reply.
@@ -1781,7 +2016,7 @@ fn await_reply<T: 'static>(rx: Receiver<Result<Payload>>) -> Result<T> {
 /// `UPDATE ... RETURNING` rather than `SELECT MAX(id) + 1`: two concurrent
 /// callers cannot be handed the same id, and an id belonging to a deleted row is
 /// never issued again. DuckDB has no `setval`, so a sequence could not be moved
-/// past the ids an import or a restore brought in -- this row can.
+/// past the ids a restore brought in -- this row can.
 fn alloc_id(conn: &Connection, name: &str) -> Result<i64> {
     let id: Option<i64> = conn
         .prepare("UPDATE romi_id SET next = next + 1 WHERE name = ?1 RETURNING next - 1")?
@@ -2051,35 +2286,48 @@ fn exclusive_lock(path: &str) -> Result<std::fs::File> {
 
 /// Refuses a `--db` file this build cannot open, before the engine touches it.
 ///
-/// The extension does not identify the format: an operator's `romi.db` may be the
-/// SQLite database of the previous build, and silently creating a second, empty
-/// DuckDB database beside it would look like every node disappeared. Nothing is
-/// renamed, deleted or overwritten here.
+/// Only the first [`DUCKDB_HEADER`] bytes are read, and the file is closed
+/// immediately: a multi-gigabyte database must not be loaded into memory just to
+/// decide whether it is ours. Any existing file that is not a DuckDB database is
+/// refused with the same concise error and left exactly as it was; there is no
+/// format-specific handling and nothing is renamed, deleted or overwritten.
 fn refuse_foreign_format(path: &str) -> Result<()> {
-    let Ok(head) = std::fs::read(path) else { return Ok(()) };
-    if head.is_empty() {
+    /// The smallest prefix that carries DuckDB's storage magic at bytes 8..12.
+    const DUCKDB_HEADER: usize = 12;
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e).with_context(|| format!("reading the database header of {path}")),
+    };
+    use std::io::Read;
+    let mut head = [0u8; DUCKDB_HEADER];
+    let mut filled = 0;
+    while filled < DUCKDB_HEADER {
+        match file.read(&mut head[filled..]) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            Err(e) => return Err(e).with_context(|| format!("reading the database header of {path}")),
+        }
+    }
+    drop(file);
+    if filled == 0 {
+        // An empty file is a database path waiting for its first write; DuckDB
+        // initializes it.
         return Ok(());
     }
-    if head.starts_with(b"SQLite format 3\0") {
-        anyhow::bail!(
-            "{path} 是旧版 SQLite 数据库，本版本已改用 DuckDB，不会自动转换，也不会改动该文件。\n\
-             请先停掉旧 Hub，然后按 docs/duckdb-migration.md 的三步迁移：\n  \
-             python3 scripts/migrate-sqlite.py --source {path} --out /tmp/romi-legacy.jsonl\n  \
-             monitor-hub --import-legacy /tmp/romi-legacy.jsonl --db <新的 DuckDB 路径>\n  \
-             再用 --db <新的 DuckDB 路径> 启动"
-        );
+    if filled == DUCKDB_HEADER && &head[8..12] == b"DUCK" {
+        return Ok(());
     }
-    if head.len() < 12 || &head[8..12] != b"DUCK" {
-        anyhow::bail!("{path} 既不是 SQLite 数据库，也不是 DuckDB 数据库；拒绝在此路径上创建新库");
-    }
-    Ok(())
+    anyhow::bail!(
+        "{path} 不是 romi 的 DuckDB 数据库；拒绝在此路径上创建或打开数据库，现有文件不会被修改。请换一个不存在的路径，或换一个有效的 romi 数据库"
+    )
 }
 
 /// Restricts the database file and its write-ahead log to their owner.
 ///
 /// DuckDB writes the WAL beside the database, and the spill directory holds
-/// materialized intermediates of the same rows; neither carries SQLite's `-wal`
-/// and `-shm` names, so each path is restricted explicitly.
+/// materialized intermediates of the same rows; each path is restricted
+/// explicitly.
 pub(crate) fn restrict(path: &str) {
     for file in [path.to_owned(), format!("{path}.wal")] {
         own_only(&file);

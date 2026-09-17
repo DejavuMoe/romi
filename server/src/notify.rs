@@ -538,7 +538,7 @@ pub async fn watch(app: Shared) {
 fn sweep(app: &App, watch: &mut Watch, now: i64) -> Result<Vec<Note>> {
     let online: HashSet<i64> = app.agents.read().unwrap_or_else(|e| e.into_inner()).keys().copied().collect();
     let nodes = app.db.nodes()?;
-    // Node ids are rowids, which SQLite hands to the next node created once the
+    // The identity allocator never reissues a deleted node's id, and the
     // newest is deleted; state kept under a deleted id would pass that node's
     // absence, return and traffic step to the new one.
     // ponytail: a delete and a create within one SWEEP still inherit; key by
@@ -672,7 +672,7 @@ mod tests {
 
     fn connect(app: &App, id: i64) {
         let (tx, _) = mpsc::channel(1);
-        app.agents.write().unwrap().insert(id, Agent::new(1, tx));
+        app.agents.write().unwrap().insert(id, std::sync::Arc::new(Agent::new(1, tx)));
     }
 
     /// Offline alerts are only marked while a channel exists to carry them.
