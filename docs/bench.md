@@ -1,119 +1,220 @@
-# 存储基准
+# romi 存储与容量基准（v0.3）
 
-`scripts/bench.py` 让假 Agent 通过真实 WebSocket 协议上报，所有测量都发生在
-release `monitor-hub` 上。当前版本不再有 SQLite 迁移导入路径，因此基准也移除了
-离线 JSONL 灌库：节点通过真实 HTTP provisioning API 创建，历史查询只读取
-本 workload 现场产生的行。因此 **history query 数字与旧基准不可逐项比较**；本阶段
-不做 synthetic large-scale analytical benchmark。
+本阶段基准回答的是：**当历史真正变大时，romi 的内嵌 DuckDB 设计是否仍然可预测、可用？**
+所有数字都来自本开发机的实际运行；不是产品保证，也不代表所有硬件/部署。
 
-复现：
+开发机：Intel Core Ultra 7 255H，16 逻辑核，30 GiB RAM，Linux 7.2.5，
+DuckDB engine v1.5.5（crate `duckdb 1.10505.0`），Rust 1.98.0。
+除特别说明外，Hub 使用产品默认配置运行，只改了 `--db-threads` 的对比项。
+
+## 1. 基准工具
+
+- `server/src/bin/romi-bench.rs`：benchmark-only Rust 工具，由 Cargo feature
+  `bench` 控制，不进入 `make release`、`make package` 或发布包。
+  - `seed`：用 DuckDB 批量 SQL 生成确定性的合法 romi 数据，支持节点数、历史
+    天数、metrics 间隔、探测数、探测间隔、丢包率、延迟范围、流量增长、随机种子、
+    物理插入顺序（`time`/`node`/`none`）和 chunk 行数；生成前打印估算行数，
+    生成后打印实际行数和文件大小。
+  - `profile`：在 DB 文件上直接执行生产历史查询的 `EXPLAIN ANALYZE` 和重复计时。
+  - `sql`：benchmark-only 的 `EXPLAIN ANALYZE`/SQL 计时入口，用于验证优化假设，
+    不是产品接口。
+- `scripts/bench_analytics.py`：启动真实 release Hub，通过真实 HTTP 接口测量
+  metric / ping / combined 历史窗口、reader 并发、查询期间 ingestion、备份/恢复/
+  维护，并输出 JSON 与人类可读摘要。
+- `scripts/bench.py`：保留 v0.2 的实时 ingestion/group-commit 基准；本阶段未改变其
+  测量语义。
+
+复现流程：
 
 ```sh
 make release
-python3 scripts/bench.py --bin-dir target/release --nodes 40 --rate 400 --seconds 10
+make bench-fixture
+python3 scripts/bench_analytics.py seed \
+    --db /tmp/romi-large/bench.duckdb --nodes 500 --days 30 \
+    --metric-interval 60 --probes 2 --probe-interval 60 \
+    --loss-rate 0.01 --latency-min 5 --latency-max 250 \
+    --seed 3003 --order time --out /tmp/romi-large/seed.json
+python3 scripts/bench_analytics.py query \
+    --db /tmp/romi-large/bench.duckdb --fixture-json /tmp/romi-large/seed.json \
+    --windows 1,6,24,168,720,2160 --series metrics,ping,both \
+    --query-iterations 2 --readers 1,3,4,6 --out /tmp/romi-large/queries.json
+python3 scripts/bench_analytics.py ingest \
+    --db /tmp/romi-large/bench.duckdb --fixture-json /tmp/romi-large/seed.json \
+    --ingest-rate 400 --ingest-agents 50 --ingest-seconds 12 \
+    --analytics-readers 2 --ingest-history-windows 24,720 --out /tmp/romi-large/ingest-400.json
+python3 scripts/bench_analytics.py scale \
+    --db /tmp/romi-large/bench.duckdb --fixture-json /tmp/romi-large/seed.json \
+    --out /tmp/romi-large/scale.json
 ```
 
-`--rate` 是目标总上报次数/秒（40 节点时 `interval = 40 / rate`）。无论是否达到目标，
-脚本都不会丢弃上报来“赢得”数字；它等待 Hub 自己累计的流量达到 Agent 发送的期望值，
-并报告 `exact`。
+## 2. 实际测试数据集
 
-## 本阶段前的 DuckDB 基线（pre-stabilization）
+| 数据集 | 节点 | 历史 | 探测 | metric interval | probe interval | metric 行 | ping_record 行 | DB 大小 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Small | 100 | 7 d | 2 | 60 s | 60 s | 1,008,000 | 2,016,000 | 137 MB |
+| Medium | 100 | 30 d | 2 | 60 s | 60 s | 4,320,000 | 8,640,000 | 532 MB |
+| Large | 500 | 30 d | 2 | 60 s | 60 s | 21,600,000 | 43,200,000 | 2.7 GB |
+| Very large | 500 | 90 d | 1 | 60 s | 60 s | 64,800,000 | 64,800,000 | 5.3 GB |
+| Medium node-order | 100 | 30 d | 2 | 60 s | 60 s | 4,320,000 | 8,640,000 | 532 MB |
 
-下表是 storage stabilization 之前、迁移评审时的历史结果，只用于对照。当时的脚本
-通过已删除的 offline importer 灌入 20 节点 × 1 天分钟级历史（28 800 metric +
-57 600 ping_record + 2 probes），测量窗口 20 s，4 个历史读者；没有 group commit
-批次数/批量 instrumentation，队列计数器语义也有歧义。
+Stretch（1000 nodes × 30/90 d）本机未生成，未报告其数字。
 
-| | DuckDB 2 s（约 10/s） | DuckDB 50 ms（约 400/s） |
-| --- | --- | --- |
-| 提交上报/秒 | 10.9 | 403 |
-| 队列峰值（旧 = 未提交写入） | 1 | 2 |
-| 小写入 p50 / p99 | 3.47 / 10.67 ms | 3.41 / 7.33 ms |
-| 小读取 p50 | 0.42 ms | 0.78 ms |
-| 历史查询 p50 / p95 / p99 | 10.14 / 20.71 / 25.66 ms | 9.76 / 19.74 / 25.07 ms |
-| 历史查询条数（20 s） | 1 438 | 1 455 |
-| RSS | 114 MB | 139 MB |
-| CPU | 103 %（单核百分比） | 192 % |
-| 数据库文件 | 11.3 MB | 19.5 MB |
-| 窗口内文件增长 | 257 kB | 8.4 MB |
-| release 二进制 | 29.7 MB | 29.7 MB |
-| 累计流量与上报一致 | 是 | 是 |
+## 3. 历史查询（真实 HTTP API）
 
-旧基线结论是：约 1000 次/秒时 Hub 会吃满 CPU 并在约 60 s 内不再响应 HTTP，怀疑
-global connected-agent map 的写锁在 DuckDB commit 之前把不同节点的 report 串行化，
-group commit 拿不到真实并发流量。本阶段验证并修复了该瓶颈。
+所有窗口使用产品实际的 `GET /api/nodes/{id}/metrics`，`series=metrics|ping` 或
+省略 `series` 为 combined；`step` 按 API 的 point budget 计算。每个
+series/window 用多个节点、多次采样；这里只列关键窗口的 p50/p95。
 
-## 本阶段结果（post-stabilization）
+### 3.1 Large（500 节点 × 30 天）
 
-同一台机器：Intel Core Ultra 7 255H，16 线程，30 GiB RAM，Linux 7.2.5；
-Rust 1.98.0；每个速率一次 10 s 窗口，40 节点，2 个历史读者，8 个小写入/读取样本。
-每个 datum 都来自一次完整运行，未做多次取中位数。
+优化前（默认 `--db-threads 4`）：
 
-| 目标/s | 实际上报/s | 实际提交/s | 峰值 `queued_ops_current` | batch tx | 平均 batch | 最大 batch | 队列等待均值 | 事务均值 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 10 | 12.0 | 12.0 | 40 | 17 | 16.47 | 34 | 22.08 ms | 5.08 ms |
-| 100 | 100.0 | 100.0 | 39 | 93 | 13.76 | 36 | 29.34 ms | 10.02 ms |
-| 200 | 200.0 | 200.0 | 39 | 199 | 12.46 | 38 | 32.04 ms | 11.71 ms |
-| 400 | 396.0 | 400.0 | 39 | 375 | 13.01 | 38 | 30.24 ms | 12.67 ms |
-| 600 | 596.6 | 600.1 | 40 | 593 | 12.49 | 37 | 28.66 ms | 12.09 ms |
-| 800 | 795.7 | 799.3 | 38 | 900 | 10.89 | 36 | 26.00 ms | 11.07 ms |
-| 1000 | 995.3 | 998.1 | 41 | 667 | 20.21 | 40 | 41.09 ms | 19.61 ms |
-| 1200 | 1192.0 | 988.4 | 41 | 820 | 20.20 | 40 | 42.17 ms | 20.26 ms |
-| 1500 | 1485.1 | 1015.8 | 41 | 1035 | 20.17 | 40 | 42.25 ms | 20.49 ms |
+| 查询 | 1 reader p50 | 4 readers p50 | 6 readers |
+| --- | ---: | ---: | ---: |
+| metrics 720 h | 62.5 ms | 133.2 ms | 130.3 ms + 71 个 503 |
+| ping 720 h | 62.8 ms | 129.8 ms | 103.4 ms |
+| combined 720 h | 124.3 ms | 258.3 ms | 224.5 ms |
+| combined 2160 h | 122.4 ms | 217.2 ms | 199.5 ms |
 
-所有速率 `refused_ops_total = 0`、`failed_ops_total = 0`，drain 后
-`accumulated.exact = true`。也就是说没有用丢弃上报换取吞吐。超过约 1000/s 后，
-提交速率进入平台期（约 990–1016/s），积压通过更长的 drain 体现：
+优化后（默认 `--db-threads 8`）：
 
-| 目标/s | 未提交 drain（s） | 小写入 p50 / p99 | 小读取 p50 / p99 | 历史 p50 | CPU | RSS | 数据增长 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 10 | 0.01 | 4.45 / 5.52 ms | 0.93 / 3.76 ms | 4.42 ms | 30.0 % | 73.3 MB | 0.05 MB |
-| 100 | 0.00 | 3.31 / 4.40 ms | 0.72 / 3.85 ms | 4.35 ms | 47.2 % | 91.0 MB | 0.29 MB |
-| 200 | 0.00 | 4.67 / 5.41 ms | 0.90 / 3.52 ms | 4.36 ms | 68.2 % | 89.6 MB | 0.58 MB |
-| 400 | 0.00 | 4.38 / 7.06 ms | 1.60 / 3.93 ms | 4.09 ms | 101.3 % | 88.4 MB | 1.13 MB |
-| 600 | 2.03 | 5.23 / 42.90 ms | 0.75 / 44.72 ms | 4.09 ms | 137.7 % | 77.6 MB | 1.73 MB |
-| 800 | 0.00 | 11.16 / 38.11 ms | 0.55 / 33.07 ms | 3.92 ms | 177.1 % | 93.2 MB | 2.39 MB |
-| 1000 | 1.42 | 44.26 / 45.74 ms | 1.13 / 502.7 ms | 4.11 ms | 229.7 % | 85.2 MB | 2.86 MB |
-| 1200 | 3.31 | 43.51 / 49.95 ms | 0.70 / 623.7 ms | 4.02 ms | 282.9 % | 97.1 MB | 3.53 MB |
-| 1500 | 9.21 | 44.87 / 49.06 ms | 0.92 / 914.8 ms | 4.01 ms | 350.3 % | 87.8 MB | 4.45 MB |
+| 查询 | 1 reader p50 | 3 readers p50 | 4 readers p50 | 6 readers |
+| --- | ---: | ---: | ---: | ---: |
+| metrics 720 h | 39.0 ms | 69.2 ms | 76.7 ms | 83.9 ms + 53 个 503 |
+| ping 720 h | 43.4 ms | 61.4 ms | 68.9 ms | 90.2 ms |
+| combined 720 h | 82.2 ms | 124.9 ms | 144.0 ms | 122.5 ms |
+| combined 2160 h | 74.9 ms | 129.9 ms | 123.1 ms | 139.1 ms |
 
-### group commit 是否拿到真实并发流量
+同样的数据集、同样的 readers/iterations 下，single-reader combined 30-day
+从 124.3 ms 降到 82.2 ms，4-reader combined 从 258.3 ms 降到 144.0 ms。
+所有测量都是进程已启动、OS page cache 已热的 warm 运行；没有把 cold/reopen
+运行当作同一分布。
 
-**是。** 这是本阶段最重要的结果：
+### 3.2 Very large（500 节点 × 90 天）
 
-- 在 1000 次/秒目标下，约 9 980 条 committed reports 只需要 667 次 batch transaction，
-  平均每次 20.21 条，最大 40 条。40 正好是并发连接节点数：每个 Agent 在任一时刻最多
-  有一个 report 在等待 writer，多个节点的 report 进入同一个 DuckDB transaction。
-- 在 1500 次/秒目标下，平均 batch 20.17、最大 40，批次数随积压增加；说明 writer
-  确实在做 group commit，而不是每个 report 一个 commit。
-- 修复前的基线没有 batch instrumentation，只有压力工况队列峰值 1–2；在那个测量下
-  无法看到多节点 report 是否进入同一 commit。本阶段先把 Agent 锁拆成 per-session
-  state，再让 writer 的组批统计可观测，才回答了这个问题。
-- 800/s 时平均 batch 反而约 10.9：writer 能把队列及时排空，所以到达时常常只有部分
-  Agent 已排队；这正是“没有积压但仍在合并”的形态。
+| 查询 | 1 reader p50/p95 | 3 readers p50/p95 | 4 readers p50/p95 | 6 readers |
+| --- | ---: | ---: | ---: | ---: |
+| metrics 720 h | 45.1 / 48.4 ms | 85.3 / 107.4 ms | 121.6 / 162.8 ms | 169.9 / 362.4 ms + 56 个 503 |
+| metrics 2160 h | 122.5 / 125.8 ms | 230.2 / 310.2 ms | 290.0 / 413.6 ms | 256.1 / 303.9 ms |
+| ping 2160 h | 56.7 / 59.7 ms | 62.7 / 227.4 ms | 86.4 / 241.8 ms | 114.9 / 298.1 ms |
+| combined 2160 h | 178.9 / 179.6 ms | 303.8 / 416.4 ms | 465.1 / 661.1 ms | 299.9 / 386.2 ms |
 
-### 对照与回归
+6 readers 时约 1/3 请求返回 503，因为产品 `HISTORY_GATE` 固定为 4；这不是数据库
+错误，而是已有的 backpressure 语义。reader pool 仍是 3，未按基准请求扩大。
 
-- **10/s 设计工况**：提交从基线 10.9/s 降到本阶段 12.0/s（目标 10，没有丢报告），
-  小写入 p50 从 3.47 ms 变为 4.45 ms，RSS 从 114 MB 降到约 73 MB，CPU 从 103 %
-  降到约 30 %。差异包含 workload 不再灌历史数据，不能逐项归因。
-- **400/s**：提交 403/s → 400/s，小写入 p50 3.41 ms → 4.38 ms，均在同一量级；
-  基线之后新增了 `queue_wait`/`transaction` 计时与 retire/restore 生命周期逻辑，
-  这可能是小幅差异来源，本轮不做单点归因。
-- **约 1000/s 以上**：修复后不再出现基线中“CPU 吃满、HTTP 完全无响应”的崩溃式
-  饱和；现在表现为提交速率约 1000/s 的平台、可见的 drain（1.4–9.2 s）和更高但仍有
-  界限的 HTTP 延迟。所有已接受上报最终提交（`exact = true`）。
-- **history query**：本阶段各速率 p50 约 4 ms，但读取的是现场产生的少量行，不能与
-  基线 10 ms 对比；`errors = 0` 只说明在 writer 高压下读路径仍可服务。
-- **饱和代价**：1000/s 以上小写入 p50 约 44 ms，小读取 p99 在 1000/1500 目标下分别
-  约 503 ms / 915 ms；这是 backpressure 可见、HTTP 尽量保持响应的表现，不是新的失败模式。
-- **磁盘**：10 s 内增长随速率从 0.05 MB 到 4.45 MB；未观察到无界增长。数据库文件
-  在 40 节点、数十秒 workload 下为 1.3–5.8 MB。
+## 4. 测量前 profiling：真正的瓶颈
 
-### 未做的比较
+`EXPLAIN ANALYZE` 显示 metric 和 ping 查询即使在 `node_id=... AND ts>=...` 条件下
+也会选择 `TABLE_SCAN`（Sequential Scan），并扫描整张表后过滤 node_id：
 
-- 没有用新测量重跑 SQLite 基线；上表 pre-stabilization 列保留迁移评审时的
-  DuckDB 原始数字，仅作历史比较。
-- 没有 synthetic 大范围聚合 / 直接 Parquet 扫描 / 多天历史分析型基准；这属于
-  存储稳定后的下一阶段。
-- 没有跨机、网络存储、容器、musl、跨架构或多次取中位数；以上为本机单次运行。
+- DuckDB 默认 `index_scan_percentage = 0.001`、`index_scan_max_count = 2048`。
+  单节点 30 天返回 1,441 个 bucket，但原始扫描行数是 43,200（metric）或
+  86,400（ping），远高于默认会走 ART 索引的上限；优化器因此选择顺序扫描。
+- 对 metric 的每节点 30 天查询，计划是 `TABLE_SCAN` + `HASH_GROUP_BY`。扫描成本
+  随 **整张表** 的行数增长，而不是随该节点的 43,200 行增长。
+- 因此首要瓶颈是“按 node_id 过滤的整表扫描”，不是 JSON 序列化，也不是
+  `AVG/TRUNC` 表达式。
+
+相关实验：
+
+- 显式 `CREATE INDEX metric(node_id)` / `ping_record(node_id)` 后，提高
+  `index_scan_percentage` 能强制 `INDEX_SCAN`，但 30 天聚合从约 12 ms 变成约
+  101 ms：索引扫描的 row-id fetch 比向量化顺序扫描更慢。已拒绝。
+- `SUM(...)//COUNT(*)` 替代 `TRUNC(AVG(...))`：在 medium 上 p50 12.60 ms vs
+  12.35 ms，差异在噪声范围内。无收益，未采用。
+- 拆分固定 SQL 表达式、减少重复 bucket 表达式：medium p50 基本不变。未采用。
+
+### 4.1 物理 row group 顺序的实验
+
+用完全相同的行数、只改 seed 的物理插入顺序（`--order node`），并直接执行同一
+生产 SQL：
+
+| 查询 | time-major | node-major | 改善 |
+| --- | ---: | ---: | ---: |
+| metric 720 h | 11.9 ms | 2.9 ms | ~4.1× |
+| ping 720 h | 17.2 ms | 7.3 ms | ~2.4× |
+| metric 2160 h | 11.8 ms | 3.0 ms | ~3.9× |
+| ping 2160 h | 17.7 ms | 7.9 ms | ~2.2× |
+
+这说明 zone-map 对 `node_id` 的剪枝非常有效，但生产 writer 是**按分钟交错写入不同
+节点**的 append-only 模式，不会自然形成 node-major row group。要利用该收益，需要
+周期性全表排序/聚簇或新的分析副本，维护和生命周期成本本阶段没有实施；这里只记录
+测量证据，留待后续阶段做明确产品决策。未引入任何持久 rollup 表。
+
+## 5. Ping 路径的 SQL 化实验
+
+当前 ping 查询把原始行取回 Rust，在 `close_bucket` 中做 median/band/loss 折叠。
+原型 SQL 用 `MEDIAN + MIN/MAX + SUM` 一次聚合：
+
+- medium 30 天原始 DB 计时：raw p50 17.3 ms，`MEDIAN` 聚合 p50 12.3 ms。
+- 但 DuckDB `MEDIAN(BIGINT)` 返回 `DOUBLE`；当 latency 接近 `2^53`/`i64::MAX`
+  时会丢精度，甚至 `CAST(... AS BIGINT)` 直接报越界。现有 Rust 折叠使用整数
+  运算，语义是精确的。
+- 用 `list_sort`/`list_filter` 实现精确整数 median 的 SQL 版本 p50 17.6 ms，
+  并不比原路径快。
+- 结论：**保留 Rust fold**，不为了约 20–30% 的 DB 时间而牺牲大 latency 值的
+  精确 median 语义。
+
+## 6. Ingestion 与 analytics 并发
+
+Large 数据集（500 节点 × 30 天），50 个真实 Agent WebSocket 连接，2 个 analytics
+reader，12 s 窗口。结果：
+
+| `--db-threads` | 目标 reports/s | 实际 offered/s | exact 累计流量 | 平均 batch | batch tx | 历史查询 p50 | 轻量 `/api/nodes` p50 (p99) | refused/failed |
+| ---: | ---: | ---: | :---: | ---: | ---: | ---: | ---: | :---: |
+| 4（旧默认） | 100 | 97.6 | 是 | 17.4 | 89 | 5.65 ms | 1.13 (14.4) ms | 0 / 0 |
+| 4（旧默认） | 400 | 399.2 | 是 | 12.8 | 441 | 5.68 ms | 1.23 (27.7) ms | 0 / 0 |
+| 8（新默认） | 100 | 96.2 | 是 | 17.1 | 85 | 5.92 ms | 1.33 (29.2) ms | 0 / 0 |
+| 8（新默认） | 400 | 400.0 | 是 | 16.4 | 344 | 5.86 ms | 1.10 (48.0) ms | 0 / 0 |
+
+结论：4→8 线程在 analytics 并发下没有破坏 ingestion 正确性；`exact` 累计流量为真，
+没有 refused/failed。更多 analytics 并发会让 writer 队列出现更长的等待，但已接受
+的 telemetry 仍然提交。
+
+## 7. 容量指导（仅本机测量）
+
+**可用容量示例**
+
+- 500 节点 × 30 天：21.6M metric + 43.2M ping_record，DB 2.7 GB；单 reader
+  30 天 combined p50 约 82 ms；4 readers 约 144 ms；同时 400 reports/s ingestion
+  仍保持 exact。
+- 500 节点 × 90 天：64.8M metric + 64.8M ping_record，DB 5.3 GB；单 reader
+  90 天 combined p50 约 179 ms；4 readers p99 约 661 ms；RSS 约 700 MB。
+- 100 节点 × 30 天：13M 行，DB 532 MB；30 天 combined 单 reader 约 34 ms。
+
+**第一个瓶颈**
+
+1. 历史查询是整表顺序扫描（取决于总行数），不是按节点数据量扫描。总行数增大时，
+   `HISTORY_GATE` 之外的 4 个请求会把 CPU/内存带宽吃满，这是本机看到的第一瓶颈。
+2. 本机四个并发 90 天请求时 p99 已达到几百毫秒到 1 秒，部分请求因 gate 返回 503。
+3. 恢复 staging 需要比正常服务更高的临时 DuckDB memory limit：默认 512 MiB
+   在本机无法重建 100×30 天（13M 行）历史。v0.3 的恢复路径现在根据归档行数提出
+   临时 staging 上限，并在主机内存预算不足时返回明确错误；这是恢复操作特有的，
+   不会改变正常服务的 `--db-memory` 语义。
+
+**不是保证**
+
+上述数字只代表本机单次运行，没有跨机、没有多次中位数，也没有 1000+ 节点 stretch
+配置。产品保证应保守地按相同量级打折，并以 operator 的实际 `--db-memory`、
+`--db-threads` 和 retention 为准。
+
+## 8. 备份 / 恢复 / 维护扩展
+
+`scale` 模式在同一台临时数据库上执行：维护 → 下载备份 → 用隐藏的 chunked HTTP
+上传恢复到新的临时 Hub → 校验行数。
+
+| 数据集 | 备份归档 | 备份耗时 | 恢复耗时 | 恢复后验证 | 维护（CHECKPOINT/体检） |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Medium | 10.4 MB | 0.50 s | 6.5 s | 4.32M metric + 8.64M ping | 0.005 s，未重写 |
+| Large | 22.9 MB | 2.14 s | 46.0 s | 21.6M metric + 43.2M ping | 0.006 s，未重写 |
+| Very large | 63.3 MB | 7.39 s | 108.7 s | 64.8M metric + 64.8M ping | 0.014 s，未重写 |
+
+结论：
+
+- 现有 256 MiB 压缩备份上限在实测到的最大的 5.3 GB / 129.6M 行数据集上仍然
+  合理（63.3 MB），本阶段不修改该限制；没有把上限盲目放大。
+- 恢复时间随行数增长（medium 6.5 s → large 46 s → very large 109 s），主要成本
+  是解包、重建表和构建 primary-key ART 索引。
+- 恢复的 staging 数据库在构建期间需要临时更高的 DuckDB 内存上限；恢复成功后
+  临时文件删除，正常 live handle 重新按配置的 `--db-memory` 运行。
+- backup/restore 的语言语义、manifest 和 archive member 限制没有改变。

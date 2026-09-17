@@ -143,10 +143,12 @@ class Hub:
         self.url = f'http://127.0.0.1:{self.port}'
         self.process = None
 
-    def start(self, memory=None):
+    def start(self, memory=None, threads=None):
         command = [str(self.binary), '--listen', f'127.0.0.1:{self.port}', '--db', str(self.database)]
         if memory:
             command += ['--db-memory', memory]
+        if threads:
+            command += ['--db-threads', str(threads)]
         self.process = subprocess.Popen(command, cwd=self.work, stdout=self.log, stderr=self.log)
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:

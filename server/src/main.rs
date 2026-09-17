@@ -212,7 +212,7 @@ fn parse_args() -> Result<Args> {
                      install commands from the address in the browser's bar.\n\
                      --db-memory caps DuckDB's own memory use (default 512MB); it is not a\n\
                      ceiling on the process's resident set.\n\
-                     --db-threads caps DuckDB's worker threads (default: up to 4).\n\
+                     --db-threads caps DuckDB's worker threads (default: up to 8).\n\
                      --db-temp is where DuckDB spills; defaults to <db>.tmp.\n",
                     env!("CARGO_PKG_VERSION")
                 );

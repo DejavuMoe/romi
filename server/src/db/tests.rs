@@ -126,6 +126,49 @@ fn the_engine_runs_with_the_configured_limits_and_no_autoloading() {
     }
 }
 
+/// The default worker cap follows the host up to eight. The benchmark measured
+/// a materially faster large-history scan at eight workers while ingestion
+/// correctness during concurrent analytics stayed unchanged; a smaller host
+/// still uses all of its own cores rather than a fixed lower bound.
+#[test]
+fn the_default_worker_cap_tracks_cores_up_to_eight() {
+    let expected = std::thread::available_parallelism().map(|n| n.get() as i64).unwrap_or(2).min(8);
+    assert_eq!(Options::default().threads, expected);
+    assert!((1..=8).contains(&expected), "the cap stays inside DuckDB's supported range");
+}
+
+/// Restore builds its staging database with the large-table keys deferred, then
+/// adds them after the bulk load. The final schema must expose the same primary
+/// keys as a normally initialized database; otherwise a restore would publish a
+/// database with weaker uniqueness than the product's own schema.
+#[test]
+fn the_staging_schema_defers_and_then_restores_the_large_table_keys() {
+    let mut conn = open_connection(":memory:", &Options::default(), false).unwrap();
+    schema::initialize_staging(&mut conn, env!("CARGO_PKG_VERSION")).unwrap();
+    let primary_key = |conn: &Connection, table: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM duckdb_constraints()
+             WHERE table_name=?1 AND constraint_type='PRIMARY KEY'",
+            [table],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap()
+            > 0
+    };
+    assert!(!primary_key(&conn, "metric"), "metric load must not pay index maintenance per row");
+    assert!(!primary_key(&conn, "ping_record"));
+    assert!(primary_key(&conn, "node"), "small tables keep their ordinary schema");
+
+    schema::add_large_table_keys(&conn).unwrap();
+    assert!(primary_key(&conn, "metric"));
+    assert!(primary_key(&conn, "ping_record"));
+    assert_eq!(
+        schema::stored_version(&conn).unwrap(),
+        Some(schema::SCHEMA_VERSION),
+        "the staging database still gets the normal version row"
+    );
+}
+
 /// A fresh file, a second start on the same file, and a file carrying a schema
 /// this build does not know: one has to be created, one has to be reused, and one
 /// has to be refused before anything is written to it.
@@ -1043,6 +1086,48 @@ fn maintenance_leaves_a_small_database_alone() {
     assert!(!report.compacted);
     assert_eq!(report.freed, 0);
     assert_eq!(report.pruned, 0);
+}
+
+/// A hub capped at 64 MiB for normal service must still be able to restore a
+/// bulky history archive. Restore temporarily derives a larger staging ceiling
+/// from the archive's indexed row count; without that, DuckDB's primary-key
+/// index build fails at the service limit before the archive can be validated.
+#[test]
+fn a_low_memory_hub_restores_a_history_larger_than_its_service_limit() {
+    let scratch = Scratch::new();
+    let copy = scratch.copy(".copy");
+    // Seed the history and take the archive with a normal-sized engine; the
+    // regression is the restore path when the hub is then capped at 64 MiB.
+    {
+        let seed_options = Options { memory_limit: "512MB".into(), threads: 1, ..Default::default() };
+        let seed = Db::open_with(&scratch.0, seed_options).unwrap();
+        let id = node(&seed, 1);
+        let task = probe(&seed, vec![id]);
+        seed.exec(&format!(
+            "INSERT INTO ping_record (node_id, task_id, ts, latency)
+             SELECT {id}, {task}, i, 42 FROM range(0, 1500000) s(i)"
+        ))
+        .unwrap();
+        let report = seed.backup_into(&copy).unwrap();
+        assert_eq!(report.rows["ping_record"], 1_500_000);
+        seed.close().unwrap();
+    }
+    let options = Options { memory_limit: "64MB".into(), threads: 1, ..Default::default() };
+    let db = Db::open_with(&scratch.0, options).unwrap();
+
+    let restored = db.restore_from(&copy).unwrap();
+    assert_eq!(restored.rows["ping_record"], 1_500_000);
+    assert_eq!(db.scalar("SELECT COUNT(*) FROM ping_record").unwrap(), 1_500_000);
+    assert_eq!(
+        db.scalar(
+            "SELECT COUNT(*) FROM duckdb_constraints()
+             WHERE table_name='ping_record' AND constraint_type='PRIMARY KEY'"
+        )
+        .unwrap(),
+        1,
+        "the deferred staging key must be present in the restored database"
+    );
+    let _ = std::fs::remove_file(&copy);
 }
 
 /// The whole path: take a copy, change the live database, restore the copy, and

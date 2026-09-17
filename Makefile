@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export CARGO_TARGET_DIR := $(CURDIR)/target
-.PHONY: help setup frontend build release package check smoke bench dev-server dev-admin dev-web
+.PHONY: help setup frontend build release package check smoke bench bench-fixture dev-server dev-admin dev-web
 
 help:
 	@echo 'make setup       Install locked frontend dependencies and fetch Rust dependencies'
@@ -8,6 +8,7 @@ help:
 	@echo 'make check       Lint, typecheck/build frontends and run existing tests'
 	@echo 'make smoke       Build and verify server + agent over loopback'
 	@echo 'make bench       Run the storage benchmark against target/release (see scripts/bench.py)'
+	@echo 'make bench-fixture  Build the benchmark-only large-history fixture/profiler'
 	@echo 'make dev-server  Run server on 127.0.0.1:9911, data under .local/'
 	@echo 'make dev-admin   Run admin HMR on 127.0.0.1:5173/admin/'
 	@echo 'make dev-web     Run public web HMR on 127.0.0.1:5174/'
@@ -63,6 +64,12 @@ smoke: build
 # per row and the numbers would say nothing about a deployed hub.
 bench: release
 	python3 scripts/bench.py --bin-dir target/release
+
+# Benchmark-only fixture generator/profiler. Feature-gated so it never enters
+# make release, make package, or the shipped binary; scripts/bench_analytics.py
+# invokes it and drives the real HTTP endpoints.
+bench-fixture:
+	cargo build --locked --release --features bench --bin romi-bench --manifest-path server/Cargo.toml
 
 dev-server:
 	mkdir -p .local

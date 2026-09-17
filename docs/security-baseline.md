@@ -46,8 +46,8 @@
 
 本轮必要检查：
 
-- `make check`：前端构建、lint、测试；Rust fmt/clippy；server 137 + integration 9、agent 19 项测试。
-- 存储测试覆盖归档限制（压缩大小/成员数/单成员/展开总量）、备份事务失败后连接可复用、
+- `make check`：前端构建、lint、测试；Rust fmt/clippy；server 140 + integration 9、agent 19 项测试。
+- 存储测试覆盖归档限制（压缩大小/成员数/单成员/展开总量）、低内存恢复 staging、备份事务失败后连接可复用、
   snapshot 不被 replacement 语义拒绝、并发 Agent 会话顺序、恢复前会话失效、writer 队列
   计数与确定性关闭；离线迁移测试已随迁移功能一并删除。
 - `make smoke`：默认拒绝匿名访问、私有节点创建、实际 Agent 指标、令牌换发断线与新令牌重连、主题修改拒绝。

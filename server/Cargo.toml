@@ -40,11 +40,20 @@ tower-http = { version = "0.6", features = ["limit", "compression-gzip"] }
 tar = { version = "0.4", default-features = false }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
+[features]
+# Benchmark-only fixture generator/profiler; never enabled for release packages.
+bench = []
+
 [dev-dependencies]
 serde_urlencoded = "0.7"
 # Only the tests need a movable clock; the relay deadline spans minutes.
 # dev-dependencies do not reach the shipped binary.
 tokio = { version = "1", features = ["test-util"] }
+
+[[bin]]
+name = "romi-bench"
+path = "src/bin/romi-bench.rs"
+required-features = ["bench"]
 
 [profile.release]
 codegen-units = 1

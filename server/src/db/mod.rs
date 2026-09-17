@@ -65,6 +65,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
 mod backup;
+#[path = "queries.rs"]
+mod queries;
 mod schema;
 #[cfg(test)]
 mod tests;
@@ -317,7 +319,13 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             memory_limit: DEFAULT_MEMORY_LIMIT.into(),
-            threads: std::thread::available_parallelism().map(|n| n.get() as i64).unwrap_or(2).min(4),
+            // Cap worker threads by what the host actually offers, up to eight.
+            // Measured on a sixteen-core benchmark host, the 90-day / 500-node
+            // scan fell from ~62 ms to ~38 ms per node query when this cap moved
+            // from four to eight, while ingestion correctness during concurrent
+            // analytical reads was unchanged. On small virtual machines the cap
+            // remains the machine's own core count.
+            threads: std::thread::available_parallelism().map(|n| n.get() as i64).unwrap_or(2).min(8),
             temp_directory: String::new(),
             max_temp_size: DEFAULT_MAX_TEMP.into(),
         }
@@ -1220,12 +1228,7 @@ impl Db {
     /// floating point.
     pub fn metrics(&self, node_id: i64, since: i64, step: i64) -> Result<Vec<serde_json::Value>> {
         self.read_bounded(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT (MIN(ts)//?3)*?3, AVG(cpu), CAST(TRUNC(AVG(mem_used)) AS BIGINT),
-                        CAST(TRUNC(AVG(disk_used)) AS BIGINT),
-                        CAST(TRUNC(AVG(net_rx)) AS BIGINT), CAST(TRUNC(AVG(net_tx)) AS BIGINT)
-                 FROM metric WHERE node_id=?1 AND ts>=?2 GROUP BY ts//?3 ORDER BY (MIN(ts)//?3)*?3",
-            )?;
+            let mut stmt = conn.prepare(queries::METRICS_SQL)?;
             let rows = stmt.query_map(params![node_id, since, step], |r| {
                 Ok(serde_json::json!({
                     "ts": r.get::<_, i64>(0)?, "cpu": r.get::<_, f64>(1)?,
@@ -1439,7 +1442,7 @@ impl Db {
     /// Probe results for one node, one sample per probe per `step` seconds: the
     /// bucket's median round trip, its range, and the proportion lost.
     ///
-    /// [`PING_ROWS`] returns rows in time order, so a bucket is complete the
+    /// The probe-row query returns rows in time order, so a bucket is complete the
     /// moment the next opens and only one is held at a time.
     ///
     /// Returns the buckets and, alongside them, the proportion of the whole
@@ -1455,7 +1458,7 @@ impl Db {
         step: i64,
     ) -> Result<(Vec<serde_json::Value>, serde_json::Value)> {
         self.read_bounded(move |conn| {
-            let mut stmt = conn.prepare(PING_ROWS)?;
+            let mut stmt = conn.prepare(queries::PING_ROWS_SQL)?;
             let mut rows = stmt.query(params![node_id, since, step])?;
             let mut out = Vec::new();
             // Per probe in the bucket being filled: what answered, and how many
@@ -1726,17 +1729,6 @@ impl Db {
         self.read(move |conn| Ok(conn.query_row(&sql, [], |r| r.get::<_, i64>(0))?))
     }
 }
-
-/// The rows behind the latency chart: one node's probe results over a window,
-/// bucketed and in time order. Everything the chart draws is folded out of them
-/// in [`close_bucket`].
-///
-/// `//` rather than `/`: DuckDB's `/` is floating-point division, and a bucket
-/// index that arrived as a float would make `bucket * step` a float too.
-pub const PING_ROWS: &str = "SELECT ts//?3, task_id, latency FROM ping_record
-     WHERE node_id=?1 AND ts>=?2
-           AND task_id IN (SELECT task_id FROM ping_node WHERE node_id=?1)
-     ORDER BY ts";
 
 /// Every column of `node`, in the order [`row_to_node`] reads them. Spelled out
 /// rather than `SELECT *` so a schema change cannot silently shift a field into

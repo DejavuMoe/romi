@@ -230,6 +230,45 @@ pub fn engine_version(conn: &Connection) -> Result<String> {
 /// brand-new file receives the current schema directly rather than the history of
 /// how it was reached.
 pub fn initialize(conn: &mut Connection, fresh: bool, written_by: &str) -> Result<()> {
+    initialize_with_ddl(conn, fresh, written_by, DDL)
+}
+
+/// Creates the same schema as [`initialize`], but leaves the primary keys off
+/// `metric` and `ping_record`.
+///
+/// Restore uses this because DuckDB maintains a primary-key ART index
+/// incrementally during `INSERT`; on a medium/large history that index
+/// maintenance exceeded a 512 MB `memory_limit` before the row count was even
+/// validated. Loading the bulk tables first and adding their keys with
+/// [`add_large_table_keys`] afterwards keeps the staging build bounded while
+/// producing the same final schema.
+pub fn initialize_staging(conn: &mut Connection, written_by: &str) -> Result<()> {
+    let ddl = DDL
+        .replace(",\n  PRIMARY KEY (node_id, ts)", "")
+        .replace(",\n  PRIMARY KEY (node_id, ts, task_id)", "");
+    anyhow::ensure!(
+        !ddl.contains("PRIMARY KEY (node_id, ts)") && !ddl.contains("PRIMARY KEY (node_id, ts, task_id)"),
+        "staging DDL did not defer the large-table primary keys"
+    );
+    initialize_with_ddl(conn, true, written_by, &ddl)
+}
+
+/// Adds the keys [`initialize_staging`] deferred, after the bulk rows exist.
+///
+/// DuckDB supports `ALTER TABLE ... ADD PRIMARY KEY` and builds the ART index
+/// after the load. A duplicate row in an archive makes this fail, which is the
+/// correct outcome: a backup that cannot satisfy the product's own uniqueness
+/// rules must not become the live database.
+pub fn add_large_table_keys(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "ALTER TABLE metric ADD PRIMARY KEY (node_id, ts);
+         ALTER TABLE ping_record ADD PRIMARY KEY (node_id, ts, task_id);",
+    )
+    .context("adding the large history primary keys to the staging database")?;
+    Ok(())
+}
+
+fn initialize_with_ddl(conn: &mut Connection, fresh: bool, written_by: &str, ddl: &str) -> Result<()> {
     let from = stored_version(conn)?;
     if let Some(v) = from {
         anyhow::ensure!(
@@ -247,7 +286,7 @@ pub fn initialize(conn: &mut Connection, fresh: bool, written_by: &str) -> Resul
         );
     }
     let tx = conn.transaction()?;
-    tx.execute_batch(DDL).context("creating the romi DuckDB schema")?;
+    tx.execute_batch(ddl).context("creating the romi DuckDB schema")?;
     for name in ID_SOURCES {
         // 1 is the first id this build hands out; an import or a restore moves it.
         tx.execute("INSERT INTO romi_id (name, next) VALUES (?1, 1) ON CONFLICT (name) DO NOTHING", [name])?;

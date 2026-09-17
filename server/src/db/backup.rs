@@ -466,8 +466,23 @@ fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str) -> Result<BackupRepo
         }
         let _ = std::fs::remove_file(dest);
         let _ = std::fs::remove_file(format!("{dest}.wal"));
-        let mut conn = open_connection(dest, &inner.options, false)?;
-        schema::initialize(&mut conn, true, env!("CARGO_PKG_VERSION"))?;
+        let indexed_rows = report
+            .rows
+            .get("metric")
+            .copied()
+            .unwrap_or(0)
+            .saturating_add(report.rows.get("ping_record").copied().unwrap_or(0));
+        let mut staging_options = inner.options.clone();
+        staging_options.memory_limit = staging_memory_limit(&inner.options.memory_limit, indexed_rows)?;
+        let mut conn = open_connection(dest, &staging_options, false)?;
+        // A restore rebuilds a fresh database; physical row order is not part of
+        // the API. DuckDB otherwise buffers an ordered INSERT long enough to
+        // preserve insertion order, which made representative medium/large
+        // archives exceed the configured memory_limit while rebuilding
+        // ping_record. Streaming keeps the staging build bounded.
+        conn.execute_batch("SET preserve_insertion_order=false")
+            .context("disabling insertion-order preservation for the restore staging build")?;
+        schema::initialize_staging(&mut conn, env!("CARGO_PKG_VERSION"))?;
         for table in BACKUP_TABLES {
             let file = format!("{work}/{table}.parquet");
             // The archive is untrusted input. Comparing the Parquet schema with
@@ -494,6 +509,10 @@ fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str) -> Result<BackupRepo
             let claimed = report.rows.get(table).copied().unwrap_or(0);
             ensure!(count == claimed, "{table} 期望 {claimed} 行，实际装入 {count} 行");
         }
+        // The large-table keys were deferred during the load; build them now
+        // that the archive's rows are all present. A duplicate makes this fail,
+        // which is the right outcome before activation.
+        schema::add_large_table_keys(&conn)?;
         // Restore transformation, performed before validation/checkpoint while
         // this is still a scratch database. The format carries no session rows,
         // and this makes the empty state deliberate rather than incidental.
@@ -787,6 +806,80 @@ pub(super) fn apply_maintenance(
 }
 
 // ---- helpers ----
+
+/// A temporary memory ceiling for the staging database.
+///
+/// The service `memory_limit` is sized for normal query/ingest operation, but a
+/// restore rebuilds bulk history and materializes the primary-key ART indexes in
+/// one place. Restoring a medium archive under the default 512 MiB failed before
+/// even the row counts could be validated. The staging build therefore gets a
+/// ceiling derived from the archive's indexed row counts: a bounded base plus a
+/// conservative per-row allowance. If even that does not fit the host memory
+/// budget, restore refuses with an actionable error instead of being OOM-killed.
+fn staging_memory_limit(configured: &str, indexed_rows: i64) -> Result<String> {
+    const BASE: u64 = 256 * 1024 * 1024;
+    const PER_ROW: u64 = 64;
+    let configured = parse_size(configured).unwrap_or(BASE);
+    let needed = BASE.saturating_add((indexed_rows.max(0) as u64).saturating_mul(PER_ROW));
+    let system_cap = system_memory_bytes().map(|bytes| bytes.saturating_mul(3) / 4).unwrap_or(u64::MAX);
+    let cap = system_cap.max(configured);
+    ensure!(
+        needed <= cap,
+        "恢复这个归档需要约 {} MiB 的 staging 内存，但本机可用预算约 {} MiB；\
+         请释放内存、在更大的主机上恢复，或提高 --db-memory",
+        needed / 1024 / 1024,
+        cap / 1024 / 1024
+    );
+    let chosen = configured.max(needed).min(cap);
+    if chosen > configured {
+        warn!(
+            "restore staging uses a temporary memory_limit of {} MiB (configured {}); \
+             the primary-key build for {} indexed history rows needs more than normal service",
+            chosen / 1024 / 1024,
+            configured / 1024 / 1024,
+            indexed_rows
+        );
+    }
+    Ok(format!("{}MiB", chosen / 1024 / 1024))
+}
+
+/// Parse a DuckDB size string such as `512MB`, `2GiB`, or `64M`.
+fn parse_size(text: &str) -> Option<u64> {
+    let text = text.trim();
+    let split = text.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(text.len());
+    let number: f64 = text[..split].parse().ok()?;
+    if !number.is_finite() || number <= 0.0 {
+        return None;
+    }
+    let unit = text[split..].trim().to_ascii_lowercase();
+    let multiplier = match unit.as_str() {
+        "b" => 1.0,
+        "kb" | "kib" | "k" => 1024.0,
+        "mb" | "mib" | "m" => 1024.0 * 1024.0,
+        "gb" | "gib" | "g" => 1024.0 * 1024.0 * 1024.0,
+        "tb" | "tib" | "t" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
+        _ => return None,
+    };
+    Some((number * multiplier) as u64)
+}
+
+/// Total physical memory, when the host can report it. Linux hubs are the
+/// target, where this is a cheap syscall; unknown hosts skip the budget check
+/// and let DuckDB report an allocation failure.
+#[cfg(unix)]
+fn system_memory_bytes() -> Option<u64> {
+    let pages = unsafe { libc::sysconf(libc::_SC_PHYS_PAGES) };
+    let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    if pages <= 0 || page <= 0 {
+        return None;
+    }
+    Some((pages as u64).saturating_mul(page as u64))
+}
+
+#[cfg(not(unix))]
+fn system_memory_bytes() -> Option<u64> {
+    None
+}
 
 /// Advisory free space for the filesystem holding `path`, in bytes.
 ///
