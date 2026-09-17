@@ -1,0 +1,194 @@
+name: Release
+
+# A manual dispatch is always a non-publishing dry run. Only a pushed `v*` tag
+# can reach the publish job, and that job cannot start until the build job has
+# verified the exact tagged commit.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify artifacts
+    runs-on: ubuntu-24.04
+    # make check plus an optimized DuckDB build and two smoke passes. The
+    # existing CI job performs the same heavy phases well under this limit; the
+    # margin leaves room for the expensive bundled DuckDB C++ compile.
+    timeout-minutes: 120
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up development tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: node pnpm python rust
+
+      - name: Ensure a C/C++ toolchain for DuckDB
+        run: |
+          cc --version
+          c++ --version
+
+      - name: Install locked dependencies
+        run: make setup
+
+      - name: Validate release tag against VERSION
+        if: github.ref_type == 'tag'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/version.py check --tag "$RELEASE_TAG"
+
+      - name: Run code-quality gate
+        run: make check
+
+      - name: Run loopback smoke test against development binaries
+        run: make smoke
+
+      # Build/test jobs above are read-only. `--locked`/`--frozen-lockfile` are
+      # part of the repository entry points; no workflow cache is trusted as an
+      # input to release artifacts.
+      - name: Build release artifacts
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          make release
+          if [ -n "$RELEASE_TAG" ]; then
+            python3 scripts/release.py package --tag "$RELEASE_TAG" --commit "$GITHUB_SHA"
+          else
+            python3 scripts/release.py package --candidate --commit "$GITHUB_SHA"
+          fi
+
+      - name: Re-verify release directory and extract binaries
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RELEASE_TAG" ]; then
+            python3 scripts/release.py verify dist/release --tag "$RELEASE_TAG" --commit "$GITHUB_SHA" --run-binaries
+          else
+            python3 scripts/release.py verify dist/release --commit "$GITHUB_SHA" --run-binaries
+          fi
+          unpack=$(mktemp -d)
+          trap 'rm -rf "$unpack"' EXIT
+          for archive in dist/release/*.tar.gz; do
+            tar -xzf "$archive" -C "$unpack"
+          done
+          test ! -e "$unpack/bin/romi-bench"
+          test ! -e "$unpack/bin/monitor-hub"
+          test ! -e "$unpack/bin/monitor-agent"
+          version=$(cat VERSION)
+          test "$("$unpack/bin/romi-hub" --version)" = "romi-hub $version"
+          test "$("$unpack/bin/romi-agent" --version)" = "romi-agent $version"
+          echo '--- romi-hub dynamic linkage ---'
+          ldd "$unpack/bin/romi-hub"
+          echo '--- romi-agent dynamic linkage ---'
+          ldd "$unpack/bin/romi-agent"
+          # The bundled feature builds DuckDB into the binary; an external
+          # libduckdb here would mean the release is not self-contained.
+          if ldd "$unpack/bin/romi-hub" | grep -i 'duckdb'; then
+            echo 'romi-hub unexpectedly links a system DuckDB library' >&2
+            exit 1
+          fi
+          # The released binaries, not the build directory, run the existing suite.
+          python3 scripts/smoke.py --bin-dir "$unpack/bin"
+
+      - name: Inspect dependency feature graphs
+        run: |
+          set -euo pipefail
+          cargo tree -e features --locked --manifest-path server/Cargo.toml | tee /tmp/romi-hub-features.txt
+          cargo tree -e features --locked --manifest-path agent/Cargo.toml | tee /tmp/romi-agent-features.txt
+          if grep -qi sqlite /tmp/romi-hub-features.txt /tmp/romi-agent-features.txt; then
+            echo 'SQLite must not be a production dependency' >&2
+            exit 1
+          fi
+          grep -q 'duckdb feature "bundled"' /tmp/romi-hub-features.txt
+          grep -q 'duckdb feature "parquet"' /tmp/romi-hub-features.txt
+
+      - name: Upload verified artifacts for the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: romi-release-${{ github.sha }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish tagged release
+    # Manual dispatches never reach this job. A tag push cannot bypass build.
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Least privilege: only this job can write a Release or mint the OIDC token
+    # used by the official attestation action. The build job above stays read-only.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out tagged source for independent verification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the verified build output
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: romi-release-${{ github.sha }}
+          path: dist/release
+
+      - name: Re-verify tag, commit, manifest, and artifacts
+        run: |
+          set -euo pipefail
+          case "$RELEASE_TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "refusing to publish malformed release tag: $RELEASE_TAG" >&2; exit 1 ;;
+          esac
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")" = "$GITHUB_SHA"
+          python3 scripts/version.py check --tag "$RELEASE_TAG"
+          python3 scripts/release.py verify dist/release --tag "$RELEASE_TAG" --commit "$GITHUB_SHA" --run-binaries
+
+      - name: Create signed build-provenance attestations
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          # Each uploaded release asset, including the manifest and SHA256SUMS,
+          # is a subject of the attestation.
+          subject-path: dist/release/*
+
+      - name: Create draft release and upload assets
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            --repo "$GH_REPO" \
+            --draft \
+            --verify-tag \
+            --latest=false \
+            --title "romi $RELEASE_TAG" \
+            --generate-notes
+          gh release upload "$RELEASE_TAG" dist/release/* --repo "$GH_REPO" --clobber
+
+      - name: Publish the complete draft
+        run: |
+          set -euo pipefail
+          # Drafts are invisible; the release becomes public only after every
+          # asset has been uploaded and the draft is flipped in one final step.
+          gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false

@@ -38,5 +38,7 @@ const { execFileSync } = await import("node:child_process")
 const tricky = "a'b;$HOME`echo injected`\nnext"
 assert.equal(execFileSync("sh", ["-c", `printf %s ${shellQuote(tricky)}`], { encoding: "utf8" }), tricky)
 assert.equal(agentCommand("http://remote.test", "secret", 1), "")
-assert.ok(agentCommand("https://romi.test", "secret", 0).endsWith("--interval 1"))
+assert.equal(agentCommand("https://romi.test", "secret", 0), "ROMI_TOKEN='secret' ./romi-agent --server 'https://romi.test' --interval 1")
+assert.ok(!agentCommand("https://romi.test", "secret", 1).includes("monitor-agent"))
+assert.ok(registrationCommand("https://romi.test", "key").includes('ROMI_TOKEN="$romi_token" ./romi-agent'))
 assert.ok(!registrationCommand("https://romi.test", "key").includes("/install.sh"))

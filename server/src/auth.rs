@@ -352,7 +352,7 @@ async fn github_login(app: &App, code: &str) -> Result<String> {
         .http
         .get("https://api.github.com/user")
         .header(header::AUTHORIZATION, format!("Bearer {access}"))
-        .header(header::USER_AGENT, "monitor-hub")
+        .header(header::USER_AGENT, "romi-hub")
         .send()
         .await
         .context("user request")?;

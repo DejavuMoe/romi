@@ -228,21 +228,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "monitor-agent"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "futures-util",
- "if-addrs",
- "rustix",
- "rustls",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -328,6 +313,21 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "romi-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "if-addrs",
+ "rustix",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
 ]
 
 [[package]]

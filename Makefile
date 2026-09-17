@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export CARGO_TARGET_DIR := $(CURDIR)/target
-.PHONY: help setup frontend build release package check smoke bench bench-fixture dev-server dev-admin dev-web
+.PHONY: help setup frontend build release release-candidate release-package package check smoke bench bench-fixture dev-server dev-admin dev-web
 
 help:
 	@echo 'make setup       Install locked frontend dependencies and fetch Rust dependencies'
@@ -12,11 +12,14 @@ help:
 	@echo 'make dev-server  Run server on 127.0.0.1:9911, data under .local/'
 	@echo 'make dev-admin   Run admin HMR on 127.0.0.1:5173/admin/'
 	@echo 'make dev-web     Run public web HMR on 127.0.0.1:5174/'
-	@echo 'make release     Build local release binaries (no publishing)'
-	@echo 'make package     Build a checksummed local snapshot archive'
+	@echo 'make release           Build local release binaries (no publishing)'
+	@echo 'make package           Build a checksummed local development snapshot archive'
+	@echo 'make release-candidate Build/verify a release-shaped candidate for x86_64-unknown-linux-gnu'
+	@echo 'make release-package   Package HEAD as a public release; requires TAG=vX.Y.Z'
 	@echo ''
 	@echo 'The Hub links DuckDB from source, so a C/C++ toolchain (cc and c++) is'
-	@echo 'required; nothing else is. Agent builds need neither.'
+	@echo 'required; nothing else is. Agent builds need neither. Public release'
+	@echo 'packaging refuses a dirty tree; see docs/release.md.'
 
 setup:
 	pnpm install --frozen-lockfile
@@ -43,7 +46,21 @@ release: frontend
 package: release
 	python3 scripts/package.py build
 
+# A public-release-shaped candidate: exact VERSION, exact HEAD commit, clean
+# worktree, but no Git tag is created and nothing is published. The release
+# workflow's manual dry-run uses the same candidate path.
+release-candidate: release
+	python3 scripts/release.py package --candidate
+
+# Public packaging requires an existing tag whose commit is HEAD; this does
+# not push or publish anything.
+release-package: release
+	@test -n "$(TAG)" || { echo 'usage: make release-package TAG=vX.Y.Z' >&2; exit 2; }
+	python3 scripts/release.py package --tag "$(TAG)"
+
 check: frontend
+	python3 scripts/version.py check
+	python3 scripts/release.py check
 	python3 scripts/package.py check
 	pnpm --dir admin run lint
 	pnpm --dir admin test

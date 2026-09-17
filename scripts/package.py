@@ -33,7 +33,7 @@ def source_state():
 
 
 def binaries():
-    return {name: sha((RELEASE / name).read_bytes()) for name in ['monitor-hub', 'monitor-agent']}
+    return {name: sha((RELEASE / name).read_bytes()) for name in ['romi-hub', 'romi-agent']}
 
 
 def generated():
@@ -122,7 +122,7 @@ def verify(path, expected):
         raise ValueError('unsupported manifest')
     if manifest['files'] != {name: sha(value) for name, value in contents.items()}:
         raise ValueError('manifest file hashes mismatch')
-    for name in ['monitor-hub', 'monitor-agent']:
+    for name in ['romi-hub', 'romi-agent']:
         if sha(contents[f'bin/{name}']) != manifest['build']['binaries'][name]:
             raise ValueError('binary differs from build receipt')
     for name, digest in manifest['build']['generated'].items():
@@ -164,7 +164,7 @@ def self_check():
             subprocess.run(['git', 'init', '-q', str(ROOT)], check=True)
             (ROOT / '.gitignore').write_text('target/\nweb/dist/\n')
             RELEASE.mkdir(parents=True)
-            for name in ['monitor-hub', 'monitor-agent']:
+            for name in ['romi-hub', 'romi-agent']:
                 (RELEASE / name).write_bytes(b'fixture')
             (ROOT / 'web/dist').mkdir(parents=True)
             page = ROOT / 'web/dist/index.html'

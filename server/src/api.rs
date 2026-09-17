@@ -596,11 +596,13 @@ const REGISTER_WINDOW: i64 = 3600;
 const REGISTER_LIMIT: i64 = 100;
 
 /// Exchanges a registration key for a node token, so a batch of machines can be
-/// installed with one command rather than one panel visit each.
+/// provisioned with one command rather than one panel visit each.
 ///
-/// No session stands behind this route: the caller is `install.sh` on a machine
-/// that has never contacted the hub. A key issued by the panel, valid only within
-/// [`REGISTER_WINDOW`], serves in place of a session.
+/// No session stands behind this route: the caller is an unauthenticated
+/// provisioning script on a machine that has never contacted the hub. A key
+/// issued by the panel, valid only within [`REGISTER_WINDOW`], serves in place of
+/// a session. The active romi distribution paths remain disabled; this endpoint
+/// exists for the native provisioning phase (see `docs/release.md`).
 ///
 /// One request costs two setting reads, a `COUNT` and an `INSERT`. It makes no
 /// outbound request, and the router's 64 KiB body limit bounds the name.
@@ -1087,10 +1089,7 @@ pub async fn db_backup(_: Admin, State(app): State<Shared>) -> Response {
                 (header::CACHE_CONTROL, "no-store".to_owned()),
                 (
                     header::CONTENT_DISPOSITION,
-                    format!(
-                        "attachment; filename=\"monitor-{}.tar.gz\"",
-                        Local::now().format("%Y%m%d-%H%M%S")
-                    ),
+                    format!("attachment; filename=\"romi-{}.tar.gz\"", Local::now().format("%Y%m%d-%H%M%S")),
                 ),
             ],
             axum::body::Body::from_stream(tokio_util::io::ReaderStream::new(file)),
@@ -1333,7 +1332,7 @@ async fn update(app: &App, short: &str) -> Result<(bool, String), anyhow::Error>
     let release: Release = app
         .http
         .get(format!("https://api.github.com/repos/{owner}/{repo}/releases/latest"))
-        .header(header::USER_AGENT, "monitor-hub")
+        .header(header::USER_AGENT, "romi-hub")
         .send()
         .await?
         .error_for_status()
@@ -1496,7 +1495,9 @@ fn setting_error(app: &App, key: &str, value: &Value) -> Option<String> {
     // success.
     let Some(value) = value.as_str() else { return Some(format!("{key} must be a string")) };
     match key {
-        "public_page" | "country_lookup" if !matches!(value, "on" | "off") => Some(format!("{key} must be on or off")),
+        "public_page" | "country_lookup" if !matches!(value, "on" | "off") => {
+            Some(format!("{key} must be on or off"))
+        }
         "theme" if !crate::frontend::selectable(app, value) => Some("theme is not installed".into()),
         // Housekeeping clamps whatever it reads, so an unparsable value would be
         // stored, echoed back, and silently mean 7 days indefinitely.
@@ -1504,17 +1505,16 @@ fn setting_error(app: &App, key: &str, value: &Value) -> Option<String> {
             Some("retention days must be a number from 1 to 3650".into())
         }
         // The hub fetches this URL itself, so it must be one: a scheme it cannot
-        // speak turns every agent download into a 502 that says nothing about the
-        // setting responsible.
+        // speak turns every proxied download into a 502 that says nothing about
+        // the setting responsible.
         //
-        // https only. What returns from this host is the agent binary, which
-        // `install.sh` writes to /opt/monitor and starts on every node provisioned
-        // here; over http:// anyone on the path between the hub and the mirror
-        // chooses that binary, while the node still sees a valid TLS connection to
-        // the hub.
-        "github_proxy" if !(value.is_empty() || value.starts_with("https://")) => {
-            Some("GitHub proxy must start with https://: the agent binary is fetched through it and installed on every node".into())
-        }
+        // https only. What returns from this host is forwarded to callers that
+        // may later execute it; over http:// anyone on the path between the hub
+        // and the mirror chooses that payload, while the consumer may still see a
+        // valid TLS connection to the hub.
+        "github_proxy" if !(value.is_empty() || value.starts_with("https://")) => Some(
+            "GitHub proxy must start with https://: callers may execute what they fetch through it".into(),
+        ),
         "admin_password" if value.len() < 12 => Some("password must be at least 12 characters".into()),
         "admin_password" => None,
         k if k.starts_with("notify_") => crate::notify::setting_error(k, value),

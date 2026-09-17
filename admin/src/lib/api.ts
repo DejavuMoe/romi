@@ -277,11 +277,11 @@ export const shellQuote = (value: string) => "'" + value.replaceAll("'", "'\\''"
 export function agentCommand(site: string, token: string, seconds: number) {
   site = provisioningSite(site)
   if (!site) return ""
-  return `MONITOR_TOKEN=${shellQuote(token)} ./monitor-agent --server ${shellQuote(site)} --interval ${Math.min(3600, Math.max(1, Math.round(seconds) || 1))}`
+  return `ROMI_TOKEN=${shellQuote(token)} ./romi-agent --server ${shellQuote(site)} --interval ${Math.min(3600, Math.max(1, Math.round(seconds) || 1))}`
 }
 
 export function registrationCommand(site: string, key: string) {
   site = provisioningSite(site)
   if (!site) return ""
-  return `romi_token=$(curl -fsS --request POST ${shellQuote(site + "/api/agent/register")} --header ${shellQuote("Authorization: Bearer " + key)} --data-binary "$(hostname)") && MONITOR_TOKEN="$romi_token" ./monitor-agent --server ${shellQuote(site)}; unset romi_token`
+  return `romi_token=$(curl -fsS --request POST ${shellQuote(site + "/api/agent/register")} --header ${shellQuote("Authorization: Bearer " + key)} --data-binary "$(hostname)") && ROMI_TOKEN="$romi_token" ./romi-agent --server ${shellQuote(site)}; unset romi_token`
 }

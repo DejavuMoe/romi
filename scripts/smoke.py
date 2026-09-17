@@ -23,6 +23,14 @@ def main():
     args = parser.parse_args()
     binaries = args.bin_dir.resolve() if args.bin_dir else ROOT / 'target' / ('release' if args.release else 'debug')
     processes = []
+    version = (ROOT / 'VERSION').read_text().strip()
+    for name in ['romi-hub', 'romi-agent']:
+        got = subprocess.run(
+            [str(binaries / name), '--version'], capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+        assert got == f'{name} {version}', f'{name}: expected version {version}, got {got!r}'
+    if args.bin_dir:
+        assert not (binaries / 'romi-bench').exists(), 'benchmark-only binary must not be packaged'
     with tempfile.TemporaryDirectory(prefix='romi-smoke-') as directory:
         work = Path(directory)
         with socket.socket() as sock:
@@ -61,7 +69,7 @@ def main():
         with (work / 'server.log').open('w+') as log, (work / 'agent.log').open('w+') as agent_log:
             try:
                 processes.append(subprocess.Popen([
-                    str(binaries / 'monitor-hub'), '--listen', f'127.0.0.1:{port}',
+                    str(binaries / 'romi-hub'), '--listen', f'127.0.0.1:{port}',
                     '--db', str(work / 'romi.db'),
                 ], cwd=work, stdout=log, stderr=log))
                 wait_for(lambda: re.search(r'Emergency password: (\S+)', (work / 'server.log').read_text()),
@@ -124,26 +132,28 @@ def main():
                 # itself refuses a second read-write process, and the hub refuses
                 # it with an explanation rather than a raw engine error.
                 second = subprocess.run(
-                    [str(binaries / 'monitor-hub'), '--listen', '127.0.0.1:0', '--db', str(path)],
+                    [str(binaries / 'romi-hub'), '--listen', '127.0.0.1:0', '--db', str(path)],
                     cwd=work, capture_output=True, text=True, timeout=30,
                 )
                 assert second.returncode != 0, 'a second hub on one database must not start'
                 assert '已被另一个' in second.stderr, second.stderr
-                env = dict(os.environ, MONITOR_SERVER=base, MONITOR_TOKEN=token)
-                agent = subprocess.Popen([str(binaries / 'monitor-agent')], cwd=work, env=env,
+                env = dict(os.environ, ROMI_SERVER=base, ROMI_TOKEN=token)
+                agent = subprocess.Popen([str(binaries / 'romi-agent')], cwd=work, env=env,
                                          stdout=agent_log, stderr=agent_log)
                 processes.append(agent)
                 wait_for(lambda: any(n['online'] and n.get('metrics') and n['metrics'].get('mem_total', 0) > 0
                                      for n in nodes()), 'agent did not report live metrics')
                 assert agent.poll() is None, 'agent exited'
+                assert any(n.get('agent_version') == version for n in nodes()), \
+                    f'agent must report romi version {version}'
                 with request(f'/api/nodes/{node_id}/token', {}) as response:
                     fresh = json.load(response)['token']
                     assert fresh != token
                 wait_for(lambda: all(not n['online'] for n in nodes()), 'rotation did not disconnect old agent')
                 agent.terminate()
                 agent.wait(timeout=5)
-                env['MONITOR_TOKEN'] = fresh
-                replacement = subprocess.Popen([str(binaries / 'monitor-agent')], cwd=work, env=env, stdout=agent_log, stderr=agent_log)
+                env['ROMI_TOKEN'] = fresh
+                replacement = subprocess.Popen([str(binaries / 'romi-agent')], cwd=work, env=env, stdout=agent_log, stderr=agent_log)
                 processes.append(replacement)
                 wait_for(lambda: any(n['online'] and n.get('metrics') for n in nodes()), 'fresh token did not connect')
                 replacement.terminate()
@@ -157,7 +167,7 @@ def main():
                         assert error.code == 403
                 print('PASS: local frontends/assets, disabled upstream downloads, login, node creation, '
                       'private defaults, DuckDB storage, single-writer lock, '
-                      'rotation, agent metrics and theme denials')
+                      'rotation, agent metrics and theme denials; release binary versions verified')
             finally:
                 for process in reversed(processes):
                     if process.poll() is None:

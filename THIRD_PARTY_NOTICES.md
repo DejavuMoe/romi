@@ -14,6 +14,11 @@ Exact revisions, import date and license SHA-256 hashes are in `upstream.lock.js
 Archived upstream automation and installer files under `docs/upstream/` are also covered
 by the corresponding upstream license.
 
+Public `romi-hub` and `romi-agent` release archives include this file, the root MIT
+license, and the applicable imported-component licenses (`server/LICENSE`,
+`admin/LICENSE`, `web/LICENSE`, `agent/LICENSE`). The inherited product names in the
+tables above identify upstream sources, not the current binaries.
+
 Rust/JavaScript dependencies and bundled fonts, icons and images retain their own licenses.
 This file records the source imports, not a complete dependency license audit or SBOM.
 Before public distribution, inventory the actual bundled dependencies/assets and include

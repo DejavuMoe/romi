@@ -21,11 +21,13 @@
   放到 `server/target/theme`。`build.rs` 只检查文件，不下载或构建前端。
 - `/install.sh` 与 `/agent/{arch}` 返回 503，删除上游 latest 二进制转发代码及其专用测试，增加拒绝分发测试。
 - 原三个 `.github/`、上游安装脚本、Dockerfile 和主题下载脚本归档到 `docs/upstream/`，
-  只用于对照，不能作为 romi 的安装或发布入口。无 root 发布 workflow，避免误发布到上游命名空间。
+  只用于对照，不能作为 romi 的安装或发布入口。romi 自有 `.github/workflows/release.yml` 只在
+  推送 `v*` 标签时发布，构建任务与被手动触发的 dry-run 保持只读。
 - 两个 Vite 入口使用原生代理访问 Hub 提供的另一应用页面，修复开发模式跨应用导航落到自身 SPA 的问题。
   代理规则依据 [Vite server.proxy](https://vite.dev/config/server-options.html#server-proxy)，未添加插件或前端依赖。
-- API、数据库、Cookie、环境变量、Rust 包名及现有 UI 品牌暂时沿用上游。
-  `monitor-hub` / `monitor-agent` 是当前本地输出名，不代表从上游下载的二进制。
+- v0.4A 起，公开 Rust 包名/二进制统一为 `romi-hub` / `romi-agent`，版本源切换为根 `VERSION`
+  并同步 Cargo 版本；对外环境变量使用 `ROMI_SERVER` / `ROMI_TOKEN` / `ROMI_LOG`。Cookie 名、
+  `monitor_session` 等内部标识的改名不属于本阶段公开产品身份，不提供旧二进制名兼容符号或别名。
 
 许可证正文保留，`admin/LICENSE` 从其原仓库复制。根 MIT 许可证增加 Dejavu Moe 版权声明。
 `THIRD_PARTY_NOTICES.md` 不是全量依赖许可证审计结果。

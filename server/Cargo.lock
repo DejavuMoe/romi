@@ -1372,35 +1372,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "monitor-hub"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "argon2",
- "axum",
- "chrono",
- "duckdb",
- "flate2",
- "futures-core",
- "hex",
- "libc",
- "mime_guess",
- "rand 0.9.5",
- "reqwest",
- "rust-embed",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sha2 0.10.9",
- "tar",
- "tokio",
- "tokio-util",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1761,6 +1732,35 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "romi-hub"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "axum",
+ "chrono",
+ "duckdb",
+ "flate2",
+ "futures-core",
+ "hex",
+ "libc",
+ "mime_guess",
+ "rand 0.9.5",
+ "reqwest",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha2 0.10.9",
+ "tar",
+ "tokio",
+ "tokio-util",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

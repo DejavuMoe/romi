@@ -1,23 +1,65 @@
-> romi 说明：下文保留上游文档供参考，原安装、发布与目录说明不代表当前 romi。
-> 开发和构建请以[根目录 README](../README.md)为准；上游发布流程已归档。
+# romi Hub
 
-# monitor
+`romi-hub` 是 romi 的单二进制服务端：内嵌 admin 后台与公开状态页资源，通过 HTTP/WebSocket
+接收 Agent 上报，并使用内嵌 DuckDB 保存数据。
 
-## 特性
+## 当前状态
 
-- 实时监控：秒级实时数据展示
-- 轻量高效：Rust 语言构建，低资源占用，极简高效
-- 自托管：完全掌控数据隐私，部署简单
-- 通知：节点掉线、流量、到期与登录，推送到 Telegram 或自定义 Webhook
+- 当前源码版本为 `0.1.0`（根目录 [`VERSION`](../VERSION)）；romi 尚未创建公开发行标签。
+- Hub 默认监听 `127.0.0.1:28080`，默认数据库为 `romi.db`。
+- `GET /install.sh` 与 `GET /agent/{arch}` 仍固定返回 503；romi 不提供系统安装脚本、
+  镜像或自动 Agent 分发。原生部署与 Agent provisioning 属于后续阶段。
+- 公开发行工件与 provenance 说明见 [docs/release.md](../docs/release.md)。
 
-## 组成
+## 构建与运行
 
-| 仓库 | 说明 |
-|---|---|
-| [monitor](https://github.com/monitor-probe/monitor) | hub：后台、API、公开页宿主 |
-| [agent](https://github.com/monitor-probe/agent) | Linux agent |
-| [monitor-theme-default](https://github.com/monitor-probe/monitor-theme-default) | 内置默认主题 |
+在仓库根执行：
 
+```sh
+mise exec -- make setup
+mise exec -- make build
+target/debug/romi-hub --listen 127.0.0.1:28080 --db .local/romi.db
 ```
-agent (Linux)  ──WebSocket / JSON-RPC 2.0──▶  hub (axum + DuckDB)  ──▶  后台 + 状态页
+
+release 构建与开发快照：
+
+```sh
+make release          # target/release/romi-hub
+make package          # dist/ 下的本地开发快照，不等于公开 Release
+make release-candidate  # 公开发行形状的本地候选，不创建标签
 ```
+
+Hub 链接的 DuckDB 由官方 `duckdb` crate 的 `bundled` feature 从源码编译，因此本机需要
+C/C++ 工具链（`cc`、`c++`）；目标机不需要安装外部 DuckDB，但需要与构建 ABI 匹配的
+GNU C/C++ 运行库（实测依赖见 [发行与验证](../docs/release.md)）。
+
+常用参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--listen <addr>` | `127.0.0.1:28080` | 监听地址；默认回环 |
+| `--db <path>` | `romi.db` | DuckDB 数据库文件 |
+| `--themes <dir>` | 数据库旁的 `themes/` | 第三方主题目录 |
+| `--site <url>` | 空 | 反向代理后的外部 HTTPS 域名 |
+| `--db-memory <size>` | `512MB` | DuckDB 内存上限，不是进程 RSS 上限 |
+| `--db-threads <n>` | 最多 8 | DuckDB worker 线程 |
+| `--db-temp <dir>` | `<db>.tmp` | DuckDB spill 目录 |
+| `--allow-custom-themes` | 关闭 | 信任外部主题 JavaScript 与后台同源运行 |
+| `--version` | — | 输出 `romi-hub X.Y.Z` 后退出，不读数据库、不联网 |
+
+日志级别可用环境变量 `ROMI_LOG` 覆盖（默认 `romi_hub=info,tower_http=warn`）。
+
+## 相关文档
+
+- [根 README](../README.md)：产品概览、开发入口与检查命令。
+- [存储设计](../docs/storage.md)：DuckDB 引擎、写入队列、备份与恢复。
+- [安全基线](../docs/security-baseline.md)：当前已实现的认证、隐私与发行边界。
+- [发行与验证](../docs/release.md)：VERSION、标签、manifest、SHA256SUMS 与 provenance。
+
+## 许可与来源
+
+romi Hub 使用 MIT 许可证（见仓库根 `LICENSE` 与 [`server/LICENSE`](LICENSE)），基于 stqfdyr
+的 `monitor-probe/monitor` 导入并重命名；原始版权与许可证保留在
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) 与
+[upstream.lock.json](../upstream.lock.json) 中。`docs/upstream/` 下的旧文档与安装脚本只是归档
+参考，不是当前产品手册或安装入口。

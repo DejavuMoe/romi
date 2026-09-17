@@ -1,4 +1,4 @@
-//! monitor-agent: reports one Linux host to a monitor hub over WebSocket.
+//! romi-agent: reports one Linux host to a romi hub over WebSocket.
 
 mod collect;
 
@@ -29,18 +29,26 @@ struct Args {
     insecure: bool,
 }
 
+/// Identity printed by `--version` and at the top of `--help`; it opens no
+/// network connection and reads no local state.
+fn version_line() -> String {
+    format!("romi-agent {}", env!("CARGO_PKG_VERSION"))
+}
+
 fn usage() -> ! {
     eprintln!(
-        "monitor-agent {}\n\n\
-         Usage: monitor-agent --server <url> --token <token> [options]\n\n\
+        "{}\n\n\
+         Usage: romi-agent --server <url> --token <token> [options]\n\n\
          Options:\n  \
            --server <url>       Hub base URL, e.g. https://hub.example.com\n  \
            --token <token>      Node token from the hub panel\n  \
            --interval <secs>    Report interval (default 1)\n  \
            --insecure           Allow plain ws:// to a remote hub; the token\n  \
                                 travels in the clear. Only for a hub reached\n  \
-                                at ip:port with no TLS in front.\n",
-        env!("CARGO_PKG_VERSION")
+                                at ip:port with no TLS in front.\n  \
+           --version             Print the romi version and exit without\n  \
+                                reading host state or opening a connection.\n",
+        version_line()
     );
     std::process::exit(2)
 }
@@ -55,12 +63,16 @@ fn parse_args() -> Result<Args> {
             "--token" => token = Some(value()),
             "--interval" => interval = value().parse().unwrap_or_else(|_| usage()),
             "--insecure" => insecure = true,
+            "--version" => {
+                println!("{}", version_line());
+                std::process::exit(0);
+            }
             "-h" | "--help" => usage(),
             other => bail!("unknown argument: {other}"),
         }
     }
-    let server = server.or_else(|| std::env::var("MONITOR_SERVER").ok()).unwrap_or_else(|| usage());
-    let token = token.or_else(|| std::env::var("MONITOR_TOKEN").ok()).unwrap_or_else(|| usage());
+    let server = server.or_else(|| std::env::var("ROMI_SERVER").ok()).unwrap_or_else(|| usage());
+    let token = token.or_else(|| std::env::var("ROMI_TOKEN").ok()).unwrap_or_else(|| usage());
     Ok(Args { server, token, interval: interval.clamp(1, 3600), insecure })
 }
 
@@ -171,10 +183,10 @@ fn remaining(last_frame: Instant) -> Duration {
 async fn main() -> Result<()> {
     let args = parse_args()?;
     let url = ws_url(&args.server, args.insecure)?;
-    // Reported once at startup. install.sh hardens this unit with
-    // ProtectHome=yes, which mounts a tmpfs over /home; where /home is its own
-    // filesystem the totals then omit it. The unit file owns that decision, but
-    // the discrepancy must not go unreported.
+    // Reported once at startup. The future native unit is expected to harden
+    // the service with ProtectHome=yes, which mounts a tmpfs over /home; where
+    // /home is its own filesystem the totals then omit it. The unit file owns
+    // that decision, but the discrepancy must not go unreported.
     for mount in collect::shadowed_mounts(&std::fs::read_to_string("/proc/self/mounts").unwrap_or_default()) {
         eprintln!("{mount} is covered by another mount and is not counted toward disk totals");
     }
@@ -674,5 +686,11 @@ mod tests {
         let flood = (0..500).map(|id| task(id, "f:6", 60)).collect();
         respawn_ping_tasks(&mut running, flood, &tx);
         assert_eq!(running.len(), MAX_PING_TASKS, "the hub does not choose how many probes run");
+    }
+
+    #[test]
+    fn version_identifies_romi_agent_without_reading_host_state() {
+        assert_eq!(version_line(), format!("romi-agent {}", env!("CARGO_PKG_VERSION")));
+        assert!(!version_line().contains("monitor"), "the inherited product name must be gone");
     }
 }

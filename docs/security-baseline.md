@@ -1,8 +1,12 @@
-# 第一轮本地安全与发行基线
+# 本地安全与发行基线
 
-本阶段的安全验证在本地完成，未上传代码、发布镜像或签名。
+> 本文保留第一轮本地安全验证记录。v0.4A 已将版本源、公开二进制名和公开发行边界统一为
+> `VERSION`、`romi-hub`、`romi-agent`，公开发行说明见 [发行与验证](release.md)；本节以下
+> 内容除非另有说明，仍描述当前实现。
+
+第一轮安全验证在本地完成，未上传代码、发布镜像或签名。
 后续已配置 `git@github.com:DejavuMoe/romi.git`、默认分支 `master` 和 GitHub Actions 测试工作流；
-远程 CI 执行结果须在首次推送后单独确认。
+远程 CI 随后在 master 推送中实际运行。本轮新增改动未推送，因此没有对应的远端 CI 结果。
 保持原始 Agent 协议，没有升级应用依赖或重做 UI。前端锁文件现已迁移至 pnpm workspace，
 保留已锁定的应用依赖版本和 integrity；mise 配置使本地与 CI 使用相同开发工具版本。
 
@@ -37,28 +41,27 @@
 默认运行仍可能按显式配置访问 OAuth、通知 webhook/Telegram 和 Agent 的探测目标。
 本轮没有声称全面断网、封禁内网探测或审计所有出站 URL。
 
-## 本地发行与验证
+## 本地快照与公开发行边界
 
-`make package` 构建并记录源码、工具链、两个二进制以及生成后的前端资源，再生成本地快照归档。
-`manifest.json` 保存源文件和负载的摘要；校验器拒绝摘要不符、路径穿越、重复/非普通文件及超量负载。
-记录完成后替换生成主题会被拒绝。详见 [本地发行说明](local-release.md)。
-包尚未签名；同目录校验和仅证明一致性，来源真实性需要独立可信摘要或后续签名链路。
+`make package` 构建并记录当前源码、工具链、`romi-hub`/`romi-agent` 二进制以及生成后的前端资源，
+再生成本地开发快照归档。`manifest.json` 的 `kind` 为 `local-snapshot`、`signed` 为 false，允
+许未打标签的源码状态；校验器拒绝摘要不符、路径穿越、重复/非普通文件及超量负载，记录完成后替换
+生成主题也会被拒绝。详见 [本地发行说明](local-release.md)。
 
-本轮必要检查：
+公开发行由 [`.github/workflows/release.yml`](../.github/workflows/release.yml) 定义，与本
+地快照分离：
 
-- `make check`：前端构建、lint、测试；Rust fmt/clippy；server 140 + integration 9、agent 19 项测试。
-- 存储测试覆盖归档限制（压缩大小/成员数/单成员/展开总量）、低内存恢复 staging、备份事务失败后连接可复用、
-  snapshot 不被 replacement 语义拒绝、并发 Agent 会话顺序、恢复前会话失效、writer 队列
-  计数与确定性关闭；离线迁移测试已随迁移功能一并删除。
-- `make smoke`：默认拒绝匿名访问、私有节点创建、实际 Agent 指标、令牌换发断线与新令牌重连、主题修改拒绝。
-- 本地包校验后解压，再用 `scripts/smoke.py --bin-dir <解压目录>/bin` 验证包中的实际二进制。
-- 独立只读复审发现并修复了“生成主题未绑定构建记录”和“退休连接排队消息仍可写入”两处问题；回归已加入。
-- 浏览器：真实本地后台的默认设置与主题限制；组件夹具通过真实 API 创建节点，首次令牌展示、关闭后不可读回、复制禁用。
-  夹具显式模拟 HTTPS 域名请求头，未绕过产品中的 HTTPS 限制；这不等同于真实 TLS 反向代理部署验证。
-  检查了桌面与 390×844 凭证窗口，观察到的浏览器 error/warn 为空；夹具与临时数据已移除。
+- 版本源为根 `VERSION`，公开标签必须是 `v<VERSION>`，Hub 与 Agent 的 Cargo 包版本必须一致；
+- 只支持 `x86_64-unknown-linux-gnu`，要求在 CI 中构建、解压、执行 `--version` 并跑现有 smoke；
+- release manifest 绑定一个完整 commit、目标三元组、rustc 和 DuckDB engine；
+- `SHA256SUMS` 与 manifest 相互校验，只证明完整性与一致性，不冒充签名；
+- 正常 CI/构建任务保持 `contents: read`；只有标签发布任务获得 `contents: write`，并单独获得
+  `id-token: write` / `attestations: write` 用于 GitHub 官方 attestation；
+- 不引入长期私钥；attestation 验证必须绑定 `DejavuMoe/romi`。
 
-未覆盖：全量安全/许可证审计、正式 TLS 部署、完整跨版本/高并发/崩溃恢复矩阵、跨架构 musl、
-容器和 systemd 权限验收、独立签名与远程 CI 实际执行。第一阶段发现的客户端关闭握手/EPIPE 行为不在本轮修复范围。
+本阶段只提交并验证工作流结构，不创建 `v0.1.0` 标签、不创建真实 Release。`GET /install.sh` 与
+`GET /agent/{arch}` 继续返回 503；Hub 不抓取 GitHub Release，Agent 不自动下载或自更新。原生
+部署与 Agent provisioning 属于 v0.4B。
 
 ## 当前存储安全基线
 

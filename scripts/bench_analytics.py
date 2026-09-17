@@ -221,7 +221,7 @@ def wait_hub(hub, timeout=60):
 
 def start_hub(args, db, work, memory=None):
     work.mkdir(parents=True, exist_ok=True)
-    hub = Hub((Path(args.bin_dir) / 'monitor-hub').resolve(), work)
+    hub = Hub((Path(args.bin_dir) / 'romi-hub').resolve(), work)
     hub.database = Path(db)
     hub.start(memory=memory if memory is not None else args.memory, threads=args.db_threads)
     wait_hub(hub)
@@ -727,7 +727,7 @@ def main():
         hub = start_hub(args, db, work, memory=args.memory)
         api = Api(hub, admin_password)
         result['hub'] = {
-            'binary': str(Path(args.bin_dir) / 'monitor-hub'),
+            'binary': str(Path(args.bin_dir) / 'romi-hub'),
             'db': str(db),
             'db_stats': db_stats(api),
         }

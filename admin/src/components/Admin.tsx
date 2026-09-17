@@ -889,7 +889,7 @@ function Ping({ nodes }: { nodes: Node[] }) {
             <div className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="名称">
-                  {/* A new monitor starts empty, so the cursor belongs here;
+                  {/* A new romi node starts empty, so the cursor belongs here;
                       editing an existing one starts with nothing selected. */}
                   <Input autoFocus={!editing.id} value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Cloudflare" />
                 </Field>

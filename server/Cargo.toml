@@ -1,6 +1,6 @@
 [package]
-name = "monitor-hub"
-version = "1.0.0"
+name = "romi-hub"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Dejavu Moe"]

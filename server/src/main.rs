@@ -1,4 +1,4 @@
-//! monitor-hub: collects from monitor agents and serves the panel.
+//! romi-hub: collects reports from romi agents and serves the panel.
 //!
 //! No configuration is required to start. Everything beyond the listen address
 //! and the database path is configured in the panel and stored in the embedded
@@ -158,6 +158,15 @@ fn default_listen() -> &'static str {
     "127.0.0.1:28080"
 }
 
+/// Default database file name used when `--db` is omitted.
+const DEFAULT_DATABASE: &str = "romi.db";
+
+/// Identity printed by `--version` and used to open `--help`. It never opens
+/// the database or makes a network request.
+fn version_line() -> String {
+    format!("romi-hub {}", env!("CARGO_PKG_VERSION"))
+}
+
 /// Bytes from a short human form such as `512MB` or `2GiB`. DuckDB validates the
 /// spelling again; this only rejects something that is obviously not a size, so a
 /// typo fails at startup rather than at the first spill.
@@ -175,7 +184,7 @@ fn valid_size(value: &str) -> bool {
 
 fn parse_args() -> Result<Args> {
     let mut listen = None;
-    let mut database = "monitor.db".to_owned();
+    let mut database = DEFAULT_DATABASE.to_owned();
     let mut site = String::new();
     let mut themes = None;
     let mut allow_custom_themes = false;
@@ -199,10 +208,15 @@ fn parse_args() -> Result<Args> {
                 db_threads = Some(n);
             }
             "--db-temp" => db_temp = Some(value()),
+            "--version" => {
+                println!("{}", version_line());
+                std::process::exit(0);
+            }
             "-h" | "--help" => {
                 println!(
-                    "monitor-hub {}\n\n\
-                     Usage: monitor-hub [--listen 127.0.0.1:28080] [--db monitor.db] [--themes themes] [--site https://hub.example.com]\n\n\
+                    "{}\n\n\
+                     Usage: romi-hub [--listen 127.0.0.1:28080] [--db romi.db] [--themes themes] [--site https://hub.example.com]\n\n\
+                     --version prints the romi version and exits without opening a database.\n\
                      --listen defaults to 127.0.0.1:28080.\n\
                      --allow-custom-themes trusts external theme JavaScript with the admin origin.\n\
                      --themes defaults to a themes/ directory beside the database.\n\
@@ -214,7 +228,7 @@ fn parse_args() -> Result<Args> {
                      ceiling on the process's resident set.\n\
                      --db-threads caps DuckDB's worker threads (default: up to 8).\n\
                      --db-temp is where DuckDB spills; defaults to <db>.tmp.\n",
-                    env!("CARGO_PKG_VERSION")
+                    version_line()
                 );
                 std::process::exit(0);
             }
@@ -247,8 +261,8 @@ fn parse_args() -> Result<Args> {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_env("MONITOR_LOG")
-                .unwrap_or_else(|_| "monitor_hub=info,tower_http=warn".into()),
+            tracing_subscriber::EnvFilter::try_from_env("ROMI_LOG")
+                .unwrap_or_else(|_| "romi_hub=info,tower_http=warn".into()),
         )
         .init();
 
@@ -488,7 +502,7 @@ fn first_run(app: &App, url: &str) -> Result<()> {
     let password = auth::random_token()[..24].to_owned();
     app.db.set("admin_password_hash", &auth::hash_password(&password)?)?;
     println!(
-        "\n  Monitor hub is ready.\n\n  \
+        "\n  romi Hub is ready.\n\n  \
          Sign in at {url}/admin\n  \
          Emergency password: {password}\n\n  \
          This is shown once. Change it, and set up GitHub sign-in, under Security.\n"
@@ -747,5 +761,12 @@ mod tests {
         assert!(hash.starts_with("$argon2"));
         first_run(&app, "http://x").unwrap();
         assert_eq!(app.db.get("admin_password_hash").unwrap(), hash, "must not rotate on restart");
+    }
+
+    #[test]
+    fn version_identifies_romi_hub_and_uses_a_romi_database_name() {
+        assert_eq!(version_line(), format!("romi-hub {}", env!("CARGO_PKG_VERSION")));
+        assert!(!version_line().contains("monitor"), "the inherited product name must be gone");
+        assert_eq!(DEFAULT_DATABASE, "romi.db");
     }
 }

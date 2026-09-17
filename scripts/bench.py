@@ -203,7 +203,7 @@ class Bench:
     def __init__(self, args):
         self.args = args
         self.work = Path(tempfile.mkdtemp(prefix='romi-bench-'))
-        self.binary = (args.bin_dir / 'monitor-hub').resolve()
+        self.binary = (args.bin_dir / 'romi-hub').resolve()
         self.hub = Hub(self.binary, self.work)
         self.client = urllib.request.build_opener(
             urllib.request.ProxyHandler({}),
@@ -463,8 +463,8 @@ def main():
             raise SystemExit('--rate must be positive')
         args.interval = args.nodes / args.rate
 
-    if not (args.bin_dir / 'monitor-hub').exists():
-        raise SystemExit(f'{args.bin_dir}/monitor-hub does not exist; run make release first')
+    if not (args.bin_dir / 'romi-hub').exists():
+        raise SystemExit(f'{args.bin_dir}/romi-hub does not exist; run make release first')
     result = Bench(args).run()
     text = json.dumps(result, indent=2, sort_keys=True)
     if args.out:

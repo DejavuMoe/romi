@@ -434,7 +434,7 @@ fn parse_mounts(text: &str) -> Vec<String> {
 /// count, so `statvfs` answers for the layer on top and the one below is absent
 /// from the totals.
 ///
-/// The `install.sh` unit sets `ProtectHome=yes`, which mounts a tmpfs over
+/// The future native unit is expected to set `ProtectHome=yes`, which mounts a tmpfs over
 /// /home. Where /home is its own filesystem, `df` on the host and the panel then
 /// disagree by its entire size. Reported once at startup, since the discrepancy
 /// is otherwise visible only in the totals themselves.
@@ -718,11 +718,12 @@ mod tests {
         assert_eq!(mounts, vec!["/", "/data", "/tank"]);
     }
 
-    /// `install.sh` runs this agent with `ProtectHome=yes`, which systemd
-    /// implements by mounting a tmpfs over /home. Both rows remain in the table,
-    /// but a path resolves to the upper one, so counting the row underneath
-    /// would book the tmpfs's size -- half of RAM by default -- as that of a
-    /// filesystem statvfs is never asked about.
+    /// A future native unit is expected to run this agent with
+    /// `ProtectHome=yes`, which systemd implements by mounting a tmpfs over
+    /// /home. Both rows remain in the table, but a path resolves to the upper
+    /// one, so counting the row underneath would book the tmpfs's size -- half
+    /// of RAM by default -- as that of a filesystem statvfs is never asked
+    /// about.
     #[test]
     fn a_shadowed_filesystem_is_not_counted_as_the_one_mounted_over_it() {
         let table = "/dev/vda1 / ext4 rw 0 0\n\
@@ -740,6 +741,7 @@ mod tests {
         let mut c = Collector::new();
         let f = c.facts();
         assert!(!f.hostname.is_empty() && f.cpu_cores >= 1 && f.mem_total > 0);
+        assert_eq!(f.agent_version, env!("CARGO_PKG_VERSION"), "the report carries the romi version");
         // Whatever this host reports must parse, and a virtual bridge must not
         // be selected.
         assert!(f.ipv4.is_empty() || f.ipv4.parse::<std::net::Ipv4Addr>().is_ok());

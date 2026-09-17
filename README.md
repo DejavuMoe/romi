@@ -15,7 +15,7 @@ server/   Rust 服务端、API、WebSocket 和 DuckDB 存储
 admin/    React 管理后台
 agent/    Linux 采集与探测 Agent
 web/      React 公开状态页
-scripts/  打包、校验和集成测试
+scripts/  开发快照、公开发行、校验和集成测试
 docs/     开发、发行和安全说明
 ```
 
@@ -84,40 +84,60 @@ pnpm --filter @romi/web test
 | 命令 | 用途 |
 | --- | --- |
 | `make setup` | 安装锁定的前端与 Rust 依赖 |
-| `make check` | 前端构建、lint、测试，Rust fmt、Clippy、测试及打包拒绝检查 |
-| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发、主题限制和 DuckDB 单写者约束 |
+| `make check` | 前端构建、lint、测试，Rust fmt、Clippy、测试，版本一致性检查及发行工具负例检查 |
+| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发、主题限制、DuckDB 单写者约束和禁用分发路由 |
 | `make bench` | 对 release 二进制跑实时 ingestion / group-commit 基准（见 [docs/bench.md](docs/bench.md)） |
 | `make bench-fixture` | 构建 benchmark-only 大历史 fixture/profiler（不进入发布包） |
 | `make release` | 编译本机 release 二进制并记录构建输入 |
-| `make package` | 生成带清单与 SHA-256 校验文件的本地快照包 |
+| `make package` | 生成带清单与 SHA-256 校验文件的本地开发快照包（非公开发行） |
+| `make release-candidate` | 构建并完整验证一个绑定当前 HEAD、但不主张 Git 标签的公开候选目录 |
+| `make release-package` | 用已存在且指向 HEAD 的 `TAG=vX.Y.Z` 做公开发行目录，本地不推送、不创建 Release |
 
 集成测试使用临时回环实例和临时数据，结束后自动清理，不安装系统服务。
 
-GitHub Actions 与本地使用同一份 mise 配置，在推送 `master`、面向 `master` 的 PR 和手动触发时运行。
-CI 除了执行检查，还会校验并解压发行包，测试包中的实际二进制。
-运行记录见 [GitHub Actions](https://github.com/DejavuMoe/romi/actions)。
+GitHub Actions 与本地使用同一份 mise 配置。CI 在推送 `master`、面向 `master` 的 PR 和手动触发时
+执行检查，并校验、解压本地快照包，对包中实际二进制跑冒烟测试。公开发行工作流
+[`release.yml`](.github/workflows/release.yml) 只在推送 `v*` 标签时进入发布任务；手动触发始终是
+不发布的 dry-run。运行记录见 [GitHub Actions](https://github.com/DejavuMoe/romi/actions)。
 
 ## 运行与发行
 
-服务端与 Agent 二进制分别位于：
+本阶段源码版本为 **0.1.0**（根目录 `VERSION`）。romi 尚未创建 `v0.1.0` 标签，也尚未发布任何
+GitHub Release；在线安装入口继续关闭：`GET /install.sh` 与 `GET /agent/{arch}` 都返回 503。
+
+本地 release 构建产物为：
 
 ```text
-target/release/monitor-hub
-target/release/monitor-agent
+target/release/romi-hub
+target/release/romi-agent
 ```
 
-服务端默认监听 `127.0.0.1:28080`。更换监听地址需显式传入 `--listen`。
-Agent 使用后台创建或换发时给出的本地运行命令；关闭凭证窗口后，令牌不能再次读回。
+Hub 默认监听 `127.0.0.1:28080`，默认数据库文件为 `romi.db`。Agent 使用后台创建或换发令牌时
+展示的本地命令（也可以显式传参）：
 
-`make package` 的输出位于 `dist/`。快照包记录源码、工具链、二进制和前端资源摘要，
-当前支持构建机对应的 Linux 架构与 ABI，尚未提供跨架构静态包、镜像和自动安装服务。
-在线安装入口暂未启用，发行快照也尚未签名。
+```sh
+ROMI_TOKEN='<token>' ./romi-agent --server 'https://hub.example.com' --interval 1
+```
 
-校验和运行步骤见 [本地发行说明](docs/local-release.md)。
+两个二进制都支持 `--version`，分别输出 `romi-hub X.Y.Z` 与 `romi-agent X.Y.Z`；该命令不读取
+数据库、不建立网络连接。Agent 也接受 `ROMI_SERVER` / `ROMI_TOKEN` 环境变量。
+
+发行分为两条独立、不可混用的路径：
+
+- **开发快照**：`make package` 构建本机当前的源码、二进制与前端资源，生成
+  `dist/romi-<源码摘要>-<Rust目标>.tar.gz`。它允许未打标签的源码状态，未签名，不代表公开
+  Release；校验与运行见 [本地发行快照](docs/local-release.md)。
+- **公开发行**：由 `vX.Y.Z` 标签触发，绑定一个不可变 Git commit，产出带 release manifest 和
+  `SHA256SUMS` 的版本化归档，并在发布前完成解压、运行、冒烟与 GitHub artifact attestation。
+  可先运行 `make release-candidate` 构建/验证一个不主张标签的候选目录；公开发行流程本身不手工
+  执行。当前发布、校验和来源证明说明见 [发行与验证](docs/release.md)。
+
+`make release` 只编译本机 release 二进制；`make release-package TAG=vX.Y.Z` 要求标签已经存在
+且指向 HEAD，只做本地打包与验证，不推送、不创建 Release。
 
 ## 存储
 
-数据保存在 `--db` 指定的单个 DuckDB 文件里（默认 `monitor.db`）。启动时：
+数据保存在 `--db` 指定的单个 DuckDB 文件里（默认 `romi.db`）。启动时：
 
 - 若该文件不存在则新建；若存在但不是有效的 romi DuckDB 数据库，会**拒绝启动且不改动该文件**；
 - 同一文件同时只允许一个 Hub 进程读写（DuckDB 的限制），第二个进程会被 `<db>.lock` 拒绝；
