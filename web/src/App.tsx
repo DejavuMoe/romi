@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react"
-import { Moon, Sun, Wrench } from "lucide-react"
+import { Moon, Sun } from "lucide-react"
 
 import { NodeCard } from "@/components/NodeCard"
 import { Summary } from "@/components/Summary"
@@ -55,6 +55,7 @@ export default function App() {
   const [dark, toggleTheme] = useTheme()
   const [me, setMe] = useState<Me | null>(null)
   const [meError, setMeError] = useState("")
+  const siteName = me?.site_name?.trim() && me.site_name !== "Monitor" ? me.site_name.trim() : "romi"
   const { nodes, error, closed } = useNodes()
   const [open, go] = useNodeRoute()
 
@@ -96,8 +97,8 @@ export default function App() {
   // name. The site name rather than a fixed string, since the hub lets an operator
   // rename the site.
   useEffect(() => {
-    document.title = [selected?.name, me?.site_name || "Monitor"].filter(Boolean).join(" · ")
-  }, [selected?.name, me?.site_name])
+    document.title = [selected?.name, siteName].filter(Boolean).join(" · ")
+  }, [selected?.name, siteName])
 
   // Only while there is nothing else to show. Once `me` has loaded, a later
   // failure belongs beside the page rather than over it.
@@ -112,28 +113,28 @@ export default function App() {
 
   return (
     <div className="min-h-svh">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center gap-3 px-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-10 border-b bg-background">
+        <div className="app-shell flex min-h-14 items-center gap-2 py-2 sm:gap-3">
           {/* The site name is the way back to the list, so a node page needs
               no back button of its own. */}
-          <button className="font-semibold transition-opacity hover:opacity-70" onClick={() => go(null)}>
-            {me.site_name || "Monitor"}
+          <button className="flex min-w-0 items-baseline gap-3 text-lg font-semibold tracking-tight transition-colors hover:text-primary" onClick={() => go(null)}>
+            <span className="truncate">{siteName}</span>
           </button>
           <div className="flex-1" />
           {/* The panel is a separate app built into the hub, not part of this
               theme, so this is a navigation rather than a route. */}
           <Button variant="ghost" size="sm" asChild>
             <a href="/admin/">
-              <Wrench /> {me.authed ? "进入后台" : "登录"}
+              {me.authed ? "进入后台" : "登录"}
             </a>
           </Button>
-          <Button variant="ghost" size="icon" onClick={toggleTheme} title="切换主题">
+          <Button variant="ghost" size="icon" onClick={toggleTheme} title={dark ? "切换为 Flexoki Light" : "切换为 Hackerman"} aria-label="切换主题">
             {dark ? <Sun /> : <Moon />}
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1400px] space-y-5 px-4 py-4 sm:px-6">
+      <main className="app-shell space-y-5 py-5">
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {open !== null ? (
@@ -149,9 +150,9 @@ export default function App() {
             </p>
           )
         ) : !nodes ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 min-[56.25rem]:grid-cols-3">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-72" />
+              <Skeleton key={i} className="h-64" />
             ))}
           </div>
         ) : (
@@ -160,7 +161,7 @@ export default function App() {
             {sorted.length === 0 ? (
               <p className="py-16 text-center text-sm text-muted-foreground">还没有节点</p>
             ) : (
-              <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid items-start gap-3 md:grid-cols-2 min-[56.25rem]:grid-cols-3">
                 {sorted.map((n: Node) => (
                   <NodeCard key={n.id} node={n} onOpen={() => go(n.id)} />
                 ))}

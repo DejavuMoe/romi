@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
-import { Bell, CalendarClock, ChevronRight, Copy, Database, Download, GripVertical, Palette, Pencil, Plus, Radio, RefreshCw, Send, Server, Settings, Shield, Trash2, Upload } from "lucide-react"
+import { CalendarClock, ChevronRight, Download, GripVertical, Pencil, RefreshCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Field } from "@/components/ui/field"
+import { DatePicker } from "@/components/ui/date-picker"
+import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -55,26 +58,16 @@ function Addresses({ node }: { node: Node }) {
           key={address}
           type="button"
           onClick={() => copy(address)}
-          title="点击复制"
+          aria-label={`复制 ${address}`}
           className="tnum group inline-flex items-center gap-1 text-sm hover:text-foreground"
         >
           {address}
-          <Copy className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
         </button>
       ))}
     </div>
   )
 }
 
-function Field({ label, hint, className = "", children }: { label: string; hint?: string; className?: string; children: React.ReactNode }) {
-  return (
-    <div className={`space-y-2 ${className}`}>
-      <Label className="text-sm font-medium">{label}</Label>
-      {children}
-      {hint && <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>}
-    </div>
-  )
-}
 
 
 function ConfirmDialog({ title, description, confirmLabel, busy = false, onClose, onConfirm }: {
@@ -237,8 +230,8 @@ function NodeForm({ node, onClose, onSaved }: {
               <Input value={form.remark ?? ""} onChange={(e) => set("remark", e.target.value)} placeholder="商家、用途" />
             </Field>
           </div>
-          <details className="rounded-lg border bg-muted/30 px-3 py-2.5">
-            <summary className="cursor-pointer text-sm font-medium">流量校正</summary>
+          <details className="group rounded-lg border bg-muted/30 px-3 py-2.5">
+            <summary className="flex min-h-6 cursor-pointer items-center gap-2 text-sm font-medium"><ChevronRight className="size-4 transition-transform group-open:rotate-90" />流量校正</summary>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
               按 GB 填入需要校正的值，未修改的计数器继续正常累计。
             </p>
@@ -354,7 +347,7 @@ function BillingForm({ node, onClose, onSaved }: {
               </Select>
             </Field>
             <Field label="到期时间">
-              <Input type="date" value={form.expires_at ?? ""} onChange={(e) => set("expires_at", e.target.value)} />
+              <DatePicker value={form.expires_at ?? ""} onChange={(value) => set("expires_at", value)} />
             </Field>
           </div>
         </div>
@@ -449,7 +442,7 @@ function RegisterDialog({ site, reg, onClose }: {
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>关闭</Button>
           <Button onClick={() => copy(command)} disabled={!command}>
-            <Copy className="size-4" /> 复制
+            复制
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -518,7 +511,7 @@ function InstallDialog({ node, site, onClose, onRotated }: {
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>关闭</Button>
           <Button onClick={() => copy(command)} disabled={!command}>
-            <Copy className="size-4" /> 复制
+            复制
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -619,10 +612,10 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
         {/* An open window is visible from the list itself, so nobody has to
             remember they left one open. */}
         <Button variant="outline" disabled={!canProvision} onClick={() => setRegistering(true)}>
-          <Server /> 批量添加{reg.left > 0 && ` · ${Math.ceil(reg.left / 60)} 分`}
+          批量添加{reg.left > 0 && ` · ${Math.ceil(reg.left / 60)} 分`}
         </Button>
         <Button disabled={!canProvision} onClick={() => setCreating(true)}>
-          <Plus /> 添加节点
+          添加节点
         </Button>
       </div>
 
@@ -662,7 +655,7 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
                       // is the full one exactly while nothing is filtered out.
                       disabled={!!needle}
                       className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
-                      title={needle ? "清空搜索后可拖动排序" : "拖动排序"}
+
                       aria-label={`拖动 ${n.name} 排序`}
                       onDragStart={(e) => {
                         orderBeforeDrag.current = order.map((node) => node.id)
@@ -696,7 +689,7 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
                   <Addresses node={n} />
                 </TableCell>
                 <TableCell>
-                  <Badge variant={n.online ? "default" : "secondary"} className="font-normal">
+                  <Badge variant="outline" className={n.online ? "border-ok/40 font-normal text-ok" : "font-normal text-muted-foreground"}>
                     {n.online ? "在线" : "离线"}
                   </Badge>
                   {!n.public && <Badge variant="outline" className="ml-1 font-normal">不公开</Badge>}
@@ -712,8 +705,8 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
                     page. */}
                 <TableCell className="tnum text-sm">
                   {bytes(monthUsage(n))}
-                  <span className="text-muted-foreground">
-                    {" / "}{n.traffic_limit > 0 ? bytes(n.traffic_limit) : FOREVER}
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {n.traffic_limit > 0 ? `额度 ${bytes(n.traffic_limit)}` : "不限流量"}
                   </span>
                 </TableCell>
                 <TableCell className="tnum text-sm">
@@ -738,14 +731,14 @@ function Nodes({ nodes, refresh, site, canProvision }: { nodes: Node[]; refresh:
             ))}
             {nodes.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-sm whitespace-normal text-muted-foreground">
                   还没有节点，右上角添加
                 </TableCell>
               </TableRow>
             )}
             {needle && nodes.length > 0 && !visible.length && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-sm whitespace-normal text-muted-foreground">
                   没有匹配的节点
                 </TableCell>
               </TableRow>
@@ -846,7 +839,7 @@ function Ping({ nodes }: { nodes: Node[] }) {
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button onClick={() => setEditing({ name: "", target: "", interval: 60, nodes: [] })}>
-          <Plus /> 添加监控
+          添加监控
         </Button>
       </div>
 
@@ -878,7 +871,7 @@ function Ping({ nodes }: { nodes: Node[] }) {
             ))}
             {tasks.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={5} className="py-10 text-center text-sm whitespace-normal text-muted-foreground">
                   还没有延迟监控。每个节点独立 TCP 连接目标端口并上报耗时。
                 </TableCell>
               </TableRow>
@@ -1040,7 +1033,7 @@ function Themes() {
             {!customAllowed && <>当前仅信任本仓内置主题，外部主题安装和更新已由服务端禁用。<br /></>}
             上传主题作者发布的 <code>theme.tar.gz</code>，同名主题整体替换。
             <br />
-            主题的 <code>url</code> 指向 GitHub 仓库时，卡片上的 <RefreshCw className="inline size-3" /> 从它最新的
+            主题的 <code>url</code> 指向 GitHub 仓库时，卡片上的更新按钮从它最新的
             release 取 <code>theme.tar.gz</code>，版本没变就不下载。
             <br />
             主题代码在访客浏览器中执行，请只安装可信来源。
@@ -1048,7 +1041,7 @@ function Themes() {
         </div>
         <div>
           <Button size="sm" disabled={!customAllowed || !!busy} onClick={() => picker.current?.click()}>
-            <Upload /> {busy === "upload" ? "安装中…" : "上传主题包"}
+            {busy === "upload" ? "安装中…" : "上传主题包"}
           </Button>
           <input
             ref={picker}
@@ -1077,7 +1070,7 @@ function Themes() {
                 裁掉边，所以图本身要能点开看原尺寸——就地开一个对话框，不跳走。 */}
             <button
               type="button"
-              title="查看完整预览图"
+              aria-label="查看完整预览图"
               hidden
               className="cursor-zoom-in"
               onClick={() => setZoomed(theme)}
@@ -1089,9 +1082,9 @@ function Themes() {
                 className="aspect-video w-full rounded-md border object-cover object-top"
               />
             </button>
-            <div className="flex items-start gap-3">
+            <div className="flex flex-wrap items-start gap-3">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-medium">{theme.name}</h3>
                   {theme.selected && <Badge>当前</Badge>}
                   {theme.builtin && <Badge variant="secondary" className="font-normal">内置</Badge>}
@@ -1117,7 +1110,7 @@ function Themes() {
                     directory to delete -- it is also the fallback everything
                     else lands on. */}
                 {customAllowed && !theme.builtin && (
-                  <Button size="icon" variant="ghost" disabled={!!busy} onClick={() => setDoomed(theme)}>
+                  <Button size="icon" variant="ghost" title="删除主题" disabled={!!busy} onClick={() => setDoomed(theme)}>
                     <Trash2 />
                   </Button>
                 )}
@@ -1208,7 +1201,7 @@ function SettingsTab() {
       <Card className="gap-4 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="站点名称">
-            <Input value={String(s.site_name ?? "")} onChange={(e) => set("site_name", e.target.value)} placeholder="Monitor" />
+            <Input value={String(s.site_name ?? "")} onChange={(e) => set("site_name", e.target.value)} placeholder="romi" />
           </Field>
           <Field label="历史数据保留天数" hint="超出的明细自动清理，累计流量不受影响">
             <Input
@@ -1267,8 +1260,7 @@ function SettingsTab() {
   )
 }
 
-const TEXTAREA =
-  "w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+const TEXTAREA = "font-mono"
 
 // One offline alert, filled in the way the hub fills a template: in a single pass,
 // JSON-escaped for the webhook body. Previews only; nothing here is sent.
@@ -1352,12 +1344,12 @@ function OfflineNodes({ nodes, refresh }: { nodes: Node[]; refresh: () => void }
   const enabled = nodes.filter((n) => n.notify).length
   return (
     <Card className="gap-4 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-medium">离线通知</h3>
           <p className="mt-1 text-xs text-muted-foreground">按节点打开，默认关。已打开 {enabled} / {nodes.length} 台</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" disabled={busy || enabled === nodes.length} onClick={() => apply(nodes, true)}>全部打开</Button>
           <Button size="sm" variant="ghost" disabled={busy || enabled === 0} onClick={() => apply(nodes, false)}>全部关闭</Button>
         </div>
@@ -1402,7 +1394,7 @@ function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void }) {
   return (
     <div className="space-y-4">
       <Card className="gap-4 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-medium">通知渠道</h3>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -1410,7 +1402,7 @@ function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void }) {
             </p>
           </div>
           <Button size="sm" variant="secondary" disabled={testing} onClick={test}>
-            <Send /> {testing ? "发送中…" : "发送测试"}
+            {testing ? "发送中…" : "发送测试"}
           </Button>
         </div>
       </Card>
@@ -1431,10 +1423,10 @@ function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void }) {
           </Field>
         </div>
         <Field label="消息模板" hint={`纯文本。占位符 ${PLACEHOLDERS}`}>
-          <textarea rows={3} className={TEXTAREA} value={text("notify_telegram_text")} onChange={(e) => set("notify_telegram_text", e.target.value)} />
+          <Textarea rows={3} className={TEXTAREA} value={text("notify_telegram_text")} onChange={(e) => set("notify_telegram_text", e.target.value)} />
         </Field>
         <TemplatePreview template={text("notify_telegram_text")} site={text("site_name") || "Monitor"} />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
             onClick={() =>
@@ -1466,7 +1458,7 @@ function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void }) {
           />
         </Field>
         <Field label="请求头" hint={`可选，一行一个。${s.notify_webhook_headers_set ? "已设置，留空不变" : ""}`}>
-          <textarea
+          <Textarea
             rows={2}
             className={TEXTAREA}
             placeholder={s.notify_webhook_headers_set ? "••••••••" : "Authorization: Bearer xxx"}
@@ -1475,10 +1467,10 @@ function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void }) {
           />
         </Field>
         <Field label="请求体" hint={`以 POST 发送，Content-Type 为 application/json。占位符 ${PLACEHOLDERS}，须写在引号内`}>
-          <textarea rows={4} className={TEXTAREA} value={text("notify_webhook_body")} onChange={(e) => set("notify_webhook_body", e.target.value)} />
+          <Textarea rows={4} className={TEXTAREA} value={text("notify_webhook_body")} onChange={(e) => set("notify_webhook_body", e.target.value)} />
         </Field>
         <TemplatePreview template={text("notify_webhook_body")} site={text("site_name") || "Monitor"} json />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
             onClick={() => save({ notify_webhook_body: text("notify_webhook_body"), ...typed("notify_webhook_url", "notify_webhook_headers") })}
@@ -1573,14 +1565,14 @@ function Sessions() {
       <div className="divide-y">
         {rows.map((s) => (
           <div key={s.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-            <div className="flex min-w-0 items-center gap-2 text-sm">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
               <span className="tnum">{new Date(s.created_at * 1000).toLocaleString()}</span>
               {s.current && <Badge variant="secondary">当前设备</Badge>}
             </div>
             {/* 当前会话没有删除按钮：右上角的退出登录做的就是这件事，而在这里删
                 只会让已经渲染好的面板以为自己还登着。 */}
             {!s.current && (
-              <Button size="icon" variant="ghost" disabled={!!busy} onClick={() => remove(s.id)}>
+              <Button size="icon" variant="ghost" title="删除会话" disabled={!!busy} onClick={() => remove(s.id)}>
                 <Trash2 />
               </Button>
             )}
@@ -1605,7 +1597,7 @@ function Security({ site }: { site: string }) {
         <div>
           <h3 className="text-sm font-medium">GitHub 单点登录</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            OAuth App 回调地址 <code className="rounded bg-muted px-1">{callback}</code>
+            OAuth App 回调地址 <code className="break-all rounded bg-muted px-1">{callback}</code>
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -1757,7 +1749,7 @@ function Data() {
           {stat("历史跨度", info.oldest ? `${Math.floor((Date.now() / 1000 - info.oldest) / 86400)} 天` : "—")}
           {DB_ROWS.map(([key, label]) => stat(label, (info.rows[key] ?? 0).toLocaleString()))}
         </div>
-        <p className="truncate text-xs text-muted-foreground" title={info.path}>
+        <p className="break-all text-xs text-muted-foreground">
           <code>{info.path}</code>
         </p>
       </Card>
@@ -1792,11 +1784,11 @@ function Data() {
               the response, never held in the page. */}
           <Button size="sm" asChild>
             <a href="/api/db/backup" download>
-              <Download /> 导出备份
+              导出备份
             </a>
           </Button>
           <Button size="sm" variant="secondary" disabled={!!busy} onClick={() => picker.current?.click()}>
-            <Upload /> 导入备份
+            导入备份
           </Button>
           <input
             ref={picker}
@@ -1838,13 +1830,13 @@ function Data() {
 // Each area is its own route rather than a tab, so a page can be linked to and a
 // reload returns to the same section.
 const ADMIN_SECTIONS = [
-  { path: "/admin/nodes", label: "节点", icon: Server },
-  { path: "/admin/ping", label: "延迟", icon: Radio },
-  { path: "/admin/notify", label: "通知", icon: Bell },
-  { path: "/admin/data", label: "数据", icon: Database },
-  { path: "/admin/themes", label: "主题", icon: Palette },
-  { path: "/admin/security", label: "安全", icon: Shield },
-  { path: "/admin/settings", label: "设置", icon: Settings },
+  { path: "/admin/nodes", label: "节点" },
+  { path: "/admin/ping", label: "延迟" },
+  { path: "/admin/notify", label: "通知" },
+  { path: "/admin/data", label: "数据" },
+  { path: "/admin/themes", label: "主题" },
+  { path: "/admin/security", label: "安全" },
+  { path: "/admin/settings", label: "设置" },
 ] as const
 
 export function Admin({
@@ -1863,20 +1855,19 @@ export function Admin({
   canProvision: boolean
 }) {
   return (
-    <div className="flex flex-col gap-6 md:flex-row">
-      <nav className="flex gap-1 overflow-x-auto md:w-44 md:shrink-0 md:flex-col md:overflow-visible">
-        {ADMIN_SECTIONS.map(({ path: to, label, icon: Icon }) => {
+    <div className="flex flex-col gap-5">
+      <nav aria-label="后台导航" className="flex flex-wrap gap-1 border-b">
+        {ADMIN_SECTIONS.map(({ path: to, label }) => {
           const active = path === to
           return (
             <button
               key={to}
               onClick={() => go(to)}
               aria-current={active ? "page" : undefined}
-              className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
-                active ? "bg-secondary font-medium" : "text-muted-foreground hover:bg-muted"
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm transition-colors ${
+                active ? "border-primary font-medium text-primary" : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
-              <Icon className="size-4" />
               {label}
             </button>
           )

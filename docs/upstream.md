@@ -27,7 +27,7 @@
 - API、数据库、Cookie、环境变量、Rust 包名及现有 UI 品牌暂时沿用上游。
   `monitor-hub` / `monitor-agent` 是当前本地输出名，不代表从上游下载的二进制。
 
-许可证正文保留，`admin/LICENSE` 从其原仓库复制。根 MIT 许可证增加 romi 修改者声明。
+许可证正文保留，`admin/LICENSE` 从其原仓库复制。根 MIT 许可证增加 Dejavu Moe 版权声明。
 `THIRD_PARTY_NOTICES.md` 不是全量依赖许可证审计结果。
 
 上游测试中的 `HISTORY_GATE` 为进程全局共享；并行测试曾出现 `NoPermits`。

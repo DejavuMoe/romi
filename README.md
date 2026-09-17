@@ -27,7 +27,8 @@ docs/     开发、发行和安全说明
 `mise.toml` 固定 Node.js **24.21.0**、pnpm **12.4.2** 和 Python **3.14.7**；
 Rust **1.98.0** 及 rustfmt、Clippy 由 `rust-toolchain.toml` 定义，mise 自动读取。
 
-还需要 Git、GNU Make、C 编译器和链接器。开发与测试环境为 Linux。
+本地开发环境为 Omarchy Linux，已通过 mise 同步上述工具版本。
+还需要 Git、GNU Make、C 编译器和链接器；GitHub CI 使用 Ubuntu 24.04。
 
 ```sh
 git clone git@github.com:DejavuMoe/romi.git
@@ -123,6 +124,12 @@ Agent 使用后台创建或换发时给出的本地运行命令；关闭凭证�
 TLS 反向代理和备份恢复验证。
 
 ## 许可证与致谢
+
+作者：**Dejavu Moe**。
+
+```text
+Copyright (c) 2026 Dejavu Moe
+```
 
 romi 使用 [MIT 许可证](LICENSE)。项目基于 stqfdyr 的
 [monitor](https://github.com/monitor-probe/monitor)、

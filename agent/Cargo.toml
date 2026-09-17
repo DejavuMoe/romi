@@ -3,8 +3,9 @@ name = "monitor-agent"
 version = "1.0.0"
 edition = "2021"
 license = "MIT"
+authors = ["Dejavu Moe"]
 description = "Linux monitoring agent for the monitor hub"
-repository = "https://github.com/monitor-probe/agent"
+repository = "https://github.com/DejavuMoe/romi"
 
 [dependencies]
 anyhow = "1"

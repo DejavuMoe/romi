@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node src/lib/api.test.ts",
+    "test": "node src/lib/api.test.ts && node src/lib/calendar.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -31,5 +31,11 @@
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
+  },
+  "author": "Dejavu Moe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DejavuMoe/romi.git"
   }
 }

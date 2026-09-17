@@ -9,7 +9,7 @@ romi is derived from the following MIT-licensed projects by stqfdyr:
 | [monitor-probe/monitor-theme-default](https://github.com/monitor-probe/monitor-theme-default) | `web/` | `web/LICENSE` |
 
 All original copyright and MIT license notices are retained. Root `LICENSE`
-adds the romi contributors' modifications notice; it does not replace upstream ownership.
+includes Copyright (c) 2026 Dejavu Moe alongside the original author's notice.
 Exact revisions, import date and license SHA-256 hashes are in `upstream.lock.json`.
 Archived upstream automation and installer files under `docs/upstream/` are also covered
 by the corresponding upstream license.

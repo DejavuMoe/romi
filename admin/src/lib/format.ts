@@ -24,12 +24,7 @@ export function uptime(seconds: number): string {
   return d > 0 ? `${d} 天 ${h} 小时` : h > 0 ? `${h} 小时 ${m} 分` : `${m} 分`
 }
 
-/**
- * No expiry and no traffic cap are both rendered as the absence of a ceiling.
- * U+221E rather than the emoji, which arrives as a coloured tile from whatever
- * font the browser provides; this inherits the text colour and size.
- */
-export const FOREVER = "∞"
+export const FOREVER = "永不到期"
 
 const SYMBOLS: Record<string, string> = { USD: "$", CNY: "¥", EUR: "€", GBP: "£", JPY: "¥" }
 

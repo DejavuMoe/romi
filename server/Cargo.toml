@@ -3,8 +3,9 @@ name = "monitor-hub"
 version = "1.0.0"
 edition = "2021"
 license = "MIT"
+authors = ["Dejavu Moe"]
 description = "Lightweight server monitoring hub"
-repository = "https://github.com/monitor-probe/monitor"
+repository = "https://github.com/DejavuMoe/romi"
 
 [dependencies]
 anyhow = "1"

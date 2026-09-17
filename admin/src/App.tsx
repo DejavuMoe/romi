@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { ExternalLink, LogOut, Moon, Sun } from "lucide-react"
+import { LogOut, Moon, Sun } from "lucide-react"
 import { Toaster } from "sonner"
 
 import { Admin } from "@/components/Admin"
@@ -54,6 +54,7 @@ export default function App() {
   const [dark, toggleTheme] = useTheme()
   const [me, setMe] = useState<Me | null>(null)
   const [meError, setMeError] = useState("")
+  const siteName = me?.site_name?.trim() && me.site_name !== "Monitor" ? me.site_name.trim() : "romi"
   const { nodes, admin, error, refresh } = useNodes()
 
   const loadMe = useCallback(() => {
@@ -68,6 +69,8 @@ export default function App() {
   useEffect(() => {
     loadMe()
   }, [loadMe])
+
+  useEffect(() => { document.title = `${siteName} · 管理` }, [siteName])
 
   // Every frame declares its audience. The hub closes the stream when the session
   // behind it is revoked -- signed out from another device, a password change, a
@@ -107,22 +110,21 @@ export default function App() {
 
   return (
     <div className="min-h-svh">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
+      <header className="sticky top-0 z-10 border-b bg-background">
+        <div className="app-shell flex min-h-14 items-center gap-2 py-2 sm:gap-3">
           {/* The site name is the way back to the status page, as in the
               theme's own header. */}
-          <a href="/" className="font-semibold transition-opacity hover:opacity-70">
-            {me.site_name || "Monitor"}
+          <a href="/" className="flex min-w-0 items-baseline gap-3 text-lg font-semibold tracking-tight transition-colors hover:text-primary">
+            <span className="truncate">{siteName}</span>
           </a>
-          <span className="text-xs text-muted-foreground">后台</span>
           <div className="flex-1" />
           {/* The status page is a separate app, so this is a navigation. */}
           <Button variant="ghost" size="sm" asChild>
             <a href="/">
-              <ExternalLink /> 状态面板
+              状态面板
             </a>
           </Button>
-          <Button variant="ghost" size="icon" onClick={toggleTheme} title="切换主题">
+          <Button variant="ghost" size="icon" onClick={toggleTheme} title={dark ? "切换为 Flexoki Light" : "切换为 Hackerman"} aria-label="切换主题">
             {dark ? <Sun /> : <Moon />}
           </Button>
           <Button variant="ghost" size="icon" onClick={signOut} title="退出登录">
@@ -131,7 +133,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-5 px-4 py-6">
+      <main className="app-shell space-y-5 py-5">
         {error && <p className="text-sm text-destructive">{error}</p>}
         {!nodes ? (
           <Skeleton className="h-64" />

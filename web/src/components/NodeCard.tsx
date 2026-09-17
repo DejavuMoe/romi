@@ -1,5 +1,3 @@
-import { ArrowDown, ArrowUp } from "lucide-react"
-
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Meter } from "@/components/Meter"
@@ -30,7 +28,7 @@ function deployed(node: Node) {
 }
 
 /**
- * The dot plus how long the machine has been up, or once it is gone, how long it
+ * How long the machine has been up, or once it is gone, how long it
  * has been absent -- the first question asked of an offline node. Both are
  * durations, so the badge keeps its shape either way.
  */
@@ -46,9 +44,8 @@ export function Status({ node }: { node: Node }) {
     // no longer current.
     <Badge
       variant="outline"
-      className={cn("tnum shrink-0 gap-1.5 font-normal", !node.online && "text-muted-foreground")}
+      className={cn("tnum shrink-0 gap-1.5 font-normal", node.online ? "border-ok/40 text-ok" : "text-muted-foreground")}
     >
-      <span className={cn("size-1.5 rounded-full", node.online ? "bg-foreground" : "bg-muted-foreground/40")} />
       {label.trim()}
     </Badge>
   )
@@ -69,14 +66,14 @@ export function Country({ node }: { node: Node }) {
 function trafficFoot(node: Node) {
   return node.traffic_limit > 0
     ? pair(monthUsage(node), node.traffic_limit)
-    : `${bytes(monthUsage(node))} / ${FOREVER}`
+    : `已用 ${bytes(monthUsage(node))}`
 }
 
 // No date means nothing expires: a permanent host, or one with no renewal set. A
 // blank corner asserts neither.
 function Expiry({ node }: { node: Node }) {
   const days = daysUntil(node.expires_at)
-  if (days === null) return <span className="text-xs text-muted-foreground" title="永不到期">{FOREVER}</span>
+  if (days === null) return <span className="text-xs text-muted-foreground" aria-label="永不到期">{FOREVER}</span>
   const tone = days < 0 ? "text-destructive" : days <= 7 ? "text-warn" : "text-muted-foreground"
   return (
     <span className={cn("tnum text-xs", tone)}>
@@ -95,25 +92,25 @@ export function NodeCard({ node, onOpen }: { node: Node; onOpen: () => void }) {
       // OS line below does not wrap, so on a phone the card would grow past its
       // column and scroll the page sideways. The truncate inside only takes effect
       // once the card is allowed to be narrower.
-      className="min-w-0 cursor-pointer gap-0 p-4 transition-colors hover:border-ring"
+      className="flex min-w-0 cursor-pointer flex-col gap-2 p-3 transition-colors hover:border-ring focus-visible:outline-2 focus-visible:outline-primary"
       role="button"
       tabIndex={0}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen())}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-1">
         <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <h3 className="truncate font-medium">{node.name}</h3>
+          <div className="flex min-w-0 items-start gap-1.5">
+            <h3 className="min-w-0 break-words font-medium">{node.name}</h3>
             <Country node={node} />
           </div>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {node.os ? osName(node.os) : "等待首次上报"}
             {node.virt && node.virt !== "none" ? ` · ${node.virt}` : ""}
             {node.arch ? ` · ${node.arch}` : ""}
           </p>
         </div>
-        {/* State right, identity left, one line each. */}
-        <div className="flex shrink-0 flex-col items-end gap-1">
+        {/* Status and expiry share a quiet metadata row below the identity. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Status node={node} />
           <Expiry node={node} />
         </div>
@@ -124,47 +121,51 @@ export function NodeCard({ node, onOpen }: { node: Node; onOpen: () => void }) {
           the live figures blank beats a stretched card with one line in it. */}
       {deployed(node) ? (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 border-t pt-2">
             {/* The core count belongs beside the word CPU: it is what the
                 percentage and the load averages are both measured against. */}
             <Meter
               label={`CPU ${node.cpu_cores} 核`}
+              color="var(--chart-1)"
               pct={m ? m.cpu : null}
               foot={m ? m.load.map((n) => n.toFixed(2)).join(" ") : "—"}
             />
             <Meter
               label="内存"
+              color="var(--chart-2)"
               pct={m ? percent(m.mem_used, m.mem_total) : null}
               foot={m ? pair(m.mem_used, m.mem_total) : bytes(node.mem_total)}
             />
             <Meter
               label="硬盘"
+              color="var(--chart-3)"
               pct={m ? percent(m.disk_used, m.disk_total) : null}
               foot={m ? pair(m.disk_used, m.disk_total) : bytes(node.disk_total)}
             />
             <Meter
               label="流量"
+              color="var(--chart-4)"
               pct={node.traffic_limit > 0 ? percent(monthUsage(node), node.traffic_limit) : null}
-              empty={FOREVER}
+              empty="不限"
               foot={trafficFoot(node)}
             />
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-4 text-xs">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t pt-2 text-xs">
             <span className="tnum inline-flex items-center gap-1.5">
-              <ArrowDown className="size-3 text-muted-foreground" />
+              <span className="text-muted-foreground">下行</span>
               {m ? rate(m.net_rx) : "—"}
             </span>
             <span className="tnum inline-flex items-center gap-1.5">
-              <ArrowUp className="size-3 text-muted-foreground" />
+              <span className="text-muted-foreground">上行</span>
               {m ? rate(m.net_tx) : "—"}
             </span>
             <span className="tnum inline-flex items-center gap-1.5 text-muted-foreground">
-              <ArrowDown className="size-3" />
+              <span>下行</span>
               {bytes(node.total_rx)}
             </span>
             <span className="tnum inline-flex items-center gap-1.5 text-muted-foreground">
-              <ArrowUp className="size-3" />
+              <span>上行</span>
               {bytes(node.total_tx)}
             </span>
           </div>
