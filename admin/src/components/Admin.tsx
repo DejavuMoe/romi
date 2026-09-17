@@ -1663,11 +1663,17 @@ type DbInfo = {
   path: string
   size: number
   wal: number
+  /** Space DuckDB reports as reusable inside the file. Reclaimed only by a rewrite. */
   free: number
   /** Timestamp of the earliest history row, null on a database with none. */
   oldest: number | null
   retention: number
   rows: Record<string, number>
+  /** The storage engine and the application schema it is running, for the record. */
+  engine: string
+  schema: number | null
+  /** Writes accepted and not yet committed, and the queue's capacity. */
+  queue: { queued: number; committed: number; superseded: number; capacity: number }
 }
 
 // The only two tables whose row count indicates anything about size. Every other
@@ -1695,8 +1701,20 @@ function Data() {
   async function vacuum() {
     setBusy("vacuum")
     try {
-      const { pruned, freed } = await api<{ pruned: number; freed: number }>("/db/vacuum", { method: "POST" })
-      toast.success(`已清理 ${pruned} 行，回收 ${bytes(freed)}`)
+      const { pruned, freed, compacted, reusable } = await api<{
+        pruned: number
+        freed: number
+        compacted: boolean
+        reusable: number
+      }>("/db/vacuum", { method: "POST" })
+      // `freed` is measured, not estimated: it is the difference in bytes on disk
+      // before and after. DuckDB's own VACUUM does not return space, so when a
+      // rewrite was not worth it the count says so rather than inventing a figure.
+      toast.success(
+        compacted
+          ? `已清理 ${pruned} 行，重写文件后实际回收 ${bytes(freed)}`
+          : `已清理 ${pruned} 行，可复用 ${bytes(reusable)} 未达重写阈值，本次未重写文件`,
+      )
       load()
     } catch (e) {
       toast.error((e as Error).message)
@@ -1742,8 +1760,10 @@ function Data() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {stat("文件大小", bytes(info.size))}
           {stat("预写日志", bytes(info.wal))}
-          {stat("可回收空间", bytes(info.free))}
+          {stat("可复用空间", bytes(info.free))}
           {stat("保留天数", `${info.retention} 天`)}
+          {stat("引擎", `${info.engine} · schema ${info.schema ?? "?"}`)}
+          {stat("待提交写入", `${info.queue?.queued ?? 0} / ${info.queue?.capacity ?? 0}`)}
           {/* 和保留天数并排：跨度小于保留期是还没攒够，大于保留期就是每小时
               那次 prune 没在跑。 */}
           {stat("历史跨度", info.oldest ? `${Math.floor((Date.now() / 1000 - info.oldest) / 86400)} 天` : "—")}
@@ -1758,8 +1778,10 @@ function Data() {
         <div>
           <h3 className="text-sm font-medium">回收空间</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            按保留天数清掉过期明细，再重建数据库文件把空出来的页还给磁盘（SQLite 的 VACUUM）。
-            重建期间需要与数据库等量的空闲磁盘，过程中面板和上报会短暂变慢。
+            按保留天数清掉过期明细，然后做一次 CHECKPOINT 把预写日志折进主文件。
+            DuckDB 的 VACUUM 并不归还磁盘空间，所以只有当可复用空间超过阈值时才把整个数据库
+            复制到新文件并切换过去，报告的是前后实测的磁盘差值。重写需要与数据库等量的空闲磁盘，
+            期间写入会短暂等待。
           </p>
         </div>
         <div>
@@ -1773,10 +1795,12 @@ function Data() {
         <div>
           <h3 className="text-sm font-medium">备份</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            导出的是整个数据库，含节点凭证与登录密码哈希，请当作密钥保管。恢复会用备份文件整体覆盖当前数据，
-            当前节点、设置、历史全部作废，所有设备需要重新登录。
+            导出的是每张表的数据归档（tar.gz + Parquet），含节点凭证摘要与登录密码哈希，请当作密钥保管。
+            恢复会先完整校验并重建一个新数据库，全部通过后才切换；当前节点、设置、历史会被替换，
+            所有登录失效，设备需要重新登录。
             <br />
-            请用这里导出的文件恢复：直接复制 <code>monitor.db</code> 会丢掉预写日志里还没落盘的那部分。
+            请用这里导出的文件恢复：直接复制运行中的数据库文件会丢掉预写日志里尚未合并的部分，
+            而且备份格式不是数据库文件本身。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

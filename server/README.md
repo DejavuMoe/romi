@@ -19,5 +19,5 @@
 | [monitor-theme-default](https://github.com/monitor-probe/monitor-theme-default) | 内置默认主题 |
 
 ```
-agent (Linux)  ──WebSocket / JSON-RPC 2.0──▶  hub (axum + SQLite)  ──▶  后台 + 状态页
+agent (Linux)  ──WebSocket / JSON-RPC 2.0──▶  hub (axum + DuckDB)  ──▶  后台 + 状态页
 ```

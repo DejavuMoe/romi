@@ -516,6 +516,26 @@ pub async fn me(State(app): State<Shared>, headers: HeaderMap) -> Json<Value> {
     }))
 }
 
+/// Runs one storage call on a blocking thread.
+///
+/// Every write waits for the writer thread's commit, and during a maintenance
+/// operation it waits for the barrier; a history read waits for a free connection.
+/// None of that belongs on a Tokio core worker, so the mutation routes hand the
+/// call to `spawn_blocking` the same way the history and data-page routes already
+/// do. Indexed point reads (`Db::get`, `Db::session_valid`) stay inline: they are
+/// single-row lookups on a pool that short work does not queue behind.
+async fn storage<T, F>(app: &Shared, f: F) -> Result<T, anyhow::Error>
+where
+    T: Send + 'static,
+    F: FnOnce(&crate::db::Db) -> Result<T, anyhow::Error> + Send + 'static,
+{
+    let db = app.db.clone();
+    match tokio::task::spawn_blocking(move || f(&db)).await {
+        Ok(outcome) => outcome,
+        Err(e) => Err(anyhow::anyhow!("数据库任务失败：{e}")),
+    }
+}
+
 pub async fn create_node(
     _: Admin,
     State(app): State<Shared>,
@@ -536,7 +556,8 @@ pub async fn create_node(
     }
     node.name = node.name.trim().to_owned();
     let token = random_token();
-    match app.db.create_node(&node, &token) {
+    let issued = token.clone();
+    match storage(&app, move |db| db.create_node(&node, &issued)).await {
         // Reveal once. Neither the raw token nor its hash belongs in node views.
         Ok(id) => {
             invalidate_snapshot(&app);
@@ -591,9 +612,19 @@ pub async fn agent_register(
     // One answer for both "no window is open" and "that key is wrong": the
     // difference is only useful to someone who has neither.
     let closed = || (StatusCode::FORBIDDEN, "registration is closed").into_response();
-    let until = app.db.get("register_until").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
-    let Some(key) = app.db.get("register_key").filter(|k| !k.is_empty() && Utc::now().timestamp() < until)
-    else {
+    let window = match storage(&app, |db| {
+        Ok((
+            db.get("register_until").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0),
+            db.get("register_key"),
+        ))
+    })
+    .await
+    {
+        Ok(window) => window,
+        Err(e) => return fail(e),
+    };
+    let (until, key) = window;
+    let Some(key) = key.filter(|k| !k.is_empty() && Utc::now().timestamp() < until) else {
         return closed();
     };
     if agent_ws::bearer(&headers) != Some(key.as_str()) {
@@ -603,7 +634,7 @@ pub async fn agent_register(
         app.registrations.record_failure(ip);
         return closed();
     }
-    match app.db.nodes_created_since(until - REGISTER_WINDOW) {
+    match storage(&app, move |db| db.nodes_created_since(until - REGISTER_WINDOW)).await {
         Ok(n) if n >= REGISTER_LIMIT => {
             return (StatusCode::FORBIDDEN, "this window has registered enough nodes").into_response()
         }
@@ -624,7 +655,8 @@ pub async fn agent_register(
         Err(e) => return fail(e),
     };
     let token = random_token();
-    match app.db.create_node(&node, &token) {
+    let issued = token.clone();
+    match storage(&app, move |db| db.create_node(&node, &issued)).await {
         Ok(_) => {
             app.registrations.clear(ip);
             invalidate_snapshot(&app);
@@ -642,7 +674,13 @@ pub async fn open_register(_: Admin, State(app): State<Shared>, headers: HeaderM
     }
     let key = random_token();
     let until = (Utc::now().timestamp() + REGISTER_WINDOW).to_string();
-    match app.db.set("register_key", &key).and_then(|()| app.db.set("register_until", &until)) {
+    let (written_key, written_until) = (key.clone(), until.clone());
+    match storage(&app, move |db| {
+        db.set("register_key", &written_key)?;
+        db.set("register_until", &written_until)
+    })
+    .await
+    {
         Ok(()) => Json(json!({"register_key": key, "register_until": until})).into_response(),
         Err(e) => fail(e),
     }
@@ -650,7 +688,12 @@ pub async fn open_register(_: Admin, State(app): State<Shared>, headers: HeaderM
 
 /// Closes the window early, before the hour elapses.
 pub async fn close_register(_: Admin, State(app): State<Shared>) -> Response {
-    match app.db.set("register_key", "").and_then(|()| app.db.set("register_until", "0")) {
+    match storage(&app, |db| {
+        db.set("register_key", "")?;
+        db.set("register_until", "0")
+    })
+    .await
+    {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
@@ -672,7 +715,7 @@ pub async fn update_node(
     if let Some(message) = node_limits(node.traffic_reset_day, node.price, node.traffic_limit) {
         return bad(message);
     }
-    match app.db.update_node(id, &node) {
+    match storage(&app, move |db| db.update_node(id, &node)).await {
         Ok(()) => {
             invalidate_snapshot(&app);
             Json(json!({"ok": true})).into_response()
@@ -690,7 +733,7 @@ pub struct NodeOrder {
 /// that renumbers rather than here: re-reading the node list first would only
 /// race the write it guards.
 pub async fn reorder_nodes(_: Admin, State(app): State<Shared>, Json(order): Json<NodeOrder>) -> Response {
-    match app.db.reorder_nodes(&order.ids) {
+    match storage(&app, move |db| db.reorder_nodes(&order.ids)).await {
         Ok(()) => {
             invalidate_snapshot(&app);
             Json(json!({"ok": true})).into_response()
@@ -706,12 +749,17 @@ pub async fn delete_node(_: Admin, State(app): State<Shared>, Path(id): Path<i64
     // this the agent would keep reporting under an id SQLite reassigns to the
     // next node created, which would then appear online on another node's
     // metrics. The same reasoning applies in `reset_token` below.
-    let result = {
-        let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
-        app.db.delete_node(id).map(|()| {
-            agents.remove(&id);
-        })
-    };
+    // The agents lock is taken inside the blocking call rather than held across
+    // the await: dropping the sender is what ends a connection already open on
+    // the deleted row, and it must happen with the delete, but no async worker
+    // may hold a std guard while it waits for the writer.
+    let owner = app.clone();
+    let result = storage(&app, move |db| {
+        db.delete_node(id)?;
+        owner.agents.write().unwrap_or_else(|e| e.into_inner()).remove(&id);
+        Ok(())
+    })
+    .await;
     match result {
         Ok(()) => {
             invalidate_snapshot(&app);
@@ -727,17 +775,19 @@ pub async fn delete_node(_: Admin, State(app): State<Shared>, Path(id): Path<i64
 /// reinstall the agent. Reading the install command does not pass through here.
 pub async fn reset_token(_: Admin, State(app): State<Shared>, Path(id): Path<i64>) -> Response {
     let token = random_token();
-    let updated = app.db.node(id).map(|n| n.is_some()).unwrap_or(false);
-    if !updated {
+    let issued = token.clone();
+    let exists = storage(&app, move |db| Ok(db.node(id)?.is_some())).await.unwrap_or(false);
+    if !exists {
         return (StatusCode::NOT_FOUND, "no such node").into_response();
     }
     // The same agents lock guards activation after upgrade, closing the handshake/rotation race.
-    let result = {
-        let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
-        app.db.reset_token(id, &token).map(|()| {
-            agents.remove(&id);
-        })
-    };
+    let owner = app.clone();
+    let result = storage(&app, move |db| {
+        db.reset_token(id, &issued)?;
+        owner.agents.write().unwrap_or_else(|e| e.into_inner()).remove(&id);
+        Ok(())
+    })
+    .await;
     invalidate_snapshot(&app);
     match result {
         Ok(()) => {
@@ -756,7 +806,7 @@ pub async fn patch_traffic(
     if [p.total_rx, p.total_tx, p.month_rx, p.month_tx].into_iter().flatten().any(|v| v < 0) {
         return bad("traffic must be non-negative");
     }
-    match app.db.set_traffic(id, &p) {
+    match storage(&app, move |db| db.set_traffic(id, &p)).await {
         Ok(()) => {
             invalidate_snapshot(&app);
             Json(json!({"ok": true})).into_response()
@@ -766,7 +816,7 @@ pub async fn patch_traffic(
 }
 
 pub async fn ping_tasks(_: Admin, State(app): State<Shared>) -> Response {
-    match app.db.ping_tasks() {
+    match storage(&app, |db| db.ping_tasks()).await {
         Ok(tasks) => Json(json!({"tasks": tasks})).into_response(),
         Err(e) => fail(e),
     }
@@ -822,7 +872,7 @@ pub async fn save_ping_task(_: Admin, State(app): State<Shared>, Json(mut task):
     if !(5..=3_600).contains(&task.interval) {
         return bad("interval must be from 5 to 3600 seconds");
     }
-    match app.db.save_ping_task(&task) {
+    match storage(&app, move |db| db.save_ping_task(&task)).await {
         Ok(id) => {
             agent_ws::push_ping_tasks(&app);
             Json(json!({"id": id})).into_response()
@@ -835,7 +885,7 @@ pub async fn save_ping_task(_: Admin, State(app): State<Shared>, Json(mut task):
 }
 
 pub async fn delete_ping_task(_: Admin, State(app): State<Shared>, Path(id): Path<i64>) -> Response {
-    match app.db.delete_ping_task(id) {
+    match storage(&app, move |db| db.delete_ping_task(id)).await {
         Ok(()) => {
             agent_ws::push_ping_tasks(&app);
             Json(json!({"ok": true})).into_response()
@@ -975,16 +1025,22 @@ async fn append(
 /// the database has room on. The random component keeps two concurrent calls
 /// apart, since `VACUUM INTO` refuses an existing file.
 fn scratch_path(app: &App, kind: &str) -> String {
-    format!("{}.{kind}-{}.tmp", app.db.file(), &random_token()[..16])
+    // Beside the database, so the copy lands on a filesystem that has room for
+    // it; inside the temporary directory when the hub is in memory. See
+    // `db::scratch_beside`, which is also what the restore's own scratch files
+    // use -- two spellings of this rule is how the in-memory case was wrong once
+    // already.
+    crate::db::scratch_beside(&app.db.file(), kind)
 }
 
 /// The data page's figures.
 ///
 /// Off the runtime, like the three routes below: `stats` counts every row of
-/// `metric` and `ping_record` -- both WITHOUT ROWID, so each count is a full
-/// index scan -- holding the connection the agents report through throughout. At
-/// 2.2M rows that is 127 ms during which the public page and every agent report
-/// also wait, growing with `retention_days`.
+/// `metric` and `ping_record`, which is a scan of each and grows with
+/// `retention_days`. It reads a pooled connection rather than the writer's, so a
+/// slow count delays other reads instead of the agents' reports -- but it is
+/// still seconds of work on a large history, which is why it is not on a Tokio
+/// core worker.
 pub async fn db_stats(_: Admin, State(app): State<Shared>) -> Response {
     match tokio::task::spawn_blocking(move || app.db.stats()).await {
         Ok(Ok(stats)) => Json(stats).into_response(),
@@ -993,16 +1049,16 @@ pub async fn db_stats(_: Admin, State(app): State<Shared>) -> Response {
     }
 }
 
-/// Returns a compact copy of the whole database.
+/// Returns a consistent, data-only archive of the whole database.
 ///
 /// The copy is written beside the live file and then unlinked while still open,
 /// so it exists only for the duration of this response: a client that
 /// disconnects partway through leaves nothing behind, and nothing on disk
-/// outlives the download.
+/// outlives the download. The format is documented in `db::backup`.
 pub async fn db_backup(_: Admin, State(app): State<Shared>) -> Response {
     let path = scratch_path(&app, "backup");
-    // Off the runtime: this reads the entire database while holding the
-    // connection the agents write through.
+    // Off the runtime: this reads every table and holds the maintenance barrier
+    // for the duration, so the archive is one consistent snapshot.
     let copied = {
         let (app, path) = (app.clone(), path.clone());
         tokio::task::spawn_blocking(move || app.db.backup_into(&path)).await
@@ -1023,7 +1079,10 @@ pub async fn db_backup(_: Admin, State(app): State<Shared>) -> Response {
                 (header::CACHE_CONTROL, "no-store".to_owned()),
                 (
                     header::CONTENT_DISPOSITION,
-                    format!("attachment; filename=\"monitor-{}.db\"", Local::now().format("%Y%m%d-%H%M%S")),
+                    format!(
+                        "attachment; filename=\"monitor-{}.tar.gz\"",
+                        Local::now().format("%Y%m%d-%H%M%S")
+                    ),
                 ),
             ],
             axum::body::Body::from_stream(tokio_util::io::ReaderStream::new(file)),
@@ -1083,58 +1142,61 @@ pub async fn db_restore(
     }
 
     let outcome = restore(&app, &source).await;
-    // SQLite writes a -wal and a -shm beside any file it opens in WAL mode, and a
-    // plain copy of a running hub's database is exactly that. They are removed
-    // when the connection closes cleanly; these three lines cover the case where
-    // it does not.
-    for leftover in [source.clone(), format!("{source}-wal"), format!("{source}-shm")] {
-        let _ = std::fs::remove_file(leftover);
-    }
+    let _ = std::fs::remove_file(&source);
     match outcome {
-        Ok(()) => {
+        Ok(report) => {
             // Agents authenticate at the handshake, and the tokens they hold may
             // now belong to different nodes, or to none. Dropping the senders ends
             // those loops; each reconnects against the restored database.
             invalidate_snapshot(&app);
-            let cookie = match app.db.drop_all_sessions().and_then(|()| issue_session(&app, &headers)) {
+            let cookie = match issue_session(&app, &headers) {
                 Ok(cookie) => cookie,
                 Err(e) => return fail(e),
             };
-            with_cookies(Json(json!({"ok": true})), [cookie])
+            with_cookies(Json(json!({"ok": true, "restored": report})), [cookie])
         }
         Err(e) => bad(&format!("{e:#}")),
     }
 }
 
-async fn restore(app: &Shared, path: &str) -> Result<(), anyhow::Error> {
-    // Both halves read the whole file, off the runtime: `PRAGMA integrity_check`
-    // on a 256 MiB upload is not runtime work, and the copy that follows holds
-    // the connection the agents write through.
+/// Validates the upload and, only once it is a complete database, switches to it.
+///
+/// The whole thing is one storage call: validating a 256 MiB upload is not
+/// runtime work, the rebuild reads and writes the whole file, and the switch
+/// itself closes and reopens every connection. `Db::restore_from` drops every
+/// session in the restored data before returning, so a backup cannot revive a
+/// logged-out login whichever caller reaches it.
+async fn restore(app: &Shared, path: &str) -> Result<crate::db::BackupReport, anyhow::Error> {
     let (app, source) = (app.clone(), path.to_owned());
-    tokio::task::spawn_blocking(move || {
-        app.db.check_backup(&source)?;
-        let mut agents = app.agents.write().unwrap_or_else(|e| e.into_inner());
-        app.db.restore_from(&source)?;
-        agents.clear();
-        Ok(())
+    let outcome = tokio::task::spawn_blocking(move || {
+        let report = app.db.restore_from(&source)?;
+        app.agents.write().unwrap_or_else(|e| e.into_inner()).clear();
+        Ok(report)
     })
-    .await?
+    .await?;
+    outcome
 }
 
-/// Drops history beyond the retention window and rebuilds the file around what
-/// remains, which is the only way SQLite returns the space to the filesystem.
+/// Drops history beyond the retention window, checkpoints, and rewrites the file
+/// when DuckDB reports enough reusable space to justify a copy.
+///
+/// The name is kept for the panel, but the operation is not SQLite's `VACUUM`:
+/// DuckDB documents that `VACUUM` does not reclaim space, so this reports what
+/// was actually returned to the filesystem -- measured, not estimated -- and says
+/// whether the file was rewritten at all.
 pub async fn db_vacuum(_: Admin, State(app): State<Shared>) -> Response {
     let keep = app.db.retention_days();
     let app = app.clone();
-    // A rebuild of the whole file, holding the connection the agents write
-    // through, so it belongs on a blocking thread.
-    let done = tokio::task::spawn_blocking(move || {
-        let pruned = app.db.prune(keep)?;
-        app.db.vacuum().map(|freed| json!({"pruned": pruned, "freed": freed}))
-    })
-    .await;
+    let done = tokio::task::spawn_blocking(move || app.db.maintenance(keep)).await;
     match done.map_err(|e| anyhow::anyhow!(e)).and_then(|r| r) {
-        Ok(result) => Json(result).into_response(),
+        Ok(result) => Json(json!({
+            "pruned": result.pruned,
+            "freed": result.freed,
+            "reusable": result.reusable,
+            "compacted": result.compacted,
+            "size": result.size,
+        }))
+        .into_response(),
         Err(e) => fail(e),
     }
 }
@@ -1364,7 +1426,7 @@ pub async fn themes(_: Admin, State(app): State<Shared>) -> Response {
 /// it identifies a row without being presentable as a cookie.
 pub async fn sessions(_: Admin, State(app): State<Shared>, headers: HeaderMap) -> Response {
     let mine = current_session(&headers);
-    match app.db.sessions() {
+    match storage(&app, |db| db.sessions()).await {
         Ok(rows) => Json(
             rows.into_iter()
                 .map(|(hash, expires_at)| {
@@ -1384,7 +1446,7 @@ pub async fn sessions(_: Admin, State(app): State<Shared>, headers: HeaderMap) -
 /// Deleting a row that no longer exists is not an error: two panels open on the
 /// same list both achieve the requested sign-out.
 pub async fn delete_session(_: Admin, State(app): State<Shared>, Path(id): Path<String>) -> Response {
-    match app.db.drop_session(&id) {
+    match storage(&app, move |db| db.drop_session(&id)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => fail(e),
     }
@@ -1471,23 +1533,28 @@ pub async fn save_settings(
     }
     // Set when the password changed, so the caller receives a fresh session rather
     // than being logged out by their own change.
+    // Owned before the first await: the request body is borrowed by `map`, and a
+    // reference into it cannot cross into a blocking task.
+    let entries: Vec<(String, String)> =
+        map.iter().map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_owned())).collect();
     let mut reissued = String::new();
-    for (key, value) in map {
-        let value = value.as_str().unwrap_or_default();
+    for (key, value) in entries {
         // Changing the password logs out every existing session; the caller
         // receives a replacement.
         if key == "admin_password" {
-            match hash_password(value).and_then(|h| {
-                app.db.set("admin_password_hash", &h)?;
-                app.db.drop_all_sessions()?;
-                issue_session(&app, &headers)
-            }) {
+            let changed = storage(&app, move |db| {
+                let h = hash_password(&value)?;
+                db.set("admin_password_hash", &h)?;
+                db.drop_all_sessions()
+            })
+            .await;
+            match changed.and_then(|()| issue_session(&app, &headers)) {
                 Ok(cookie) => reissued = cookie,
                 Err(e) => return fail(e),
             }
             continue;
         }
-        if let Err(e) = app.db.set(key, value) {
+        if let Err(e) = storage(&app, move |db| db.set(&key, &value)).await {
             return fail(e);
         }
     }
@@ -1793,11 +1860,15 @@ mod tests {
         assert_eq!(done.status(), StatusCode::OK);
         assert_eq!(app.db.nodes().unwrap().len(), 1, "the backup went in");
 
-        // The database and its journal are the only files that may remain.
+        // The database and the files DuckDB keeps beside it -- its write-ahead
+        // log, its spill directory and the lock -- are the only ones that may
+        // remain. None of them carries SQLite's names.
         let left: Vec<String> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
-            .filter(|name| !matches!(name.as_str(), "live.db" | "live.db-wal" | "live.db-shm"))
+            .filter(|name| {
+                !matches!(name.as_str(), "live.db" | "live.db.wal" | "live.db.tmp" | "live.db.lock")
+            })
             .collect();
         assert!(left.is_empty(), "left beside the database: {left:?}");
         std::fs::remove_dir_all(&dir).unwrap();
@@ -1847,13 +1918,18 @@ mod tests {
         let app = app();
         let id = node(&app, "n", true);
         let now = Utc::now().timestamp();
-        // A month of history at the rate the hub writes it. Two probes, because
+        // Two days of history at the rate the hub writes it. Two probes, because
         // the budget is per series and a single-probe fixture would conceal that.
+        //
+        // ponytail: two days rather than a month. What the budget bounds is the
+        // step, not the window, and the assertions below are about rows returned
+        // for a window rather than about how much history exists; the fixture only
+        // has to be longer than the widest window that divides evenly.
         const PROBES: i64 = 2;
         for _ in 0..PROBES {
             task(&app, vec![id]);
         }
-        for i in 0..30 * 1440 {
+        for i in 0..2 * 1440 {
             app.db.insert_metric(id, now - i * 60, &json!({"cpu": 1.0})).unwrap();
             for task in 1..=PROBES {
                 app.db.insert_ping(id, task, now - i * 20, 42).unwrap();
@@ -1885,8 +1961,8 @@ mod tests {
                 "{hours}h reached back too far"
             );
         }
-        // The widest window costs no more than a narrow one: unthinned, a month of
-        // history is 43,200 rows.
+        // The widest window costs no more than a narrow one: unthinned, the
+        // fixture's 2,880 minutes are what a ninety-day window would try to draw.
         assert!(app.db.metrics(id, now - 2_160 * 3_600, sample_step(2_160, None)).unwrap().len() <= 1_441);
 
         // A day returns every minute it holds: thinning exists only for what the
@@ -2110,9 +2186,10 @@ mod tests {
             "the deleted node's agent must be told to go"
         );
 
-        // SQLite reuses the id; nothing of the old machine may accompany it.
+        // The new node receives a fresh id -- the allocator never reissues one --
+        // and nothing of the old machine may accompany it either way.
         let fresh = node(&app, "fresh", true);
-        assert_eq!(fresh, old, "the fixture only means anything if the id is reused");
+        assert_ne!(fresh, old, "a deleted node's id is not handed out again");
         let nodes = visible_nodes(&app, true).unwrap();
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0]["online"], json!(false), "a node nobody deployed is not online");

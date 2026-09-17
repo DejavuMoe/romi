@@ -212,17 +212,26 @@ async fn serve(app: Shared, node_id: i64, token: String, ip: String, mut socket:
             inbound = socket.recv() => {
                 last_frame = Instant::now();
                 match inbound {
-                // Every report contends for the single database connection, which
-                // a restore or vacuum can hold for seconds. Without this, agents
-                // would park every worker thread on that lock and starve the rest
-                // of the runtime -- the panel, the public page, the shutdown
-                // signal.
-                Some(Ok(Message::Text(text))) =>
-                    match tokio::task::block_in_place(|| dispatch(&app, node_id, session, &ip, &text)) {
-                    Ok(true) => locate(app.clone(), node_id, ip.clone()),
-                    Ok(false) => {}
-                    Err(e) => warn!("node {node_id} sent an unusable message: {e:#}"),
-                },
+                // A report is a database write, and it is dispatched to the
+                // blocking pool rather than run here or under `block_in_place`.
+                // `block_in_place` hands the worker's core to another task but
+                // keeps the *thread*: a few hundred reports a second across a few
+                // dozen agents left no core free to answer the panel or the public
+                // page at all. A blocking-pool thread does not belong to the
+                // scheduler, so waiting on the writer costs the runtime nothing.
+                Some(Ok(Message::Text(text))) => {
+                    let (task_app, task_ip) = (app.clone(), ip.clone());
+                    let outcome = tokio::task::spawn_blocking(move || {
+                        dispatch(&task_app, node_id, session, &task_ip, &text)
+                    })
+                    .await
+                    .unwrap_or_else(|e| Err(anyhow::anyhow!("report worker failed: {e}")));
+                    match outcome {
+                        Ok(true) => locate(app.clone(), node_id, ip.clone()),
+                        Ok(false) => {}
+                        Err(e) => warn!("node {node_id} sent an unusable message: {e:#}"),
+                    }
+                }
                 Some(Ok(Message::Close(_))) | None => break Ok(()),
                 Some(Ok(_)) => {}
                 Some(Err(e)) => break Err(e.into()),

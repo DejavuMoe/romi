@@ -62,6 +62,7 @@ def package():
     name = f"romi-{receipt['source']['sha256'][:12]}-{host}.tar.gz"
     payload = {f'bin/{n}': (RELEASE / n).read_bytes() for n in receipt['binaries']}
     for item in ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'upstream.lock.json', 'docs/local-release.md',
+                 'docs/duckdb-migration.md', 'docs/bench.md', 'scripts/migrate-sqlite.py',
                  'server/LICENSE', 'agent/LICENSE', 'admin/LICENSE', 'web/LICENSE',
                  'server/Cargo.lock', 'agent/Cargo.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
                  'package.json', 'admin/package.json', 'web/package.json', 'mise.toml', 'rust-toolchain.toml',

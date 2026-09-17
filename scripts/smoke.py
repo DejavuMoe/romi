@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """Local process smoke test; temporary credentials/data, no system installation."""
 import argparse
-import hashlib
 import http.cookiejar
 import json
 import os
 from pathlib import Path
 import re
 import socket
-import sqlite3
 import subprocess
 import tempfile
 import time
@@ -105,9 +103,30 @@ def main():
                 node = next(node for node in nodes() if node['id'] == node_id)
                 assert node['public'] is False
                 assert 'token' not in node and 'token_hash' not in node
-                with sqlite3.connect(work / 'romi.db') as db:
-                    stored = db.execute('SELECT token_hash FROM node WHERE id=?', (node_id,)).fetchone()[0]
-                    assert stored == hashlib.sha256(token.encode()).hexdigest()
+                # The storage-level assertion that the node's credential is stored
+                # as a digest lives in the server's own tests
+                # (`db::tests::tokens_are_hashed_and_rotation_retires_the_old_one`).
+                # It cannot be made from here: DuckDB permits one read-write
+                # process per file, so a second process -- this script -- may not
+                # open the hub's live database at all, and asking the hub to expose
+                # it over HTTP would be a debugging endpoint this project does not
+                # have. What is checked here is that the file really is DuckDB and
+                # carries no SQLite journal beside it.
+                path = work / 'romi.db'
+                assert path.read_bytes()[8:12] == b'DUCK', 'the hub must write a DuckDB database'
+                assert not (work / 'romi.db-wal').exists(), 'no SQLite write-ahead log'
+                assert not (work / 'romi.db-shm').exists(), 'no SQLite shared-memory file'
+                assert (work / 'romi.db.lock').exists(), 'the lock file is what refuses a second hub'
+
+                # One hub per database file, enforced across processes: DuckDB
+                # itself refuses a second read-write process, and the hub refuses
+                # it with an explanation rather than a raw engine error.
+                second = subprocess.run(
+                    [str(binaries / 'monitor-hub'), '--listen', '127.0.0.1:0', '--db', str(path)],
+                    cwd=work, capture_output=True, text=True, timeout=30,
+                )
+                assert second.returncode != 0, 'a second hub on one database must not start'
+                assert '已被另一个' in second.stderr, second.stderr
                 env = dict(os.environ, MONITOR_SERVER=base, MONITOR_TOKEN=token)
                 agent = subprocess.Popen([str(binaries / 'monitor-agent')], cwd=work, env=env,
                                          stdout=agent_log, stderr=agent_log)
@@ -135,7 +154,8 @@ def main():
                     except urllib.error.HTTPError as error:
                         assert error.code == 403
                 print('PASS: local frontends/assets, disabled upstream downloads, login, node creation, '
-                      'private defaults, hashed credentials, rotation, agent metrics and theme denials')
+                      'private defaults, DuckDB storage with no live SQLite handle, single-writer lock, '
+                      'rotation, agent metrics and theme denials')
             finally:
                 for process in reversed(processes):
                     if process.poll() is None:

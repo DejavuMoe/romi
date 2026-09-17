@@ -500,10 +500,25 @@ pub async fn watch(app: Shared) {
     let mut ticker = tokio::time::interval(SWEEP);
     loop {
         ticker.tick().await;
-        // Synchronous database work, kept off the runtime threads like a report.
-        match tokio::task::block_in_place(|| sweep(&app, &mut watch, Utc::now().timestamp())) {
-            Ok(notes) => notes.into_iter().for_each(|note| send(&app, note)),
-            Err(e) => warn!("notification sweep failed: {e:#}"),
+        // Synchronous database work, on the blocking pool like a report: a sweep
+        // reads every node, so it must not hold a scheduler thread.
+        let (sweep_app, now) = (app.clone(), Utc::now().timestamp());
+        let mut carried = std::mem::take(&mut watch);
+        let outcome = tokio::task::spawn_blocking(move || {
+            let result = sweep(&sweep_app, &mut carried, now);
+            (carried, result)
+        })
+        .await;
+        match outcome {
+            Ok((state, Ok(notes))) => {
+                watch = state;
+                notes.into_iter().for_each(|note| send(&app, note));
+            }
+            Ok((state, Err(e))) => {
+                watch = state;
+                warn!("notification sweep failed: {e:#}");
+            }
+            Err(e) => warn!("notification sweep failed: {e}"),
         }
     }
 }
@@ -846,7 +861,7 @@ mod tests {
         assert!(at(t + 30).is_empty());
 
         let new = node(&app, "new", true, 0);
-        assert_eq!(new, old, "the id is reused");
+        assert_ne!(new, old, "a deleted node's id is not handed out again");
         metered(new);
         assert_eq!(at(t + 60), ["traffic"]);
         connect(&app, new);

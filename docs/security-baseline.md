@@ -62,3 +62,28 @@
 
 未覆盖：全量安全/许可证审计、正式 TLS 部署、完整跨版本/高并发/崩溃恢复矩阵、跨架构 musl、
 容器和 systemd 权限验收、独立签名与远程 CI 实际执行。第一阶段发现的客户端关闭握手/EPIPE 行为不在本轮修复范围。
+
+## 存储引擎替换（DuckDB）后的安全基线更新
+
+上文记录的是 SQLite 阶段。存储引擎已完全替换为内嵌 DuckDB（`docs/duckdb-migration.md`），
+以下条目随之更新，其余结论不变：
+
+- `node.token_hash` 仍是 SHA-256 摘要，语义不变；离线迁移**原样复制**摘要，不二次哈希。
+  存储层断言从 `scripts/smoke.py`（跨进程读 live SQLite）移入 Rust 测试
+  `db::tests::tokens_are_hashed_and_rotation_retires_the_old_one`：DuckDB 只允许一个进程
+  读写同一文件，跨进程读取已不可能，也不再需要。
+- 文件保护对象改为 DuckDB 的实际文件名：数据库本体、`<db>.wal`、spill 目录 `<db>.tmp`、
+  锁文件 `<db>.lock`，全部 0600/0700。**不再假设** SQLite 的 `-wal`/`-shm`。
+- 新增单写者约束：`<db>.lock` 用 `File::try_lock` 排他持有，第二个 Hub 进程会被拒绝并说明原因；
+  `scripts/smoke.py` 用真实第二个进程验证这一点。
+- 运行时禁用扩展自动安装与自动加载（`autoinstall_known_extensions`、
+  `autoload_known_extensions`、`allow_community_extensions`、`allow_unsigned_extensions`
+  均为 false）。Parquet 静态编入二进制，不需要下载任何扩展。
+- 没有新增任何用户可控的 SQL 入口；`Db::exec`/`Db::scalar` 只在 `#[cfg(test)]` 下存在。
+- 备份格式改为「数据归档」（tar.gz + 每表一个 Parquet + manifest 摘要），不再是数据库文件拷贝；
+  恢复先完整校验并在临时文件中重建，全部通过后才在维护栅栏内切换，失败回滚到原文件。
+  上传大小上限、路径校验、`no-store` 与 0600 权限保持不变。
+- 旧版 SQLite 文件在 `--db` 上会被**拒绝启动**并给出迁移命令，不会被就地转换、覆盖或删除；
+  唯一读取 SQLite 的代码是显式的离线脚本 `scripts/migrate-sqlite.py`（标准库 `sqlite3`，
+  只读打开源库）。
+- `memory_limit` 只约束 DuckDB 自身缓冲，**不是进程 RSS 上限**。

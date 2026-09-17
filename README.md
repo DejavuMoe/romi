@@ -5,13 +5,13 @@
 - 实时查看 CPU、内存、磁盘、网络流量与在线状态。
 - 配置 TCP 延迟探测、流量统计和通知。
 - 管理后台与公开状态页分别开发，构建后嵌入服务端二进制。
-- 使用 SQLite 保存数据，无需额外数据库服务。
+- 使用内嵌 DuckDB 保存数据，无需额外数据库服务；同一数据库文件同时只允许一个 Hub 进程读写。
 - 节点默认私有，公开状态页需要显式开启；节点令牌仅在创建和换发时展示。
 
 ## 项目结构
 
 ```text
-server/   Rust 服务端、API、WebSocket 和 SQLite 存储
+server/   Rust 服务端、API、WebSocket 和 DuckDB 存储
 admin/    React 管理后台
 agent/    Linux 采集与探测 Agent
 web/      React 公开状态页
@@ -28,7 +28,8 @@ docs/     开发、发行和安全说明
 Rust **1.98.0** 及 rustfmt、Clippy 由 `rust-toolchain.toml` 定义，mise 自动读取。
 
 本地开发环境为 Omarchy Linux，已通过 mise 同步上述工具版本。
-还需要 Git、GNU Make、C 编译器和链接器；GitHub CI 使用 Ubuntu 24.04。
+还需要 Git、GNU Make，以及 **C/C++ 编译器**（`cc` 与 `c++`）：Hub 链接的 DuckDB 由
+官方 crate 从源码编译。Agent 不需要 C++ 工具链。GitHub CI 使用 Ubuntu 24.04。
 
 ```sh
 git clone git@github.com:DejavuMoe/romi.git
@@ -84,7 +85,9 @@ pnpm --filter @romi/web test
 | --- | --- |
 | `make setup` | 安装锁定的前端与 Rust 依赖 |
 | `make check` | 前端构建、lint、测试，Rust fmt、Clippy、测试及打包拒绝检查 |
-| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发和主题限制 |
+| `make smoke` | 编译并验证登录、节点创建、Agent 上报、令牌换发、主题限制和离线迁移 |
+| `make legacy` | 单独跑一遍 SQLite → DuckDB 离线迁移的端到端验证 |
+| `make bench` | 对 release 二进制跑存储基准（见 [docs/bench.md](docs/bench.md)） |
 | `make release` | 编译本机 release 二进制并记录构建输入 |
 | `make package` | 生成带清单与 SHA-256 校验文件的本地快照包 |
 
@@ -111,6 +114,18 @@ Agent 使用后台创建或换发时给出的本地运行命令；关闭凭证�
 在线安装入口暂未启用，发行快照也尚未签名。
 
 校验和运行步骤见 [本地发行说明](docs/local-release.md)。
+
+## 存储
+
+数据保存在 `--db` 指定的单个 DuckDB 文件里（默认 `monitor.db`）。启动时：
+
+- 若该文件不存在则新建；若是旧版 SQLite 文件或非 romi 的 DuckDB 文件，会**拒绝启动并给出迁移提示**，
+  不会就地转换、覆盖或删除它；
+- 同一文件同时只允许一个 Hub 进程读写（DuckDB 的限制），第二个进程会被 `<db>.lock` 拒绝；
+- 可用 `--db-memory`（默认 512MB，**不是进程 RSS 上限**）、`--db-threads`（默认最多 4）、
+  `--db-temp`（默认 `<db>.tmp`）调整引擎资源。
+
+从旧版 SQLite 迁移、备份格式、恢复流程与维护语义见 [docs/duckdb-migration.md](docs/duckdb-migration.md)。
 
 ## 安全与数据
 

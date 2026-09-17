@@ -1,8 +1,13 @@
 //! monitor-hub: collects from monitor agents and serves the panel.
 //!
 //! No configuration is required to start. Everything beyond the listen address
-//! and the database path is configured in the panel and stored in SQLite,
-//! leaving no config file to track and no secrets in plaintext TOML.
+//! and the database path is configured in the panel and stored in the embedded
+//! DuckDB database, leaving no config file to track and no secrets in plaintext
+//! TOML.
+//!
+//! `--import-legacy` is the one offline mode: it turns an export of a pre-DuckDB
+//! romi database into a new DuckDB file and exits without listening. See
+//! `docs/duckdb-migration.md`.
 
 mod agent_ws;
 mod api;
@@ -16,7 +21,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::http::{Extensions, HeaderMap, StatusCode, Version};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
@@ -140,11 +145,31 @@ struct Args {
     site: String,
     themes: PathBuf,
     allow_custom_themes: bool,
+    /// Offline mode: an export produced by `scripts/migrate-sqlite.py`.
+    import_legacy: Option<String>,
+    db_memory: Option<String>,
+    db_threads: Option<i64>,
+    db_temp: Option<String>,
 }
 
 /// Native installs bind loopback unless explicitly configured otherwise.
 fn default_listen() -> &'static str {
     "127.0.0.1:28080"
+}
+
+/// Bytes from a short human form such as `512MB` or `2GiB`. DuckDB validates the
+/// spelling again; this only rejects something that is obviously not a size, so a
+/// typo fails at startup rather than at the first spill.
+fn valid_size(value: &str) -> bool {
+    let trimmed = value.trim();
+    let digits = trimmed.trim_end_matches(|c: char| c.is_ascii_alphabetic());
+    !digits.is_empty()
+        && digits.parse::<f64>().is_ok_and(|n| n > 0.0)
+        && trimmed.len() > digits.len()
+        && matches!(
+            trimmed[digits.len()..].to_ascii_uppercase().as_str(),
+            "B" | "KB" | "KIB" | "MB" | "MIB" | "GB" | "GIB" | "TB" | "TIB"
+        )
 }
 
 fn parse_args() -> Result<Args> {
@@ -153,6 +178,10 @@ fn parse_args() -> Result<Args> {
     let mut site = String::new();
     let mut themes = None;
     let mut allow_custom_themes = false;
+    let mut import_legacy = None;
+    let mut db_memory = None;
+    let mut db_threads = None;
+    let mut db_temp = None;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         let mut value = || it.next().unwrap_or_default();
@@ -162,17 +191,33 @@ fn parse_args() -> Result<Args> {
             "--site" => site = value(),
             "--themes" => themes = Some(PathBuf::from(value())),
             "--allow-custom-themes" => allow_custom_themes = true,
+            "--import-legacy" => import_legacy = Some(value()),
+            "--db-memory" => db_memory = Some(value()),
+            "--db-threads" => {
+                let text = value();
+                let n: i64 = text.parse().with_context(|| format!("--db-threads {text}"))?;
+                anyhow::ensure!((1..=64).contains(&n), "--db-threads must be from 1 to 64");
+                db_threads = Some(n);
+            }
+            "--db-temp" => db_temp = Some(value()),
             "-h" | "--help" => {
                 println!(
                     "monitor-hub {}\n\n\
-                     Usage: monitor-hub [--listen 127.0.0.1:28080] [--db monitor.db] [--themes themes] [--site https://hub.example.com]\n\n\
+                     Usage: monitor-hub [--listen 127.0.0.1:28080] [--db monitor.db] [--themes themes] [--site https://hub.example.com]\n\
+                     \x20      monitor-hub --import-legacy export.jsonl --db new.duckdb\n\n\
                      --listen defaults to 127.0.0.1:28080.\n\
                      --allow-custom-themes trusts external theme JavaScript with the admin origin.\n\
                      --themes defaults to a themes/ directory beside the database.\n\
                      --site is only needed behind a reverse proxy, where the address the\n\
                      panel is reached on is not the one agents should use. Left out, the\n\
                      hub answers on whatever ip:port it is asked, and the panel builds\n\
-                     install commands from the address in the browser's bar.",
+                     install commands from the address in the browser's bar.\n\
+                     --db-memory caps DuckDB's own memory use (default 512MB); it is not a\n\
+                     ceiling on the process's resident set.\n\
+                     --db-threads caps DuckDB's worker threads (default: up to 4).\n\
+                     --db-temp is where DuckDB spills; defaults to <db>.tmp.\n\
+                     --import-legacy runs the offline migration and exits; see\n\
+                     docs/duckdb-migration.md.",
                     env!("CARGO_PKG_VERSION")
                 );
                 std::process::exit(0);
@@ -180,11 +225,27 @@ fn parse_args() -> Result<Args> {
             other => anyhow::bail!("unknown argument: {other}"),
         }
     }
+    if let Some(value) = &db_memory {
+        anyhow::ensure!(valid_size(value), "--db-memory {value} is not a size such as 512MB");
+    }
+    if let Some(value) = &db_temp {
+        anyhow::ensure!(!value.is_empty(), "--db-temp needs a directory");
+    }
     let listen: SocketAddr = listen.unwrap_or_else(|| default_listen().to_owned()).parse()?;
     let themes = themes.unwrap_or_else(|| {
         std::path::Path::new(&database).parent().unwrap_or_else(|| std::path::Path::new(".")).join("themes")
     });
-    Ok(Args { listen, database, site: site.trim_end_matches('/').to_owned(), themes, allow_custom_themes })
+    Ok(Args {
+        listen,
+        database,
+        site: site.trim_end_matches('/').to_owned(),
+        themes,
+        allow_custom_themes,
+        import_legacy,
+        db_memory,
+        db_threads,
+        db_temp,
+    })
 }
 
 #[tokio::main]
@@ -197,9 +258,31 @@ async fn main() -> Result<()> {
         .init();
 
     let args = parse_args()?;
+    if let Some(export) = &args.import_legacy {
+        // Offline: no listener, no themes directory, no housekeeping. Reads only
+        // the JSONL export the Python exporter wrote; the legacy SQLite file
+        // itself is never opened by this binary.
+        let report = Db::import_legacy(export, &args.database)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        println!(
+            "\n  迁移完成：{} 已就绪，可以停止旧 Hub 后用 --db {} 启动本服务。\n               所有旧登录会话都已失效，请重新登录。原 SQLite 文件没有被修改。",
+            args.database, args.database
+        );
+        return Ok(());
+    }
     std::fs::create_dir_all(&args.themes)?;
     let (notes, inbox) = tokio::sync::mpsc::channel(notify::QUEUE);
-    let mut app = App::new(Db::open(&args.database)?, args.site.clone(), args.themes, notes);
+    let mut options = db::Options::default();
+    if let Some(memory) = args.db_memory.clone() {
+        options.memory_limit = memory;
+    }
+    if let Some(threads) = args.db_threads {
+        options.threads = threads;
+    }
+    if let Some(temp) = args.db_temp.clone() {
+        options.temp_directory = temp;
+    }
+    let mut app = App::new(Db::open_with(&args.database, options)?, args.site.clone(), args.themes, notes);
     app.allow_custom_themes = args.allow_custom_themes;
     if app.allow_custom_themes {
         warn!("custom themes enabled: their JavaScript shares the admin origin; use only reviewed code");
@@ -318,13 +401,20 @@ async fn main() -> Result<()> {
                     }),
             ),
         )
-        .with_state(app);
+        .with_state(app.clone());
 
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     info!("listening on {} ({url})", listener.local_addr()?);
     axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown())
         .await?;
+    // Everything already accepted is committed before the process leaves, so a
+    // restart does not silently drop the last reports. A failure here is
+    // reported rather than swallowed: an operator shutting the hub down is
+    // entitled to know that a write did not land.
+    if let Err(e) = app.db.close() {
+        warn!("closing the database cleanly failed: {e:#}");
+    }
     Ok(())
 }
 

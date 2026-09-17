@@ -1,0 +1,301 @@
+//! The native DuckDB schema and its migration mechanism.
+//!
+//! Three different versions have to be kept apart:
+//!
+//! * **The application schema version** ([`SCHEMA_VERSION`]) is stored in the
+//!   `romi_schema` row inside the database and advanced by [`migrate`].
+//! * **The DuckDB engine version** is whatever `library_version()` reports. A
+//!   build refuses to run against a different major/minor engine than the one it
+//!   was compiled and tested with, because query semantics are not frozen across
+//!   engine releases.
+//! * **The DuckDB storage format version** belongs to the engine and is checked
+//!   by DuckDB itself when the file is opened; a file written by a newer storage
+//!   format is rejected by the engine before any of our code runs.
+//!
+//! The SQLite schema version 5 this repository previously used has no meaning
+//! here. It is read only by the offline migration tool (`db::legacy`).
+
+use anyhow::{Context, Result};
+use duckdb::Connection;
+
+/// Revision of the *DuckDB* schema. This is not the SQLite `user_version`: the
+/// legacy number 5 describes a schema that no longer exists in this binary.
+///
+/// Increment it and add a `migrate_to_N` step when a database already in service
+/// has to change shape.
+pub const SCHEMA_VERSION: i64 = 1;
+
+/// Every application table. A backup must carry all of them, and a restore
+/// rebuilds exactly these.
+pub const TABLES: [&str; 8] =
+    ["setting", "node", "traffic", "metric", "ping_task", "ping_node", "ping_record", "session"];
+
+/// The engine release this build was compiled and tested against.
+///
+/// Read from `library_version()` rather than assumed from the crate version:
+/// crate `1.10505.0` vendors engine `v1.5.5`, and the two numbering schemes are
+/// deliberately independent.
+pub const ENGINE_VERSION: &str = "v1.5.5";
+
+/// Tables that carry an allocated (rather than imported) identity.
+pub const ID_SOURCES: [&str; 2] = ["node", "ping_task"];
+
+/// DDL, applied in one transaction to a database that has no `romi_schema` row.
+///
+/// Written for DuckDB rather than translated from SQLite:
+///
+/// * `BIGINT` for every column the application reads as `i64` -- identifiers,
+///   byte counters, unix timestamps. `INTEGER` is 32-bit in DuckDB and would
+///   silently truncate a lifetime counter or a post-2038 timestamp.
+/// * `DOUBLE` for the one column that carries `f64` precision (`node.price`, and
+///   the averaged `metric.cpu`).
+/// * `BOOLEAN` for `node.public` and `node.notify`; SQLite stored 0/1 and the API
+///   converted on the way out.
+/// * No `WITHOUT ROWID`: DuckDB has no such clause, and a `PRIMARY KEY` becomes an
+///   ART index, which is what makes `metric` and `ping_record` reject duplicates.
+/// * No `ON DELETE CASCADE`: DuckDB's parser rejects it outright, and its
+///   foreign-key check does not observe child deletes made earlier in the same
+///   transaction. Relationships are therefore enforced by the application inside
+///   one transaction -- see `Db::delete_node`, `Db::delete_ping_task` and
+///   `Db::save_ping_task`, and `deleting_a_node_takes_its_data_with_it`.
+/// * No foreign keys at all. A declaration that cannot cascade turns every
+///   delete into a two-transaction dance, and DuckDB's own error message points
+///   at its foreign key limitations; the application-level checks below are
+///   tested to leave no orphan behind.
+const DDL: &str = r#"
+CREATE TABLE IF NOT EXISTS setting (
+  key   VARCHAR PRIMARY KEY,
+  value VARCHAR NOT NULL
+);
+
+-- Identity allocation. A table rather than a CREATE SEQUENCE because DuckDB has
+-- no `setval`: a sequence cannot be advanced past the highest id an import or a
+-- restore brought in, and `nextval` would then hand out ids that already exist.
+-- `UPDATE ... RETURNING` is atomic, and it runs inside the writer's transaction,
+-- so two allocations can never collide. `next` is the next id to hand out.
+CREATE TABLE IF NOT EXISTS romi_id (
+  name VARCHAR PRIMARY KEY,
+  next BIGINT  NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS node (
+  id            BIGINT PRIMARY KEY,
+  name          VARCHAR NOT NULL,
+  -- Only a SHA-256 digest of a high-entropy agent credential.
+  token_hash    VARCHAR NOT NULL UNIQUE,
+  sort          BIGINT  NOT NULL DEFAULT 0,
+  public        BOOLEAN NOT NULL DEFAULT false,
+  price         DOUBLE  NOT NULL DEFAULT 0,
+  currency      VARCHAR NOT NULL DEFAULT 'USD',
+  billing_cycle VARCHAR NOT NULL DEFAULT 'monthly',
+  -- Nullable: absent is "no expiry date", which is not the same as an empty
+  -- string, and the panel clears it with an explicit null.
+  expires_at    VARCHAR,
+  remark        VARCHAR NOT NULL DEFAULT '',
+  traffic_limit BIGINT  NOT NULL DEFAULT 0,
+  traffic_mode  VARCHAR NOT NULL DEFAULT 'sum',
+  traffic_reset_day BIGINT NOT NULL DEFAULT 1,
+  hostname VARCHAR NOT NULL DEFAULT '', os VARCHAR NOT NULL DEFAULT '',
+  kernel   VARCHAR NOT NULL DEFAULT '', arch VARCHAR NOT NULL DEFAULT '',
+  virt     VARCHAR NOT NULL DEFAULT '', cpu_name VARCHAR NOT NULL DEFAULT '',
+  cpu_cores BIGINT NOT NULL DEFAULT 0, mem_total BIGINT NOT NULL DEFAULT 0,
+  swap_total BIGINT NOT NULL DEFAULT 0, disk_total BIGINT NOT NULL DEFAULT 0,
+  agent_version VARCHAR NOT NULL DEFAULT '', ip VARCHAR NOT NULL DEFAULT '',
+  ipv4 VARCHAR NOT NULL DEFAULT '', ipv6 VARCHAR NOT NULL DEFAULT '',
+  -- ISO 3166-1 alpha-2, looked up from `ip` once per address; empty until the
+  -- lookup answers.
+  country VARCHAR NOT NULL DEFAULT '',
+  last_seen BIGINT NOT NULL DEFAULT 0,
+  notify BOOLEAN NOT NULL DEFAULT false,
+  down_since BIGINT NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL
+);
+
+-- Monotonic byte counters that survive both agent reboots and hub restarts.
+CREATE TABLE IF NOT EXISTS traffic (
+  node_id  BIGINT PRIMARY KEY,
+  boot_id  VARCHAR NOT NULL DEFAULT '',
+  last_rx  BIGINT NOT NULL DEFAULT 0,
+  last_tx  BIGINT NOT NULL DEFAULT 0,
+  total_rx BIGINT NOT NULL DEFAULT 0,
+  total_tx BIGINT NOT NULL DEFAULT 0,
+  month_rx BIGINT NOT NULL DEFAULT 0,
+  month_tx BIGINT NOT NULL DEFAULT 0,
+  month_start VARCHAR NOT NULL DEFAULT '',
+  day_rx   BIGINT NOT NULL DEFAULT 0,
+  day_tx   BIGINT NOT NULL DEFAULT 0,
+  day_start VARCHAR NOT NULL DEFAULT ''
+);
+
+-- One row per node per minute. The primary key is the deduplication rule the
+-- ingest path relies on: a report landing on a minute already written replaces
+-- that minute instead of adding a second row.
+CREATE TABLE IF NOT EXISTS metric (
+  node_id BIGINT NOT NULL,
+  ts      BIGINT NOT NULL,
+  cpu     DOUBLE NOT NULL,
+  mem_used BIGINT NOT NULL, swap_used BIGINT NOT NULL, disk_used BIGINT NOT NULL,
+  net_rx BIGINT NOT NULL, net_tx BIGINT NOT NULL,
+  tcp BIGINT NOT NULL, udp BIGINT NOT NULL, procs BIGINT NOT NULL,
+  PRIMARY KEY (node_id, ts)
+);
+
+CREATE TABLE IF NOT EXISTS ping_task (
+  id       BIGINT PRIMARY KEY,
+  name     VARCHAR NOT NULL,
+  target   VARCHAR NOT NULL,
+  interval BIGINT NOT NULL DEFAULT 60
+);
+
+CREATE TABLE IF NOT EXISTS ping_node (
+  task_id BIGINT NOT NULL,
+  node_id BIGINT NOT NULL,
+  PRIMARY KEY (task_id, node_id)
+);
+
+-- Key order follows the only query there is: one node, one time window, every
+-- probe. Launching the key at `node_id` lets the chart seek to the node and then
+-- read its window in time order, which is what allows the fold in
+-- `Db::ping_records` to hold one bucket at a time.
+CREATE TABLE IF NOT EXISTS ping_record (
+  node_id BIGINT NOT NULL, task_id BIGINT NOT NULL,
+  ts BIGINT NOT NULL, latency BIGINT NOT NULL,
+  PRIMARY KEY (node_id, ts, task_id)
+);
+
+CREATE TABLE IF NOT EXISTS session (
+  token_hash VARCHAR PRIMARY KEY,
+  expires_at BIGINT NOT NULL
+);
+
+-- Application schema metadata, one row. Separate from the DuckDB engine version
+-- and from the engine's storage format version, both of which the engine owns.
+CREATE TABLE IF NOT EXISTS romi_schema (
+  id         BIGINT PRIMARY KEY,
+  version    BIGINT NOT NULL,
+  engine     VARCHAR NOT NULL,
+  written_by VARCHAR NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+"#;
+
+/// True when `table` exists in the main schema of the attached database.
+pub fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='main' AND table_name=?1",
+        [table],
+        |r| r.get(0),
+    )?;
+    Ok(n > 0)
+}
+
+/// How many tables the main schema holds. Zero means a file the engine has just
+/// created, which is the only case that may be initialized from scratch: a file
+/// with *other* tables and no `romi_schema` row is somebody else's database.
+pub fn user_tables(conn: &Connection) -> Result<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM information_schema.tables
+         WHERE table_schema='main' AND table_catalog=current_database()",
+        [],
+        |r| r.get(0),
+    )?)
+}
+
+/// The stored application schema version, or `None` when this file has no
+/// `romi_schema` row (a fresh file, or not a romi database at all).
+pub fn stored_version(conn: &Connection) -> Result<Option<i64>> {
+    if !table_exists(conn, "romi_schema")? {
+        return Ok(None);
+    }
+    let n: i64 = conn.query_row("SELECT COUNT(*) FROM romi_schema", [], |r| r.get(0))?;
+    if n == 0 {
+        return Ok(None);
+    }
+    Ok(Some(conn.query_row("SELECT version FROM romi_schema WHERE id=1", [], |r| r.get(0))?))
+}
+
+/// The engine release serving this connection, from the engine itself.
+pub fn engine_version(conn: &Connection) -> Result<String> {
+    Ok(conn.query_row("SELECT library_version FROM pragma_version()", [], |r| r.get(0))?)
+}
+
+/// Brings an empty database to [`SCHEMA_VERSION`], or advances one already in
+/// service. Runs in a single transaction: a failure leaves the file exactly as it
+/// was, which is what lets a restore build a candidate and discard it.
+///
+/// `fresh` is true only when the database holds no tables at all, which is how a
+/// brand-new file receives the current schema directly rather than the history of
+/// how it was reached.
+pub fn initialize(conn: &mut Connection, fresh: bool, written_by: &str) -> Result<()> {
+    let from = stored_version(conn)?;
+    if let Some(v) = from {
+        anyhow::ensure!(
+            v <= SCHEMA_VERSION,
+            "数据库 schema 版本为 {v}，高于本服务支持的 {SCHEMA_VERSION}；请先升级 romi"
+        );
+    } else if !fresh {
+        // Tables but no version row: a DuckDB file this application did not
+        // write. Refused rather than adopted, because every statement that
+        // follows assumes column names and types it cannot verify here -- and
+        // adopting it would mean writing our schema into somebody else's file.
+        anyhow::bail!(
+            "这不是 romi 的 DuckDB 数据库：文件里已经有 {} 张表，却没有 romi_schema 版本记录；             请换一个空的 --db 路径",
+            user_tables(conn)?
+        );
+    }
+    let tx = conn.transaction()?;
+    tx.execute_batch(DDL).context("creating the romi DuckDB schema")?;
+    for name in ID_SOURCES {
+        // 1 is the first id this build hands out; an import or a restore moves it.
+        tx.execute("INSERT INTO romi_id (name, next) VALUES (?1, 1) ON CONFLICT (name) DO NOTHING", [name])?;
+    }
+    let from = from.unwrap_or(SCHEMA_VERSION);
+    if from < SCHEMA_VERSION {
+        migrate(&tx, from)?;
+    }
+    stamp(&tx, written_by)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Writes the current version and the engine that wrote it.
+fn stamp(conn: &Connection, written_by: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO romi_schema (id, version, engine, written_by, updated_at) VALUES (1, ?1, ?2, ?3, ?4)
+         ON CONFLICT (id) DO UPDATE SET version=excluded.version, engine=excluded.engine,
+             written_by=excluded.written_by, updated_at=excluded.updated_at",
+        duckdb::params![SCHEMA_VERSION, ENGINE_VERSION, written_by, chrono::Utc::now().timestamp()],
+    )?;
+    Ok(())
+}
+
+/// Applies every step between `from` and [`SCHEMA_VERSION`].
+///
+/// Steps run in ascending order on a version that predates them, and each one is
+/// written to be harmless if the shape it expects is already there -- a database
+/// an operator restored from a backup taken mid-upgrade must not be left
+/// unusable. Nothing here mechanically copies the SQLite migrations: those
+/// described a schema that no longer exists.
+fn migrate(conn: &Connection, from: i64) -> Result<()> {
+    anyhow::ensure!(from <= SCHEMA_VERSION, "database schema is newer than this server");
+    // No steps yet: version 1 is the schema this migration mechanism was
+    // introduced with. The first real step lands here as `if from < 2 { ... }`.
+    let _ = (conn, from);
+    Ok(())
+}
+
+/// Moves an identity source past every id an import or a restore brought in.
+///
+/// Called with the highest id present in `table`; the next allocation is that
+/// plus one. `MAX` over an empty table is NULL, which leaves the counter at 1.
+pub fn resync_ids(conn: &Connection) -> Result<()> {
+    for name in ID_SOURCES {
+        conn.execute(
+            &format!(
+                "UPDATE romi_id SET next = COALESCE((SELECT MAX(id) FROM {name}), 0) + 1 WHERE name = ?1"
+            ),
+            [name],
+        )?;
+    }
+    Ok(())
+}

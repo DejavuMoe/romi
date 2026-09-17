@@ -15,7 +15,12 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time",
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum = { version = "0.8", features = ["ws", "macros"] }
-rusqlite = { version = "0.37", features = ["bundled", "backup"] }
+# Embedded analytical storage engine. `bundled` compiles the pinned DuckDB
+# amalgamation from source, so the release binary links no system libduckdb;
+# `parquet` is the backup format. The crate version is not the engine version:
+# `duckdb 1.10505.0` vendors DuckDB 1.5.5. `db::engine_version` asserts that at
+# runtime instead of trusting this comment.
+duckdb = { version = "=1.10505.0", default-features = false, features = ["bundled", "parquet"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 argon2 = "0.5"
 rand = "0.9"

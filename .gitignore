@@ -8,6 +8,12 @@
 *.db-shm
 *.db-wal
 *.log
+# DuckDB's own file names: a database, its write-ahead log, its spill directory,
+# the single-writer lock, and the scratch names a backup or a rebuild uses.
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp/
+*.duckdb.lock
 .env
 .env.*
 !.env.example

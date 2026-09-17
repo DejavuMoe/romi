@@ -18,7 +18,10 @@ jobs:
   test:
     name: Test and verify package
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The Hub links DuckDB, which the official crate compiles from source: this
+    # is a C++ build, in debug and again in release. Measured locally at roughly
+    # two minutes per profile on twelve cores; the limit leaves room for four.
+    timeout-minutes: 60
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,6 +33,13 @@ jobs:
         with:
           version: 2026.9.7
           install_args: node pnpm python rust
+
+      - name: Ensure a C/C++ toolchain for DuckDB
+        # The image ships one; this states the requirement rather than assuming
+        # it, so a runner without it fails here instead of inside the crate build.
+        run: |
+          cc --version
+          c++ --version
 
       - name: Install locked dependencies
         run: make setup
@@ -45,3 +55,5 @@ jobs:
           trap 'rm -rf "$romi_unpack"' EXIT
           tar -xzf dist/romi-*.tar.gz -C "$romi_unpack"
           python3 scripts/smoke.py --bin-dir "$romi_unpack/bin"
+          # The offline SQLite -> DuckDB migration, against the packaged binary.
+          python3 scripts/test-legacy-migration.py --bin-dir "$romi_unpack/bin"

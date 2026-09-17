@@ -18,3 +18,22 @@ Rust/JavaScript dependencies and bundled fonts, icons and images retain their ow
 This file records the source imports, not a complete dependency license audit or SBOM.
 Before public distribution, inventory the actual bundled dependencies/assets and include
 all required third-party notices in binary, container and frontend distributions.
+
+## Storage engine
+
+The Hub embeds [DuckDB](https://duckdb.org/) through the official Rust client
+[`duckdb`](https://crates.io/crates/duckdb) with the `bundled` feature, which compiles the
+DuckDB source the crate vendors into the binary. Both are MIT licensed:
+
+| Component | Version | License |
+| --- | --- | --- |
+| `duckdb` (Rust crate) | `1.10505.0` | MIT |
+| `libduckdb-sys` (build/bindings) | `1.10505.0` | MIT |
+| DuckDB engine (compiled in) | `v1.5.5` | MIT |
+
+Arrow crates arrive transitively through `libduckdb-sys`'s bundled build; they are
+Apache-2.0. `server/Cargo.lock` records the exact revisions, and
+`docs/duckdb-migration.md` records why this engine was chosen and what it replaces.
+SQLite is no longer linked into the Hub: `rusqlite` and `libsqlite3-sys` are absent from
+`server/Cargo.lock`. A legacy SQLite file is read only by `scripts/migrate-sqlite.py`,
+which uses the Python standard library's `sqlite3` module on an operator's machine.
