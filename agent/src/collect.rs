@@ -789,13 +789,22 @@ mod crosscheck {
             assert!(drift < TOLERANCE, "{what}: ours={ours} theirs={theirs} drift={drift}");
         };
 
-        // free(1) row "Mem:": its used column is total - available, which is
-        // what MemAvailable reports.
+        // free(1) row "Mem:": total, used, free, shared, buff/cache, available.
+        // procps-ng before 4.0 reports "used" as total - free - buff/cache,
+        // while this agent intentionally reports total - MemAvailable. Compare
+        // against free's own available column when present so both procps
+        // generations check the same semantic.
         let free = tool("free", &["-b"]);
-        let mut row = free.lines().nth(1).expect("free prints a Mem: row").split_whitespace().skip(1);
-        let parse = |v: Option<&str>| v.expect("free column").parse::<u64>().expect("a byte count");
-        assert_eq!(m.mem_total, parse(row.next()), "MemTotal is not free's total");
-        close(m.mem_used, parse(row.next()), "memory");
+        let fields: Vec<&str> =
+            free.lines().nth(1).expect("free prints a Mem: row").split_whitespace().skip(1).collect();
+        let parse = |value: &str| value.parse::<u64>().expect("a byte count");
+        let total = parse(fields.first().copied().expect("free total column"));
+        assert_eq!(m.mem_total, total, "MemTotal is not free's total");
+        let expected_used = match fields.get(5) {
+            Some(available) => total.saturating_sub(parse(available)),
+            None => parse(fields.get(1).copied().expect("free used column")),
+        };
+        close(m.mem_used, expected_used, "memory");
 
         // free(1) row "Swap:": total, used, free. The tolerance is far tighter
         // than for memory because the miscount it catches -- subtracting
@@ -803,8 +812,12 @@ mod crosscheck {
         // admit. Swap moves slowly enough for a megabyte to suffice.
         const SWAP_TOLERANCE: u64 = 1024 * 1024;
         let mut row = free.lines().nth(2).expect("free prints a Swap: row").split_whitespace().skip(1);
-        assert_eq!(m.swap_total, parse(row.next()), "SwapTotal is not free's swap total");
-        let theirs = parse(row.next());
+        assert_eq!(
+            m.swap_total,
+            parse(row.next().expect("free swap total column")),
+            "SwapTotal is not free's swap total"
+        );
+        let theirs = parse(row.next().expect("free swap used column"));
         let drift = m.swap_used.abs_diff(theirs);
         assert!(drift < SWAP_TOLERANCE, "swap: ours={} theirs={theirs} drift={drift}", m.swap_used);
 
