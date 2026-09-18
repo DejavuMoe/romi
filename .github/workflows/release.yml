@@ -18,7 +18,10 @@ concurrency:
 jobs:
   build:
     name: Build and verify artifacts
-    runs-on: ubuntu-24.04
+    # Public release binaries are built on the oldest currently supportable
+    # GitHub image, Ubuntu 22.04, because that is the measured GNU baseline
+    # (glibc 2.34 for both components). Development CI remains on 24.04.
+    runs-on: ubuntu-22.04
     # make check plus an optimized DuckDB build and two smoke passes. The
     # existing CI job performs the same heavy phases well under this limit; the
     # margin leaves room for the expensive bundled DuckDB C++ compile.
@@ -112,13 +115,15 @@ jobs:
             exit 1
           fi
           # The supported runtime baseline is measured from the actual release
-          # binaries. Ubuntu 24.04 links Hub at GLIBC_2.38 and Agent at
-          # GLIBC_2.34; refuse a silent raise through a runner/toolchain change.
+          # binaries. The pinned Ubuntu 22.04 build environment links both Hub
+          # and Agent at GLIBC_2.34; refuse a silent raise through a runner or
+          # toolchain change, and never claim compatibility below the measured
+          # symbol requirement.
           command -v readelf >/dev/null || { echo 'readelf is required' >&2; exit 1; }
           max_glibc() {
             readelf --version-info "$1" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -n 1
           }
-          for expected_bin in 'romi-hub:GLIBC_2.38' 'romi-agent:GLIBC_2.34'; do
+          for expected_bin in 'romi-hub:GLIBC_2.34' 'romi-agent:GLIBC_2.34'; do
             binary=${expected_bin%%:*}
             expected=${expected_bin##*:}
             actual=$(max_glibc "$unpack/bin/$binary")
@@ -198,13 +203,6 @@ jobs:
           python3 scripts/version.py check --tag "$RELEASE_TAG"
           python3 scripts/release.py verify dist/release --tag "$RELEASE_TAG" --commit "$GITHUB_SHA" --run-binaries
 
-      - name: Create signed build-provenance attestations
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          # Each uploaded release asset, including the manifest and SHA256SUMS,
-          # is a subject of the attestation.
-          subject-path: dist/release/*
-
       - name: Create draft release and upload assets
         run: |
           set -euo pipefail
@@ -216,6 +214,13 @@ jobs:
             --title "romi $RELEASE_TAG" \
             --generate-notes
           gh release upload "$RELEASE_TAG" dist/release/* --repo "$GH_REPO" --clobber
+
+      - name: Create signed build-provenance attestations
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          # Each uploaded release asset, including the manifest and SHA256SUMS,
+          # is a subject of the attestation.
+          subject-path: dist/release/*
 
       - name: Publish the complete draft
         run: |

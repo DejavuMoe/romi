@@ -30,7 +30,7 @@ Rust **1.98.0** 及 rustfmt、Clippy 由 `rust-toolchain.toml` 定义，mise 自
 
 本地开发环境为 Omarchy Linux，已通过 mise 同步上述工具版本。
 还需要 Git、GNU Make，以及 **C/C++ 编译器**（`cc` 与 `c++`）：Hub 链接的 DuckDB 由
-官方 crate 从源码编译。Agent 不需要 C++ 工具链。GitHub CI 使用 Ubuntu 24.04。
+官方 crate 从源码编译。Agent 不需要 C++ 工具链。GitHub CI 使用 Ubuntu 24.04；公开发行构建固定在 Ubuntu 22.04（见发行文档）。
 
 ```sh
 git clone git@github.com:DejavuMoe/romi.git
@@ -106,9 +106,10 @@ GitHub Actions 与本地使用同一份 mise 配置。CI 在推送 `master`、�
 本阶段源码版本为 **0.1.0**（根目录 `VERSION`）。romi 尚未创建 `v0.1.0` 标签，也尚未发布任何
 GitHub Release。
 
-原生部署只支持 Linux x86_64 GNU + systemd：Ubuntu 24.04 构建的发行二进制实测 Hub 需要
-glibc 2.38+、Agent 需要 glibc 2.34+。Hub 安装器从已验证的 release 归档安装
-`/opt/romi/current`，同时把同版本 Agent 放入本地分发；Hub 只在配置了合法
+原生部署只支持 Linux x86_64 GNU + systemd。公开发行构建固定在 Ubuntu 22.04（glibc 2.35），
+实测 Hub 与 Agent 均最高需要 `GLIBC_2.34`；因此目标主机必须提供 glibc 2.34+ 与 systemd，
+Ubuntu 22.04 及更新版本满足该基线，更老的发行版不在支持范围。Hub 安装器从已验证的 release
+归档安装 `/opt/romi/current`，同时把同版本 Agent 放入本地分发；Hub 只在配置了合法
 `--distribution-dir` 时启用 `GET /install.sh`、`GET /api/agent/distribution` 与
 `GET /agent/vX.Y.Z/x86_64`。普通开发启动没有分发，这些路由返回 503。安装、systemd 加固、
 首次管理员凭证、Nginx 反代与升级/备份说明见 [原生部署](docs/deployment.md)。

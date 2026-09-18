@@ -886,6 +886,23 @@ mod tests {
     }
 
     #[test]
+    fn a_restart_without_a_bootstrap_file_does_not_recreate_it() {
+        let directory = std::env::temp_dir().join(format!(
+            "romi-bootstrap-missing-{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("bootstrap-password");
+        let mut app = app("http://x");
+        app.db.set("admin_password_hash", "existing-hash").unwrap();
+        app.bootstrap_password_file = Some(path.clone());
+        first_run(&app, "http://x").unwrap();
+        assert!(!path.exists(), "a non-fresh Hub must not create another bootstrap credential");
+        assert_eq!(app.db.get("admin_password_hash").as_deref(), Some("existing-hash"));
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
     fn a_github_proxy_prefixes_the_theme_url() {
         let app = app("");
         let url = "https://github.com/example/theme/releases/download/v1/theme.tar.gz";

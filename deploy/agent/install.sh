@@ -349,7 +349,13 @@ if [ -z "$ROOT_PREFIX" ] && command -v systemd-analyze >/dev/null 2>&1; then
     systemd-analyze verify "$verify_unit" || die "generated Agent service unit failed systemd-analyze verify"
 fi
 install -d -m 0755 "$ROOT_PREFIX/etc/systemd/system"
-install -m 0644 "$unit_tmp" "$UNIT_PATH"
+unit_stage="$UNIT_PATH.$$"
+[ ! -e "$unit_stage" ] || die "temporary unit path already exists: $unit_stage"
+install -m 0644 "$unit_tmp" "$unit_stage"
+if [ -z "$ROOT_PREFIX" ]; then
+    chown "root:root" "$unit_stage"
+fi
+mv -f "$unit_stage" "$UNIT_PATH"
 
 # Stop the old process before the atomic switch; a failed new start leaves the
 # previous version directory available for an explicit operator decision.

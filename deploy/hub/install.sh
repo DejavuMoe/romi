@@ -122,7 +122,11 @@ done
 case "$PORT" in
     ''|*[!0-9]*) die "--port must be a number from 1 to 65535" ;;
 esac
-[ "$PORT" -ge 1 ] 2>/dev/null && [ "$PORT" -le 65535 ] || die "--port must be 1-65535"
+if [ "$PORT" -ge 1 ] 2>/dev/null && [ "$PORT" -le 65535 ]; then
+    :
+else
+    die "--port must be 1-65535"
+fi
 case "$ROOT_PREFIX" in
     *'&'*|*'|'*|*[[:space:]]*) die "--root-prefix may not contain whitespace, & or |" ;;
 esac
@@ -205,11 +209,11 @@ fi
 # directories retain anything already present.
 install -d -m 0755 "$OPT_ROOT" "$OPT_RELEASES"
 install -d -m 0750 "$STATE_DIR" "$STATE_DIR/themes" "$STATE_DIR/tmp"
-install -d -m 0750 "$DIST_ROOT" "$DIST_DIR"
+install -d -m 0750 "$DIST_ROOT"
 install -d -m 0750 "$ETC_DIR"
 if [ "$REAL_SYSTEM" = 1 ]; then
     chown "$HUB_USER:$HUB_GROUP" "$STATE_DIR" "$STATE_DIR/themes" "$STATE_DIR/tmp"
-    chown "root:$HUB_GROUP" "$DIST_ROOT" "$DIST_DIR" "$ETC_DIR"
+    chown "root:$HUB_GROUP" "$DIST_ROOT" "$ETC_DIR"
 fi
 
 if [ -e "$OPT_VERSION" ]; then
@@ -218,8 +222,11 @@ if [ -e "$OPT_VERSION" ]; then
     source_hub=$(sha256sum "$BIN_HUB" | cut -d' ' -f1)
     installed_agent=$(sha256sum "$OPT_VERSION/romi-agent" | cut -d' ' -f1)
     source_agent=$(sha256sum "$BIN_AGENT" | cut -d' ' -f1)
-    [ "$installed_hub" = "$source_hub" ] && [ "$installed_agent" = "$source_agent" ] \
-        || die "$OPT_VERSION contains different binaries; refusing to replace an immutable release"
+    if [ "$installed_hub" = "$source_hub" ] && [ "$installed_agent" = "$source_agent" ]; then
+        :
+    else
+        die "$OPT_VERSION contains different binaries; refusing to replace an immutable release"
+    fi
 else
     stage="$OPT_RELEASES/.${version}.tmp.$$"
     [ ! -e "$stage" ] || die "temporary release path already exists: $stage"
@@ -232,21 +239,40 @@ else
 fi
 
 # Copy the exact same-release Agent into the Hub's local distribution. The Hub
-# reads this root-controlled copy at startup and never contacts GitHub.
+# reads this root-controlled copy at startup and never contacts GitHub. Stage
+# every mutable copy under a temporary name first so an interrupted reinstall
+# cannot leave a half-written binary or metadata file in place.
 agent_size=$(wc -c < "$BIN_AGENT" | tr -d ' ')
 agent_sha=$(sha256sum "$BIN_AGENT" | cut -d' ' -f1)
-install -m 0640 "$BIN_AGENT" "$DIST_DIR/romi-agent"
 dist_tmp="$WORK/distribution.json"
 printf '{"format":1,"project":"romi","kind":"agent-distribution","version":"%s","target":"x86_64-unknown-linux-gnu","architecture":"x86_64","filename":"romi-agent","sha256":"%s","size":%s}\n' \
     "$version" "$agent_sha" "$agent_size" > "$dist_tmp"
-install -m 0640 "$dist_tmp" "$DIST_DIR/distribution.json"
+dist_stage="$DIST_ROOT/.${version}.tmp.$$"
+[ ! -e "$dist_stage" ] || die "temporary distribution path already exists: $dist_stage"
+install -d -m 0750 "$dist_stage"
+install -m 0640 "$BIN_AGENT" "$dist_stage/romi-agent"
+install -m 0640 "$dist_tmp" "$dist_stage/distribution.json"
+if [ "$REAL_SYSTEM" = 1 ]; then
+    chown "root:$HUB_GROUP" "$dist_stage" "$dist_stage/romi-agent" "$dist_stage/distribution.json"
+fi
+if [ -e "$DIST_DIR" ]; then
+    [ -d "$DIST_DIR" ] || die "$DIST_DIR exists but is not a directory"
+    mv -f "$dist_stage/romi-agent" "$DIST_DIR/romi-agent"
+    mv -f "$dist_stage/distribution.json" "$DIST_DIR/distribution.json"
+    rmdir "$dist_stage"
+else
+    mv "$dist_stage" "$DIST_DIR" || { rm -rf "$dist_stage"; die "cannot install $DIST_DIR"; }
+fi
 
 env_tmp="$WORK/hub.env"
+env_stage="$ETC_DIR/.hub.env.$$"
+[ ! -e "$env_stage" ] || die "temporary environment path already exists: $env_stage"
 printf 'ROMI_SITE=%s\n' "$SITE" > "$env_tmp"
-install -m 0640 "$env_tmp" "$HUB_ENV"
+install -m 0640 "$env_tmp" "$env_stage"
 if [ "$REAL_SYSTEM" = 1 ]; then
-    chown "root:$HUB_GROUP" "$DIST_DIR/romi-agent" "$DIST_DIR/distribution.json" "$HUB_ENV"
+    chown "root:$HUB_GROUP" "$env_stage"
 fi
+mv -f "$env_stage" "$HUB_ENV"
 
 unit_tmp="$WORK/romi-hub.service"
 write_unit "$unit_tmp"
@@ -259,7 +285,13 @@ if [ "$REAL_SYSTEM" = 1 ] && command -v systemd-analyze >/dev/null 2>&1; then
     systemd-analyze verify "$verify_unit" || die "generated service unit failed systemd-analyze verify"
 fi
 install -d -m 0755 "$ROOT_PREFIX/etc/systemd/system"
-install -m 0644 "$unit_tmp" "$UNIT_PATH"
+unit_stage="$UNIT_PATH.$$"
+[ ! -e "$unit_stage" ] || die "temporary unit path already exists: $unit_stage"
+install -m 0644 "$unit_tmp" "$unit_stage"
+if [ "$REAL_SYSTEM" = 1 ]; then
+    chown "root:root" "$unit_stage"
+fi
+mv -f "$unit_stage" "$UNIT_PATH"
 
 if [ "$REAL_SYSTEM" = 1 ]; then
     if systemctl is-active --quiet romi-hub.service; then
@@ -291,7 +323,11 @@ systemctl restart romi-hub.service
 attempt=0
 while [ "$attempt" -lt 30 ]; do
     if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
-        printf 'romi Hub %s is active; bootstrap credential: %s\n' "$version" "$STATE_DIR/bootstrap-password"
+        if [ -e "$STATE_DIR/bootstrap-password" ]; then
+            printf 'romi Hub %s is active; bootstrap credential: %s\n' "$version" "$STATE_DIR/bootstrap-password"
+        else
+            printf 'romi Hub %s is active (existing database; bootstrap credential unchanged).\n' "$version"
+        fi
         exit 0
     fi
     attempt=$((attempt + 1))

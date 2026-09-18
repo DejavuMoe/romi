@@ -28,18 +28,19 @@ romi 只有一个发布版本源：
 
 本阶段只支持：`x86_64-unknown-linux-gnu`。
 
-- 发行工作流在 `ubuntu-24.04` 上构建并实际执行发布出来的 Hub/Agent。
+- 公开发行构建固定在 `ubuntu-22.04`，这是当前仍受支持的最老 GitHub 托管镜像；开发 CI 继续运行
+  在 `ubuntu-24.04`。发布工作流会在该固定环境中实际执行发布出来的 Hub/Agent。
 - Hub 使用官方 `duckdb` crate 的 `bundled` + `parquet` feature，DuckDB 编入二进制；它不是
   静态链接的 musl 二进制，仍依赖构建环境的 GNU C 运行库。
 - 不声明 musl、aarch64 Hub、Alpine、macOS 或 Windows 支持。没有实际构建并运行验证的目标不会
   出现在本文或 release manifest 中。
 
-公开发行二进制在 `ubuntu-24.04`（glibc 2.39）上构建并实测：`romi-hub` 的最高 glibc
-符号版本为 `GLIBC_2.38`，`romi-agent` 为 `GLIBC_2.34`；发布工作流会在发布前重新测量并拒绝
-高于该基线的产物。更老的 glibc 不受支持。
+受控构建实验将公开发行构建从 `ubuntu-24.04` 移到 `ubuntu-22.04`（glibc 2.35），使用同一
+pinned Rust 1.98.0 工具链重新编译实际发行二进制：`romi-hub` 与 `romi-agent` 的最高 glibc
+符号版本都实测为 `GLIBC_2.34`。没有实际测量符号要求的更低版本不会被声称支持；发布工作流会在
+发布前重新测量并拒绝高于 `GLIBC_2.34` 的产物。Ubuntu 22.04 及更新版本满足该基线。
 
-在当前开发构建环境对已有 release 产物实测 `ldd`（发布工作流在 `ubuntu-24.04` 上会重新打印
-实际输出）：
+对固定 `ubuntu-22.04` 构建产物实测 `ldd`（发布工作流会在同一固定环境重新打印真实输出）：
 
 - `romi-hub`：`linux-vdso.so.1`、`libstdc++.so.6`、`libgcc_s.so.1`、`libm.so.6`、
   `libc.so.6`、`ld-linux-x86-64.so.2`；**没有** `libduckdb`（引擎编入二进制）。

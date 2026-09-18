@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export CARGO_TARGET_DIR := $(CURDIR)/target
-.PHONY: help setup frontend build release release-candidate release-package package check smoke bench bench-fixture dev-server dev-admin dev-web
+.PHONY: help setup frontend build release release-candidate release-package release-rehearsal systemd-rehearsal package check smoke bench bench-fixture dev-server dev-admin dev-web
 
 help:
 	@echo 'make setup       Install locked frontend dependencies and fetch Rust dependencies'
@@ -16,6 +16,8 @@ help:
 	@echo 'make package           Build a checksummed local development snapshot archive'
 	@echo 'make release-candidate Build/verify a release-shaped candidate for x86_64-unknown-linux-gnu'
 	@echo 'make release-package   Package HEAD as a public release; requires TAG=vX.Y.Z'
+	@echo 'make release-rehearsal Build/verify exact public-release shape using a local-only tag (never pushed)'
+	@echo 'make systemd-rehearsal Run the real systemd rehearsal from dist/release (requires root)'
 	@echo ''
 	@echo 'The Hub links DuckDB from source, so a C/C++ toolchain (cc and c++) is'
 	@echo 'required; nothing else is. Agent builds need neither. Public release'
@@ -58,11 +60,25 @@ release-package: release
 	@test -n "$(TAG)" || { echo 'usage: make release-package TAG=vX.Y.Z' >&2; exit 2; }
 	python3 scripts/release.py package --tag "$(TAG)"
 
+# Non-publishing public-shape rehearsal. The wrapper creates a lightweight tag
+# in this checkout only after proving the remote tag does not exist, invokes the
+# unchanged public packager, and deletes that local tag.
+release-rehearsal: release
+	python3 scripts/rehearse_release.py package
+
+# Manual-only, destructive, real systemd rehearsal. Run only on a disposable
+# host with no existing /opt/romi, /var/lib/romi or /etc/romi state.
+systemd-rehearsal:
+	@test "$$(id -u)" = 0 || { echo 'systemd-rehearsal must run as root on a disposable host' >&2; exit 2; }
+	python3 scripts/systemd_rehearsal.py
+
 check: frontend
 	python3 scripts/version.py check
 	python3 scripts/release.py check
+	python3 scripts/rehearse_release.py check
 	python3 scripts/package.py check
 	python3 scripts/test_installers.py
+	python3 scripts/systemd_rehearsal.py --help >/dev/null
 	pnpm --dir admin run lint
 	pnpm --dir admin test
 	pnpm --dir web run lint

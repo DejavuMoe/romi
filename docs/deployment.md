@@ -7,15 +7,15 @@
 - Hub 监听回环地址，外部 HTTPS 由反向代理终止
 - Agent 运行在独立非 root 服务账号下
 
-运行时基线以 Ubuntu 24.04（glibc 2.39）构建的发布二进制实测为准：
+公开发行构建固定在 Ubuntu 22.04（glibc 2.35），使用 pinned Rust 1.98.0 工具链实测：
 
-- `romi-hub` 最高需要 `GLIBC_2.38`；
+- `romi-hub` 最高需要 `GLIBC_2.34`；
 - `romi-agent` 最高需要 `GLIBC_2.34`。
 
-因此 Hub 主机必须提供 glibc 2.38+ 和 systemd；Agent 主机必须提供 glibc 2.34+ 和 systemd。
-Ubuntu 24.04 及更新版本满足 Hub 基线；更老的发行版、musl、aarch64、Alpine、macOS、Windows、
-Docker 和 Kubernetes 不在本阶段支持范围内。发布工作流会在发布前重新打印并校验这两个符号版本，
-防止 runner 或工具链变化悄悄提高基线。
+因此 Hub 与 Agent 主机都必须提供 glibc 2.34+ 和 systemd；Ubuntu 22.04 及更新版本满足该基线。
+更老的发行版、musl、aarch64、Alpine、macOS、Windows、Docker 和 Kubernetes 不在本阶段支持范围
+内。发布工作流会在固定构建环境重新打印并校验这两个符号版本，防止 runner 或工具链变化悄悄提高
+基线；没有实际测量过的更低 glibc 版本不会被声称支持。
 
 也不提供 `curl | sh` 从可变 `master` 源码开始的安装方式。
 
@@ -123,7 +123,7 @@ Agent unit 使用 `EnvironmentFile=/etc/romi/agent.env`，`ExecStart` 中**不�
 - 绝不把密码写到 stdout 或 journal；
 - 日志只说明凭证写到了哪里；
 - 已存在的凭证文件不会被覆盖；
-- 管理员在面板修改密码后，安装器自动删除该文件。
+- 管理员在面板成功修改密码后，Hub 进程会立即删除该文件（不是安装器删除，也不需要重装）。
 
 在没有该选项的交互式开发场景中，仍会像原行为一样在终端打印一次性密码；原生安装器不会
 使用这条路径。

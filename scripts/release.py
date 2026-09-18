@@ -74,7 +74,14 @@ def encoded(value) -> bytes:
 
 
 def git(root: Path, *arguments: str) -> str:
-    command = ["git", "-c", "user.name=romi release test", "-c", "user.email=release@example.invalid", *arguments]
+    command = [
+        "git",
+        "-c", "user.name=romi release test",
+        "-c", "user.email=release@example.invalid",
+        "-c", "commit.gpgsign=false",
+        "-c", "tag.gpgsign=false",
+        *arguments,
+    ]
     try:
         return subprocess.check_output(command, cwd=root, text=True, stderr=subprocess.STDOUT).strip()
     except subprocess.CalledProcessError as error:

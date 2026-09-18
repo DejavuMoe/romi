@@ -228,6 +228,20 @@ class InstallerTests(unittest.TestCase):
                     '--site', 'https://hub.example.com', '--no-start')
         self.assertEqual(os.readlink(current), 'releases/0.2.0')
 
+        # A same-version reinstall repairs stale local distribution metadata
+        # from an interrupted or externally damaged state without touching the
+        # immutable release or mutable database directory.
+        distribution = self.prefix / 'var/lib/romi/distribution/0.2.0'
+        (distribution / 'distribution.json').write_text('{"format":1,"version":"stale"}\n')
+        run_checked('sh', str(upgraded.install), '--root-prefix', str(self.prefix),
+                    '--site', 'https://hub.example.com', '--no-start')
+        repaired = json.loads((distribution / 'distribution.json').read_text())
+        repaired_agent = (distribution / 'romi-agent').read_bytes()
+        self.assertEqual(repaired['version'], '0.2.0')
+        self.assertEqual(repaired['sha256'], sha256(repaired_agent))
+        self.assertEqual(repaired['size'], len(repaired_agent))
+        self.assertEqual(state_marker.read_text(), 'existing state')
+
     def test_hub_rejects_bad_arguments_and_non_root_production(self):
         release = FixtureRelease(self.base, 'hub')
         for site in ['http://hub.example.com', 'https://user@hub.example.com',
@@ -242,6 +256,42 @@ class InstallerTests(unittest.TestCase):
             result = run('sh', str(release.install), '--site', 'https://hub.example.com', '--no-start')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('root', result.stderr.lower())
+
+    def test_hub_failed_upgrade_preserves_previous_release_and_state(self):
+        release = FixtureRelease(self.base, 'hub')
+        state_marker = self.prefix / 'var/lib/romi/keep-me'
+        state_marker.parent.mkdir(parents=True)
+        state_marker.write_text('existing state')
+        run_checked('sh', str(release.install), '--root-prefix', str(self.prefix),
+                    '--site', 'https://hub.example.com', '--no-start')
+        current = self.prefix / 'opt/romi/current'
+        self.assertEqual(os.readlink(current), 'releases/0.1.0')
+
+        # A new release whose Hub identity check fails must not create a version
+        # directory, move current, or touch mutable state.
+        bad = FixtureRelease(self.base, 'hub', version='0.2.0')
+        bad_hub = bad.root / 'bin/romi-hub'
+        bad_hub.write_text('#!/bin/sh\nexit 1\n')
+        bad_hub.chmod(0o755)
+        result = run('sh', str(bad.install), '--root-prefix', str(self.prefix),
+                     '--site', 'https://hub.example.com', '--no-start')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(os.readlink(current), 'releases/0.1.0')
+        self.assertFalse((self.prefix / 'opt/romi/releases/0.2.0').exists())
+        self.assertEqual(state_marker.read_text(), 'existing state')
+
+        # A release-candidate archive is intentionally refused by the native
+        # Hub installer; it must not be confused with a public release.
+        candidate = FixtureRelease(self.base, 'hub', version='0.3.0')
+        candidate_json = json.loads((candidate.root / 'release.json').read_text())
+        candidate_json['kind'] = 'release-candidate'
+        (candidate.root / 'release.json').write_text(json.dumps(candidate_json))
+        result = run('sh', str(candidate.install), '--root-prefix', str(self.prefix),
+                     '--site', 'https://hub.example.com', '--no-start')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('candidate', result.stderr.lower())
+        self.assertEqual(os.readlink(current), 'releases/0.1.0')
+        self.assertFalse((self.prefix / 'opt/romi/releases/0.3.0').exists())
 
     def test_agent_installer_installs_serves_and_upgrades(self):
         binary = b'#!/bin/sh\n[ "${1:-}" = "--version" ] && echo "romi-agent %s"\n' % b'0.1.0'
@@ -326,6 +376,17 @@ class InstallerTests(unittest.TestCase):
             result = run('sh', str(AGENT_INSTALL), '--root-prefix', str(rejection_prefix),
                          '--server', hub.url, '--token-stdin', input='token\n')
             self.assertNotEqual(result.returncode, 0)
+
+        # An Agent binary that cannot execute at all is refused before state
+        # is written; this is distinct from a runnable binary with the wrong
+        # reported version.
+        broken = b'#!/bin/sh\nexit 1\n'
+        with LocalHub('0.1.0', broken) as hub:
+            result = run('sh', str(AGENT_INSTALL), '--root-prefix', str(rejection_prefix),
+                         '--server', hub.url, '--token-stdin', input='token\n')
+            self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((rejection_prefix / 'opt/romi/releases/0.1.0').exists())
+        self.assertFalse((rejection_prefix / 'opt/romi/current').exists())
 
         # Unsupported architecture.
         metadata = {

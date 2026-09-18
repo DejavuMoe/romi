@@ -376,8 +376,8 @@ async fn github_login(app: &App, code: &str) -> Result<String> {
 }
 
 /// Peer address, or the last hop in X-Forwarded-For when the request arrived
-/// through a local reverse proxy. Used for throttling and for the address shown
-/// beside a node, never for authorization.
+/// through a loopback reverse proxy. Used for throttling and for the address
+/// shown beside a node, never for authorization.
 ///
 /// The header is honoured only when the peer is itself local. Otherwise a
 /// caller could mint a fresh identity per request, bypassing the lockout and
@@ -400,7 +400,7 @@ async fn github_login(app: &App, code: &str) -> Result<String> {
 /// range below recognizes as local.
 pub fn client_ip(headers: &HeaderMap, peer: IpAddr) -> IpAddr {
     let peer = peer.to_canonical();
-    if !behind_local_proxy(peer) {
+    if !behind_loopback_proxy(peer) {
         return peer;
     }
     headers
@@ -411,17 +411,9 @@ pub fn client_ip(headers: &HeaderMap, peer: IpAddr) -> IpAddr {
         .map_or(peer, |ip| ip.to_canonical())
 }
 
-/// Loopback or a private network, where a reverse proxy resides.
-fn behind_local_proxy(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
-        // Unique-local (fc00::/7) and link-local (fe80::/10); the stable
-        // standard library provides no predicate for either.
-        IpAddr::V6(v6) => {
-            let head = v6.segments()[0];
-            v6.is_loopback() || head & 0xfe00 == 0xfc00 || head & 0xffc0 == 0xfe80
-        }
-    }
+/// Only the local reverse proxy is trusted to supply client forwarding headers.
+fn behind_loopback_proxy(ip: IpAddr) -> bool {
+    ip.is_loopback()
 }
 
 #[cfg(test)]
@@ -552,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn forwarded_header_is_trusted_only_behind_a_local_proxy() {
+    fn forwarded_header_is_trusted_only_behind_a_loopback_proxy() {
         let ip = |s: &str| s.parse::<IpAddr>().unwrap();
         let xff = |v: &str| {
             let mut h = HeaderMap::new();
@@ -569,13 +561,16 @@ mod tests {
         // observation at the tail; reading the head would let a caller choose its
         // own throttle bucket each request, or claim the operator's address.
         let forged = xff("10.0.0.2, 198.51.100.9");
-        for peer in ["127.0.0.1", "10.0.0.1", "::1", "fd00::1"] {
+        for peer in ["127.0.0.1", "::1"] {
             assert_eq!(client_ip(&forged, ip(peer)).to_string(), "198.51.100.9", "{peer}");
         }
 
-        // A dual-stack `[::]` listener reports an IPv4 proxy as `::ffff:a.b.c.d`,
-        // which is the same local peer.
-        assert_eq!(client_ip(&forged, ip("::ffff:172.18.0.4")).to_string(), "198.51.100.9");
+        // A private or link-local peer may be a direct client, so it must not
+        // choose its own throttle bucket with a forwarding header.
+        for peer in ["10.0.0.1", "169.254.0.1", "fd00::1", "fe80::1"] {
+            assert_eq!(client_ip(&forged, ip(peer)), ip(peer), "{peer}");
+        }
+        assert_eq!(client_ip(&forged, ip("::ffff:172.18.0.4")), ip("172.18.0.4"));
         assert_eq!(client_ip(&HeaderMap::new(), ip("::ffff:203.0.113.5")), ip("203.0.113.5"));
 
         // Directly from the internet the entire header is caller-supplied, and

@@ -1,0 +1,98 @@
+name: Release Rehearsal
+
+# Manual-only and non-publishing. This workflow builds the exact
+# public-release artifact shape from a local-only tag, then installs it on the
+# disposable runner with real systemd, bootstrap credentials, the Hub-served
+# Agent installer, and an Nginx/TLS reverse proxy. It has no contents:write,
+# id-token:write, or attestations:write permission and never pushes a tag or
+# branch, creates a Release, or publishes an attestation.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-rehearsal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rehearsal:
+    name: Public shape and real systemd rehearsal
+    # Disposable GitHub-hosted VM, pinned to the same Ubuntu 22.04 release
+    # build environment. GitHub-hosted Ubuntu images run systemd and provide
+    # passwordless sudo; the tooling chooses a free port and cleans the entire
+    # installation in an always() step.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out exact commit with full history for local-only tagging
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up development tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: node pnpm python rust
+
+      - name: Ensure C/C++ toolchain
+        run: |
+          cc --version
+          c++ --version
+
+      - name: Install disposable reverse-proxy test infrastructure
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx openssl ca-certificates curl
+
+      - name: Install locked dependencies
+        run: make setup
+
+      - name: Run code-quality gate
+        run: make check
+
+      - name: Run loopback smoke test
+        run: make smoke
+
+      - name: Build exact public-release shape with a local-only tag
+        run: make release-rehearsal
+
+      - name: Re-verify public-release directory independently
+        run: |
+          set -euo pipefail
+          tag="v$(cat VERSION)"
+          python3 scripts/release.py verify dist/release --tag "$tag" --commit "$GITHUB_SHA" --run-binaries
+          echo "Release manifest:"
+          cat "dist/release/romi-release-$tag.json"
+          echo "SHA256SUMS:"
+          cat dist/release/SHA256SUMS
+          tar -tzvf dist/release/romi-hub-v*"${tag#v}"-x86_64-unknown-linux-gnu.tar.gz
+          tar -tzvf dist/release/romi-agent-v*"${tag#v}"-x86_64-unknown-linux-gnu.tar.gz
+
+      - name: Run real systemd, bootstrap, Agent, and TLS rehearsal
+        run: sudo python3 scripts/systemd_rehearsal.py --release-dir dist/release --cleanup
+
+      - name: Capture linked glibc symbols from the exact public artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          tar -xzf dist/release/romi-hub-*.tar.gz -C "$work"
+          for binary in romi-hub romi-agent; do
+            echo "--- $binary ---"
+            readelf --version-info "$work/bin/$binary" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -n 1
+            ldd "$work/bin/$binary"
+          done
+          rm -rf "$work"
+
+      - name: Cleanup disposable installation
+        if: always()
+        run: |
+          sudo systemctl disable --now romi-hub.service romi-agent.service || true
+          sudo rm -f /etc/systemd/system/romi-hub.service /etc/systemd/system/romi-agent.service
+          sudo rm -rf /opt/romi /var/lib/romi /etc/romi /etc/nginx/romi-rehearsal /etc/nginx/conf.d/romi-rehearsal.conf
+          sudo systemctl daemon-reload || true
+          sudo systemctl stop nginx.service || true
