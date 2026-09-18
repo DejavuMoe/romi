@@ -45,6 +45,27 @@ need_value() {
     [ "$#" -ge 2 ] || die "$1 needs a value"
 }
 
+systemd_analyze_verify() {
+    _unit=$1
+    _name=${_unit##*/}
+    _status=0
+    _output=$(systemd-analyze verify "$_unit" 2>&1) || _status=$?
+    _status=${_status:-0}
+    if [ "$_status" -eq 0 ]; then
+        return 0
+    fi
+    # systemd-analyze verify recurses into host units. Ignore failures that do
+    # not name this generated unit, but never hide a failure that implicates
+    # it.
+    case "$_output" in
+        *"$_unit"*|*"$_name"*)
+            printf '%s\n' "$_output" >&2
+            return 1
+            ;;
+    esac
+    return 0
+}
+
 validate_server() {
     _raw=$1
     [ -n "$_raw" ] || die "server URL is empty"
@@ -350,7 +371,7 @@ write_unit "$unit_tmp"
 if [ -z "$ROOT_PREFIX" ] && command -v systemd-analyze >/dev/null 2>&1; then
     verify_unit="$WORK/romi-agent.verify.service"
     sed "s|$OPT_CURRENT/romi-agent|$OPT_VERSION/romi-agent|g" "$unit_tmp" > "$verify_unit"
-    systemd-analyze verify "$verify_unit" || die "generated Agent service unit failed systemd-analyze verify"
+    systemd_analyze_verify "$verify_unit" || die "generated Agent service unit failed systemd-analyze verify"
 fi
 install -d -m 0755 "$ROOT_PREFIX/etc/systemd/system"
 unit_stage="$UNIT_PATH.$$"

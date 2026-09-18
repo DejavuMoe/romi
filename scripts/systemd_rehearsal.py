@@ -48,6 +48,7 @@ HUB_BASE = f"http://127.0.0.1:{HUB_PORT}"
 HUB_USER = "romi"
 AGENT_USER = "romi-agent"
 HOSTS_MARKER = "# romi systemd rehearsal"
+SYSTEMD_VERIFY_FAILURE = re.compile(r"Failed to|Bad unit file setting|Unknown key name")
 
 # The rehearsal deliberately keeps the documented fixed Hub port. Preflight
 # proves it is free; the Hub installer and the Nginx proxy_pass both use it.
@@ -137,6 +138,19 @@ def systemctl_is_active(unit: str) -> bool:
 
 def systemd_analyze(*arguments: str, check: bool = False) -> subprocess.CompletedProcess:
     return run(["systemd-analyze", *arguments], check=check, capture=True)
+
+
+def systemd_verify_failures(unit: str, output: str) -> list[str]:
+    """Return only failure diagnostics that name the generated unit.
+
+    ``systemd-analyze verify`` recursively inspects host units, so a disposable
+    VM can report unrelated distro-unit warnings. Those must not mask or
+    manufacture a verdict about the unit under test.
+    """
+    return [
+        line for line in output.splitlines()
+        if unit in line and SYSTEMD_VERIFY_FAILURE.search(line)
+    ]
 
 
 @dataclass
@@ -1253,8 +1267,14 @@ server {{
             unit_path = f"/etc/systemd/system/{unit}"
             verified = systemd_analyze("verify", unit_path)
             output = verified.stdout + verified.stderr
-            if "Failed to" in output:
+            failures = systemd_verify_failures(unit, output)
+            if failures:
                 fail(f"systemd-analyze verify failed for {unit}:\n{output}")
+            if verified.returncode != 0:
+                info(
+                    f"systemd-analyze verify exited {verified.returncode} for {unit}; "
+                    "the diagnostics name only unrelated host units"
+                )
             security = systemd_analyze("security", "--no-pager", unit)
             info(f"---- systemd-analyze security {unit} (exit {security.returncode}) ----")
             print(security.stdout + security.stderr, flush=True)

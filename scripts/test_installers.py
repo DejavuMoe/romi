@@ -458,9 +458,21 @@ class InstallerTests(unittest.TestCase):
         for unit in (self.prefix / 'etc/systemd/system/romi-hub.service',
                      agent_prefix / 'etc/systemd/system/romi-agent.service'):
             result = subprocess.run([analyze, 'verify', str(unit)], text=True, capture_output=True)
-            # systemd-analyze exits 1 for warnings on some versions but only
-            # actual syntax/load failures contain "Failed to".
-            self.assertNotIn('Failed to', result.stdout + result.stderr, unit)
+            output = result.stdout + result.stderr
+            # systemd-analyze verify walks the host's unit directories and can
+            # report unrelated host units (for example a root-only runtime
+            # fragment or a distro unit using a newer key). Only diagnostics
+            # that name this generated unit can indicate a real change in the
+            # unit contract.
+            relevant = '\n'.join(
+                line for line in output.splitlines()
+                if str(unit) in line or unit.name in line
+            )
+            self.assertNotRegex(
+                relevant,
+                r'Failed to|Bad unit file setting|Unknown key name',
+                f'{unit}\n{output}',
+            )
 
 
 if __name__ == '__main__':

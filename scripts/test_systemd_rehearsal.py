@@ -151,6 +151,29 @@ class LifecycleOrderTests(unittest.TestCase):
         self.assertNotIn("pwd.getpwnam", source)
 
 
+class SystemdVerifyScopingTests(unittest.TestCase):
+    def test_failure_naming_the_generated_unit_is_returned(self):
+        output = (
+            "/etc/systemd/system/romi-hub.service:5: Bad unit file setting.\n"
+            "Failed to load /etc/systemd/system/romi-hub.service\n"
+        )
+        failures = rehearsal.systemd_verify_failures("romi-hub.service", output)
+        self.assertEqual(len(failures), 2)
+
+    def test_unrelated_host_unit_diagnostics_are_ignored(self):
+        output = (
+            "netplan-ovs-cleanup.service: Failed to open "
+            "/run/systemd/system/netplan-ovs-cleanup.service: Permission denied\n"
+            "/lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' "
+            "in section 'Service', ignoring.\n"
+        )
+        self.assertEqual(rehearsal.systemd_verify_failures("romi-hub.service", output), [])
+
+    def test_warnings_not_naming_the_unit_are_ignored(self):
+        output = "some-other.service: Unknown key name 'Foo' in section 'Service', ignoring.\n"
+        self.assertEqual(rehearsal.systemd_verify_failures("romi-agent.service", output), [])
+
+
 class FixedPortTests(unittest.TestCase):
     def test_occupied_port_is_rejected_with_a_clear_error(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:

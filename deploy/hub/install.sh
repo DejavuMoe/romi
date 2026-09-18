@@ -31,6 +31,27 @@ need_value() {
     [ "$#" -ge 2 ] || die "$1 needs a value"
 }
 
+systemd_analyze_verify() {
+    _unit=$1
+    _name=${_unit##*/}
+    _status=0
+    _output=$(systemd-analyze verify "$_unit" 2>&1) || _status=$?
+    _status=${_status:-0}
+    if [ "$_status" -eq 0 ]; then
+        return 0
+    fi
+    # systemd-analyze verify recurses into host units. Ignore failures that do
+    # not name this generated unit, but never hide a failure that implicates
+    # it.
+    case "$_output" in
+        *"$_unit"*|*"$_name"*)
+            printf '%s\n' "$_output" >&2
+            return 1
+            ;;
+    esac
+    return 0
+}
+
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd -P) || SCRIPT_DIR=.
 RELEASE_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../.." 2>/dev/null && pwd -P) || die "cannot locate the release root"
 HUB_USER=romi
@@ -282,7 +303,7 @@ if [ "$REAL_SYSTEM" = 1 ] && command -v systemd-analyze >/dev/null 2>&1; then
     # a first install; current/ is switched only after verification.
     verify_unit="$WORK/romi-hub.verify.service"
     sed "s|$OPT_CURRENT/romi-hub|$OPT_VERSION/romi-hub|g" "$unit_tmp" > "$verify_unit"
-    systemd-analyze verify "$verify_unit" || die "generated service unit failed systemd-analyze verify"
+    systemd_analyze_verify "$verify_unit" || die "generated service unit failed systemd-analyze verify"
 fi
 install -d -m 0755 "$ROOT_PREFIX/etc/systemd/system"
 unit_stage="$UNIT_PATH.$$"
