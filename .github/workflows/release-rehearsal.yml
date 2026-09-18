@@ -21,8 +21,9 @@ jobs:
     name: Public shape and real systemd rehearsal
     # Disposable GitHub-hosted VM, pinned to the same Ubuntu 22.04 release
     # build environment. GitHub-hosted Ubuntu images run systemd and provide
-    # passwordless sudo; the tooling chooses a free port and cleans the entire
-    # installation in an always() step.
+    # passwordless sudo. The rehearsal requires 127.0.0.1:28080 to be free and
+    # claims ownership under /run; the always() cleanup removes only state named
+    # by that ownership marker.
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
@@ -88,11 +89,12 @@ jobs:
           done
           rm -rf "$work"
 
-      - name: Cleanup disposable installation
+      - name: Cleanup claimed disposable installation
         if: always()
         run: |
-          sudo systemctl disable --now romi-hub.service romi-agent.service || true
-          sudo rm -f /etc/systemd/system/romi-hub.service /etc/systemd/system/romi-agent.service
-          sudo rm -rf /opt/romi /var/lib/romi /etc/romi /etc/nginx/romi-rehearsal /etc/nginx/conf.d/romi-rehearsal.conf
-          sudo systemctl daemon-reload || true
-          sudo systemctl stop nginx.service || true
+          set -euo pipefail
+          if sudo test -f /run/romi-systemd-rehearsal/owner.json; then
+            sudo python3 scripts/systemd_rehearsal.py --cleanup-only
+          else
+            echo 'no rehearsal ownership marker; refusing to delete any host state'
+          fi

@@ -8,8 +8,10 @@ the real Hub installer from the Hub archive, the real Agent installer served by
 that Hub, and the same Nginx/TLS-facing paths an operator would use.
 
 It is intentionally not part of normal CI: it mutates /opt, /var/lib, /etc and
-systemd. A GitHub-hosted job is disposable; this driver refuses to run anywhere
-where those paths already exist.
+systemd. A GitHub-hosted job is disposable. The rehearsal requires
+127.0.0.1:28080 to be free, refuses to run where the romi service accounts or
+installation paths already exist, and claims the host with an ownership marker
+under /run so cleanup only removes state it is allowed to own.
 """
 from __future__ import annotations
 
@@ -41,11 +43,30 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SITE = "https://hub.romi.test"
 TEST_HOST = "hub.romi.test"
-HUB_BASE = "http://127.0.0.1:28080"
 HUB_PORT = 28080
+HUB_BASE = f"http://127.0.0.1:{HUB_PORT}"
 HUB_USER = "romi"
 AGENT_USER = "romi-agent"
 HOSTS_MARKER = "# romi systemd rehearsal"
+
+# The rehearsal deliberately keeps the documented fixed Hub port. Preflight
+# proves it is free; the Hub installer and the Nginx proxy_pass both use it.
+REHEARSAL_RUNTIME_DIR = Path("/run/romi-systemd-rehearsal")
+OWNERSHIP_MARKER = REHEARSAL_RUNTIME_DIR / "owner.json"
+OWNERSHIP_FORMAT = 1
+CLAIMED_UNITS = (
+    Path("/etc/systemd/system/romi-hub.service"),
+    Path("/etc/systemd/system/romi-agent.service"),
+)
+CLAIMED_PATHS = (
+    Path("/opt/romi"),
+    Path("/var/lib/romi"),
+    Path("/etc/romi"),
+    Path("/etc/nginx/romi-rehearsal"),
+    Path("/etc/nginx/conf.d/romi-rehearsal.conf"),
+)
+CLAIMED_USERS = (HUB_USER, AGENT_USER)
+CLAIMED_GROUPS = (HUB_USER, AGENT_USER)
 
 
 class RehearsalError(RuntimeError):
@@ -212,6 +233,165 @@ def expect_mode(path: Path, mode: int | None = None, uid: int | None = None, gid
     return status
 
 
+def user_exists(name: str) -> bool:
+    try:
+        pwd.getpwnam(name)
+    except KeyError:
+        return False
+    return True
+
+
+def group_exists(name: str) -> bool:
+    try:
+        grp.getgrnam(name)
+    except KeyError:
+        return False
+    return True
+
+
+def expect_contract_file(path: Path, mode: int, uid: int, gid: int) -> os.stat_result:
+    """Assert a file's exact contract mode with readable dangerous-bit checks."""
+    status = expect_mode(path, None, uid, gid)
+    actual_mode = stat.S_IMODE(status.st_mode)
+    if actual_mode & 0o020:
+        fail(f"{path} is group writable (mode {actual_mode:o}); expected {mode:o}")
+    if actual_mode & 0o007:
+        fail(f"{path} is accessible by other users (mode {actual_mode:o}); expected {mode:o}")
+    if actual_mode != mode:
+        fail(f"{path} mode is {actual_mode:o}, expected {mode:o}")
+    return status
+
+
+def ensure_free_port(port: int) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError as error:
+            fail(
+                f"127.0.0.1:{port} is already in use ({error}); "
+                "this rehearsal requires that fixed port to be free"
+            )
+
+
+def read_ownership_marker() -> dict:
+    try:
+        status = OWNERSHIP_MARKER.lstat()
+    except FileNotFoundError:
+        fail(f"ownership marker {OWNERSHIP_MARKER} is missing; refusing to delete any host state")
+    except OSError as error:
+        fail(f"cannot inspect ownership marker {OWNERSHIP_MARKER}: {error}")
+    if not stat.S_ISREG(status.st_mode):
+        fail(f"{OWNERSHIP_MARKER} is not a regular file; refusing to delete any host state")
+    if os.geteuid() == 0 and status.st_uid != 0:
+        fail(f"{OWNERSHIP_MARKER} is not owned by root; refusing to delete any host state")
+    if stat.S_IMODE(status.st_mode) & 0o077:
+        fail(f"{OWNERSHIP_MARKER} is group/world accessible; refusing to delete any host state")
+    try:
+        payload = json.loads(OWNERSHIP_MARKER.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read ownership marker {OWNERSHIP_MARKER}: {error}")
+    if not isinstance(payload, dict):
+        fail(f"{OWNERSHIP_MARKER} does not contain a JSON object; refusing cleanup")
+    if (
+        payload.get("format") != OWNERSHIP_FORMAT
+        or payload.get("project") != "romi"
+        or payload.get("purpose") != "disposable-systemd-rehearsal"
+    ):
+        fail(f"{OWNERSHIP_MARKER} is not a romi disposable-rehearsal marker; refusing cleanup")
+    return payload
+
+
+def marker_list(payload: dict, key: str, allowed: tuple) -> list[str]:
+    value = payload.get(key)
+    allowed_text = [str(item) for item in allowed]
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        fail(f"ownership marker field {key!r} is not a list of strings; refusing cleanup")
+    unknown = [item for item in value if item not in allowed_text]
+    if unknown:
+        fail(f"ownership marker claims unrecognized {key}: {unknown!r}; refusing cleanup")
+    return value
+
+
+def remove_claimed_path(path: Path) -> None:
+    if not os.path.lexists(path):
+        return
+    try:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+        else:
+            fail(f"{path} is neither a file nor a directory; refusing to remove it")
+    except OSError as error:
+        raise RehearsalError(f"cannot remove claimed path {path}: {error}") from error
+
+
+def cleanup_claimed_host_state() -> None:
+    """Remove only resources named by a rehearsal ownership marker."""
+    if not os.path.lexists(OWNERSHIP_MARKER):
+        info("no rehearsal ownership marker; refusing to delete any host state")
+        return
+    payload = read_ownership_marker()
+    claimed_paths = [Path(item) for item in marker_list(payload, "claimed_paths", CLAIMED_PATHS)]
+    claimed_units = [Path(item) for item in marker_list(payload, "claimed_units", CLAIMED_UNITS)]
+    claimed_users = marker_list(payload, "claimed_users", CLAIMED_USERS)
+    claimed_groups = marker_list(payload, "claimed_groups", CLAIMED_GROUPS)
+    info(
+        "cleaning only disposable rehearsal state claimed by "
+        f"pid {payload.get('pid')} at {payload.get('created_at')}"
+    )
+
+    run(
+        ["systemctl", "disable", "--now", *(path.name for path in claimed_units)],
+        check=False,
+        capture=True,
+    )
+    for unit in claimed_units:
+        remove_claimed_path(unit)
+    systemctl("daemon-reload", check=False)
+    for path in claimed_paths:
+        remove_claimed_path(path)
+
+    for user in claimed_users:
+        if not user_exists(user):
+            continue
+        result = run(["userdel", user], check=False, capture=True)
+        if result.returncode != 0:
+            fail(f"cannot delete claimed service user {user}: {result.stderr.strip() or result.stdout.strip()}")
+    for group in claimed_groups:
+        if not group_exists(group):
+            continue
+        result = run(["groupdel", group], check=False, capture=True)
+        if result.returncode != 0:
+            fail(f"cannot delete claimed service group {group}: {result.stderr.strip() or result.stdout.strip()}")
+
+    hosts = Path("/etc/hosts")
+    try:
+        lines = hosts.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        fail(f"cannot read {hosts} during cleanup: {error}")
+    retained = [line for line in lines if HOSTS_MARKER not in line]
+    if retained != lines:
+        try:
+            hosts.write_text("\n".join(retained) + "\n", encoding="utf-8")
+        except OSError as error:
+            fail(f"cannot rewrite {hosts} during cleanup: {error}")
+
+    systemctl("stop", "nginx.service", check=False)
+    try:
+        OWNERSHIP_MARKER.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        fail(f"cannot remove ownership marker {OWNERSHIP_MARKER}: {error}")
+    try:
+        REHEARSAL_RUNTIME_DIR.rmdir()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        info(f"left non-empty ownership directory {REHEARSAL_RUNTIME_DIR}")
+
+
 def expect_symlink(path: Path, target: str) -> None:
     try:
         actual = os.readlink(path)
@@ -278,6 +458,7 @@ class Rehearsal:
         self.nginx_ca: Path | None = None
         self.nginx_conf: Path | None = None
         self.hosts_entry_added = False
+        self.host_claimed = False
         self.direct = HTTPSession(HUB_BASE)
         self.direct_admin = HTTPSession(HUB_BASE)
         self.tls_admin: HTTPSession | None = None
@@ -297,23 +478,67 @@ class Rehearsal:
         status = (running.stdout + running.stderr).strip()
         if status not in ("running", "degraded"):
             fail(f"systemd is not managing this host (state: {status or 'unknown'})")
-        for path in (
-            Path("/opt/romi"),
-            Path("/var/lib/romi"),
-            Path("/etc/romi"),
-            Path("/etc/systemd/system/romi-hub.service"),
-            Path("/etc/systemd/system/romi-agent.service"),
-        ):
+        for path in (*CLAIMED_PATHS, *CLAIMED_UNITS):
             if os.path.lexists(path):
                 fail(f"{path} already exists; this rehearsal requires a fresh disposable host")
+        if os.path.lexists(REHEARSAL_RUNTIME_DIR):
+            fail(
+                f"{REHEARSAL_RUNTIME_DIR} already exists; an incomplete rehearsal may own this host. "
+                "Inspect the ownership marker and run --cleanup-only to remove only claimed state."
+            )
+        for name in CLAIMED_USERS:
+            if user_exists(name):
+                fail(f"service user {name!r} already exists; this rehearsal requires a fresh disposable host")
+        for name in CLAIMED_GROUPS:
+            if group_exists(name):
+                fail(f"service group {name!r} already exists; this rehearsal requires a fresh disposable host")
+        hosts = Path("/etc/hosts")
         try:
-            self.hub_uid = pwd.getpwnam(HUB_USER).pw_uid
-            self.hub_gid = grp.getgrnam(HUB_USER).gr_gid
-        except KeyError:
-            # The installer creates the users; the IDs are re-read after install.
-            self.hub_uid = -1
-            self.hub_gid = -1
+            hosts_text = hosts.read_text(encoding="utf-8")
+        except OSError as error:
+            fail(f"cannot inspect {hosts}: {error}")
+        if HOSTS_MARKER in hosts_text:
+            fail(f"{hosts} still carries this rehearsal's marker; run cleanup-aware recovery first")
+        ensure_free_port(HUB_PORT)
         self.work.mkdir(parents=True, exist_ok=True)
+
+    def claim_disposable_host(self) -> None:
+        if self.host_claimed:
+            fail("this process already claimed the disposable host")
+        try:
+            REHEARSAL_RUNTIME_DIR.mkdir(mode=0o700)
+        except FileExistsError:
+            fail(f"{REHEARSAL_RUNTIME_DIR} appeared after preflight; refusing to claim ownership")
+        except OSError as error:
+            raise RehearsalError(f"cannot create ownership directory {REHEARSAL_RUNTIME_DIR}: {error}") from error
+        # Preflight has just proved these accounts and paths absent, so this
+        # marker is the ownership claim for exactly what the installers create.
+        payload = {
+            "format": OWNERSHIP_FORMAT,
+            "project": "romi",
+            "purpose": "disposable-systemd-rehearsal",
+            "pid": os.getpid(),
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "release_dir": str(self.release_dir),
+            "site": self.site,
+            "claimed_paths": [str(path) for path in CLAIMED_PATHS],
+            "claimed_units": [str(path) for path in CLAIMED_UNITS],
+            "claimed_users": list(CLAIMED_USERS),
+            "claimed_groups": list(CLAIMED_GROUPS),
+        }
+        try:
+            descriptor = os.open(OWNERSHIP_MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, sort_keys=True)
+                handle.write("\n")
+        except OSError as error:
+            try:
+                REHEARSAL_RUNTIME_DIR.rmdir()
+            except OSError:
+                pass
+            raise RehearsalError(f"cannot write ownership marker {OWNERSHIP_MARKER}: {error}") from error
+        self.host_claimed = True
+        info(f"claimed disposable host state with {OWNERSHIP_MARKER}")
 
     def load_and_verify_release(self) -> None:
         manifests = sorted(self.release_dir.glob("romi-release-*.json"))
@@ -393,14 +618,22 @@ class Rehearsal:
         except RehearsalError:
             return False
 
-    def refresh_service_ids(self) -> None:
-        self.hub_uid = pwd.getpwnam(HUB_USER).pw_uid
-        self.hub_gid = grp.getgrnam(HUB_USER).gr_gid
-        self.agent_uid = pwd.getpwnam(AGENT_USER).pw_uid
-        self.agent_gid = grp.getgrnam(AGENT_USER).gr_gid
+    def refresh_hub_service_ids(self) -> None:
+        try:
+            self.hub_uid = pwd.getpwnam(HUB_USER).pw_uid
+            self.hub_gid = grp.getgrnam(HUB_USER).gr_gid
+        except KeyError as error:
+            fail(f"Hub service account or group {error.args[0]!r} is missing after Hub installation")
 
-    def verify_filesystem(self) -> None:
-        self.refresh_service_ids()
+    def refresh_agent_service_ids(self) -> None:
+        try:
+            self.agent_uid = pwd.getpwnam(AGENT_USER).pw_uid
+            self.agent_gid = grp.getgrnam(AGENT_USER).gr_gid
+        except KeyError as error:
+            fail(f"Agent service account or group {error.args[0]!r} is missing after Agent installation")
+
+    def verify_hub_filesystem(self) -> None:
+        self.refresh_hub_service_ids()
         opt = Path("/opt/romi")
         releases = opt / "releases"
         release = releases / self.version
@@ -421,10 +654,10 @@ class Rehearsal:
         expect_mode(state / "tmp", 0o750, self.hub_uid, self.hub_gid)
         expect_mode(state / "romi.duckdb", None, self.hub_uid, self.hub_gid)
         expect_mode(distribution, 0o750, 0, self.hub_gid)
-        expect_mode(distribution / "romi-agent", 0o640, 0, self.hub_gid)
-        expect_mode(distribution / "distribution.json", 0o640, 0, self.hub_gid)
+        expect_contract_file(distribution / "romi-agent", 0o640, 0, self.hub_gid)
+        expect_contract_file(distribution / "distribution.json", 0o640, 0, self.hub_gid)
+        expect_contract_file(hub_env, 0o640, 0, self.hub_gid)
         expect_mode(etc, 0o750, 0, self.hub_gid)
-        expect_mode(hub_env, 0o640, 0, self.hub_gid)
         expect_mode(bootstrap, 0o600, self.hub_uid, self.hub_gid)
         unit = Path("/etc/systemd/system/romi-hub.service")
         expect_mode(unit, 0o644, 0, 0)
@@ -433,12 +666,24 @@ class Rehearsal:
                 (self.hub_release / "bin" / name).read_bytes()
             ):
                 fail(f"installed {name} differs from the verified Hub archive")
-        # Database and distribution content must not be writable by the service
-        # account's group or by other users.
-        for path in (distribution / "romi-agent", distribution / "distribution.json", hub_env):
-            if stat.S_IMODE(path.stat().st_mode) & 0o077:
-                fail(f"credential/distribution file {path} is group/world accessible")
-        info("filesystem ownership and modes match the documented native layout")
+        info("Hub filesystem ownership and modes match the documented native layout")
+
+    def verify_agent_filesystem(self) -> None:
+        self.refresh_agent_service_ids()
+        if self.agent_uid == 0 or self.agent_gid == 0:
+            fail("Agent service account or group resolved to root")
+        if self.agent_uid == self.hub_uid or self.agent_gid == self.hub_gid:
+            fail("Agent service identity must be distinct from the Hub service identity")
+        env_path = Path("/etc/romi/agent.env")
+        unit = Path("/etc/systemd/system/romi-agent.service")
+        expect_contract_file(env_path, 0o600, 0, 0)
+        expect_mode(unit, 0o644, 0, 0)
+        expect_symlink(Path("/opt/romi/current"), f"releases/{self.version}")
+        installed_agent = Path("/opt/romi/releases") / self.version / "romi-agent"
+        expect_mode(installed_agent, 0o755, 0, 0)
+        if sha256_file(installed_agent) != sha256_bytes((self.hub_release / "bin" / "romi-agent").read_bytes()):
+            fail("installed Agent binary differs from the verified Hub archive")
+        info("Agent service account, environment file, unit, and immutable artifact match the contract")
 
     # ---- bootstrap credential ----------------------------------------------
 
@@ -1018,52 +1263,45 @@ server {{
     # ---- cleanup ------------------------------------------------------------
 
     def cleanup_host(self) -> None:
-        info("cleaning up disposable systemd rehearsal state")
-        systemctl("disable", "--now", "romi-hub.service", "romi-agent.service", check=False)
-        for unit in ("romi-hub.service", "romi-agent.service"):
-            path = Path("/etc/systemd/system") / unit
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
-        systemctl("daemon-reload", check=False)
-        shutil.rmtree("/opt/romi", ignore_errors=True)
-        shutil.rmtree("/var/lib/romi", ignore_errors=True)
-        shutil.rmtree("/etc/romi", ignore_errors=True)
-        run(["userdel", HUB_USER], check=False, capture=True)
-        run(["userdel", AGENT_USER], check=False, capture=True)
-        run(["groupdel", HUB_USER], check=False, capture=True)
-        run(["groupdel", AGENT_USER], check=False, capture=True)
-        if self.nginx_conf is not None:
-            self.nginx_conf.unlink(missing_ok=True)
-        shutil.rmtree("/etc/nginx/romi-rehearsal", ignore_errors=True)
-        systemctl("stop", "nginx.service", check=False)
-        if self.hosts_entry_added:
-            hosts = Path("/etc/hosts")
-            lines = [line for line in hosts.read_text(encoding="utf-8").splitlines() if HOSTS_MARKER not in line]
-            hosts.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if os.path.lexists(OWNERSHIP_MARKER):
+            cleanup_claimed_host_state()
+            self.host_claimed = False
+            return
+        if self.host_claimed:
+            fail("the rehearsal ownership marker disappeared; refusing to remove unclaimed host state")
+        info("no rehearsal ownership marker; refusing to remove host state")
 
     # ---- top-level flow -----------------------------------------------------
 
+    # Ordered phases are explicit so a regression test can prove that Hub
+    # installation/verification completes before the Agent installer creates
+    # the romi-agent account and its filesystem checks run.
+    REHEARSAL_PHASES = (
+        "preflight",
+        "claim_disposable_host",
+        "load_and_verify_release",
+        "install_hub_from_archive",
+        "verify_hub_filesystem",
+        "bootstrap_lifecycle",
+        "direct_provisioning_is_refused",
+        "setup_nginx",
+        "tls_paths",
+        "websocket_probe",
+        "create_permanent_node",
+        "fetch_and_install_agent",
+        "verify_agent_filesystem",
+        "wait_for_telemetry",
+        "registration_flow",
+        "idempotent_hub_reinstall",
+        "idempotent_agent_reinstall",
+        "hub_restart_cycle",
+        "systemd_analysis",
+    )
+
     def run_all(self) -> None:
         info(f"preflight: release directory {self.release_dir}")
-        self.preflight()
-        self.load_and_verify_release()
-        self.install_hub_from_archive()
-        self.verify_filesystem()
-        self.bootstrap_lifecycle()
-        self.direct_provisioning_is_refused()
-        self.setup_nginx()
-        self.tls_paths()
-        self.websocket_probe()
-        self.create_permanent_node()
-        self.fetch_and_install_agent(self.permanent_token)
-        self.wait_for_telemetry(self.permanent_node_id)
-        self.registration_flow()
-        self.idempotent_hub_reinstall()
-        self.idempotent_agent_reinstall()
-        self.hub_restart_cycle()
-        self.systemd_analysis()
+        for phase in self.REHEARSAL_PHASES:
+            getattr(self, phase)()
         info("all native systemd, bootstrap, Agent, telemetry, proxy, and reinstall checks passed")
 
 
@@ -1079,11 +1317,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--cleanup", action="store_true",
         help="remove the real installation and test TLS infrastructure after the rehearsal",
     )
+    parser.add_argument(
+        "--cleanup-only", action="store_true",
+        help="safely remove only state claimed by an incomplete rehearsal ownership marker",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.cleanup_only:
+        if os.geteuid() != 0:
+            print("FAIL: --cleanup-only must run as root so it can remove claimed systemd state", file=sys.stderr)
+            return 1
+        try:
+            cleanup_claimed_host_state()
+        except RehearsalError as error:
+            print(f"FAIL: cleanup failed: {error}", file=sys.stderr)
+            return 1
+        return 0
     if args.work_dir is None:
         work = Path(tempfile.mkdtemp(prefix="romi-systemd-rehearsal-"))
         remove_work = True

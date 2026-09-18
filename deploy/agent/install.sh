@@ -197,7 +197,11 @@ done
 case "$INTERVAL" in
     ''|*[!0-9]*) die "--interval must be a number from 1 to 3600" ;;
 esac
-[ "$INTERVAL" -ge 1 ] 2>/dev/null && [ "$INTERVAL" -le 3600 ] || die "--interval must be 1-3600"
+if [ "$INTERVAL" -ge 1 ] 2>/dev/null && [ "$INTERVAL" -le 3600 ]; then
+    :
+else
+    die "--interval must be 1-3600"
+fi
 
 case "$ROOT_PREFIX" in
     *'&'*|*'|'*|*[[:space:]]*) die "--root-prefix may not contain whitespace, & or |" ;;
