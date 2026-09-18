@@ -74,7 +74,15 @@ jobs:
           tar -tzvf dist/release/romi-agent-v*"${tag#v}"-x86_64-unknown-linux-gnu.tar.gz
 
       - name: Run real systemd, bootstrap, Agent, and TLS rehearsal
-        run: sudo python3 scripts/systemd_rehearsal.py --release-dir dist/release --cleanup
+        run: |
+          set -euo pipefail
+          # sudo resets PATH to /usr/bin/python3 (Python 3.10 on Ubuntu 22.04),
+          # but the canonical release verifier this driver invokes needs the
+          # mise-managed Python with tomllib. Resolve the real interpreter
+          # first, then elevate that exact binary.
+          rehearsal_python="$(python3 -c 'import sys; print(sys.executable)')"
+          echo "Using rehearsal Python: $rehearsal_python"
+          sudo "$rehearsal_python" scripts/systemd_rehearsal.py --release-dir dist/release --cleanup
 
       - name: Capture linked glibc symbols from the exact public artifacts
         if: always()
