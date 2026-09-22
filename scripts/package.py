@@ -63,8 +63,7 @@ def package():
     payload = {f'bin/{n}': (RELEASE / n).read_bytes() for n in receipt['binaries']}
     for item in ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs/local-release.md', 'docs/storage.md', 'docs/bench.md',
                  'server/Cargo.lock', 'agent/Cargo.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
-                 'package.json', 'admin/package.json', 'web/package.json', 'mise.toml', 'rust-toolchain.toml',
-                 'web/theme.json', 'web/preview.png']:
+                 'package.json', 'admin/package.json', 'web/package.json', 'mise.toml', 'rust-toolchain.toml']:
         payload[item] = (ROOT / item).read_bytes()
     for path in sorted((ROOT / 'web/dist').rglob('*')):
         if path.is_file():

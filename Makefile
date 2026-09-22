@@ -34,10 +34,9 @@ setup:
 frontend:
 	pnpm --dir admin run build
 	pnpm --dir web run build
+	rm -rf server/target/theme
 	mkdir -p server/target/theme
-	rm -rf server/target/theme/dist
 	cp -R web/dist server/target/theme/dist
-	cp web/theme.json web/preview.png server/target/theme/
 
 build: frontend
 	cargo build --locked --manifest-path server/Cargo.toml
