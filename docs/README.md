@@ -1,0 +1,21 @@
+# 文档导航
+
+按任务选择入口，不需要顺序阅读整个目录。产品事实、执行步骤和验证结果分别维护。
+
+| 要解决的问题 | 唯一入口 |
+| --- | --- |
+| 产品包含什么，什么不做 | [需求](requirements.md) |
+| 模块责任与数据流 | [架构](architecture.md) |
+| 字段、权限、计费和状态语义 | [领域规则](domain.md) |
+| 数据库、历史、备份和迁移 | [存储](storage.md) |
+| 界面能力与实现映射 | [UI 能力](ui/capabilities.md)、[产品约束](product/constraints.md)、[UI 契约](ui/implementation.md) |
+| 如何分阶段实施和提交 | [工程流程](engineering.md) |
+| 改动后跑什么检查 | [测试](testing.md) |
+| 如何安装、升级和恢复 | [部署](deployment.md) |
+| 如何交付同一份已验收工件 | [发布](release.md)、[本地快照](local-release.md) |
+| 安全机制与边界 | [安全](security-baseline.md) |
+| 如何做容量实验 | [基准方法](bench.md) |
+| 当前验证范围 | [验收状态](readiness.md) |
+| 文档与历史结构实验 | [文档消融](experiments/documentation.md) |
+
+代码和测试是行为依据，当前已批准设计在 `designs/romi-next/`。旧任务过程和淘汰方案不作为开发入口。
