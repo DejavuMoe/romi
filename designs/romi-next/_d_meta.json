@@ -1,0 +1,36 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "节点对比工作台": {
+      "versions": [
+        {
+          "path": "revision-v12/index.html",
+          "createdAt": "2026-09-22T10:59:00.368Z",
+          "status": "approved",
+          "viewport": {
+            "width": 1326,
+            "height": 831
+          }
+        }
+      ]
+    },
+    "公开状态页": {
+      "versions": [
+        {
+          "path": "revision-v12/public.html",
+          "createdAt": "2026-09-22T10:59:00.436Z",
+          "status": "approved",
+          "viewport": {
+            "width": 1326,
+            "height": 831
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-21T21:13:42.952Z",
+  "updatedAt": "2026-09-22T11:07:47.190Z",
+  "title": "romi 下一版界面原型"
+}

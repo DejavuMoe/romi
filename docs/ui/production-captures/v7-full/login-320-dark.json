@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "generator": "prototype-first-ui/collect_dom_content.js",
+  "capturedAt": "2026-09-22T08:08:13.143Z",
+  "page": {
+    "url": "http://localhost:4323/admin/nodes",
+    "title": "romi · 管理",
+    "language": "zh-CN",
+    "viewport": {
+      "width": 320,
+      "height": 831,
+      "devicePixelRatio": 2
+    }
+  },
+  "options": {
+    "includeComments": true,
+    "includeDataAttributes": true,
+    "includePseudoContent": true,
+    "includeClientJson": true,
+    "includeMetaContent": true,
+    "includeSameOriginFrames": true,
+    "redactPatterns": 0
+  },
+  "items": [
+    {
+      "id": "dom-bf41f21e",
+      "text": "romi · 管理",
+      "kind": "text",
+      "channel": "text",
+      "location": "html.dark > head > title",
+      "visibility": "hidden",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-2b2e4a19",
+      "text": "romi",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.login-screen > div.login-content > span.site-brand",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-eebde0fa",
+      "text": "登录",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.login-screen > div.login-content > h1",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-d1cf3c89",
+      "text": "card",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col",
+      "visibility": "visible",
+      "attribute": "data-slot",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-fedb33bf",
+      "text": "label",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > div:nth-of-type(1) > label.flex.items-center",
+      "visibility": "visible",
+      "attribute": "data-slot",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-8437e6da",
+      "text": "账号",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > div:nth-of-type(1) > label.flex.items-center",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-00665c2d",
+      "text": "input",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "input#username",
+      "visibility": "visible",
+      "attribute": "data-slot",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-e4a9277c",
+      "text": "label",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > div:nth-of-type(2) > label.flex.items-center",
+      "visibility": "visible",
+      "attribute": "data-slot",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-40853eb9",
+      "text": "密码",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > div:nth-of-type(2) > label.flex.items-center",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-25afb728",
+      "text": "input",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "input#password",
+      "visibility": "visible",
+      "attribute": "data-slot",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-48ff4727",
+      "text": "button",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > button.inline-flex.shrink-0",
+      "visibility": "visible",
+      "attribute": "data-slot",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-dc535e00",
+      "text": "default",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > button.inline-flex.shrink-0",
+      "visibility": "visible",
+      "attribute": "data-variant",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-dc535e00",
+      "text": "default",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > button.inline-flex.shrink-0",
+      "visibility": "visible",
+      "attribute": "data-size",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-ea79ae49",
+      "text": "登录",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.login-screen > div.login-content > div.flex.flex-col > form.space-y-4 > button.inline-flex.shrink-0",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-f90d5f31",
+      "text": "返回公开状态页",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.login-screen > div.login-content > a.text-center.text-sm",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-c49158d9",
+      "text": "Notifications alt+T",
+      "kind": "attribute",
+      "channel": "aria-label",
+      "location": "div#root > section",
+      "visibility": "visible",
+      "attribute": "aria-label",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-bee73f3b",
+      "text": "true",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > section",
+      "visibility": "visible",
+      "attribute": "data-react-aria-top-layer",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-ec2cb19d",
+      "text": "true",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#codex-browser-sidebar-comments-root ::shadow >> div > div",
+      "visibility": "visible",
+      "attribute": "data-browser-comment-root",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    }
+  ],
+  "limitations": [
+    "Closed shadow roots cannot be inspected.",
+    "Canvas/WebGL text, cross-origin frame content, native browser chrome, and OS-native dialogs are not captured.",
+    "Ordinary input values and sensitive-looking attributes/JSON keys are deliberately omitted.",
+    "Only the currently rendered state is captured; exercise other states separately.",
+    "Use sanitized test data: arbitrary text nodes or data attributes can still contain private product data."
+  ]
+}

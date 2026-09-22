@@ -1,0 +1,64 @@
+{
+  "copyBefore": {
+    "gap": 6,
+    "opacity": "0",
+    "rect": {
+      "bottom": 331.5,
+      "height": 34,
+      "left": 635.3671875,
+      "right": 718.125,
+      "top": 297.5,
+      "width": 82.7578125,
+      "x": 635.3671875,
+      "y": 297.5
+    }
+  },
+  "copyHovered": {
+    "opacity": "1",
+    "rect": {
+      "bottom": 331.5,
+      "height": 34,
+      "left": 635.3671875,
+      "right": 718.125,
+      "top": 297.5,
+      "width": 82.7578125,
+      "x": 635.3671875,
+      "y": 297.5
+    }
+  },
+  "keyboardIcon": {
+    "focused": true,
+    "opacity": "1"
+  },
+  "copies": [
+    {
+      "label": "复制 东京 · edge-01 IPv4",
+      "expected": "192.0.2.11",
+      "actual": "192.0.2.11"
+    },
+    {
+      "label": "复制 东京 · edge-01 IPv6",
+      "expected": "2001:db8::11",
+      "actual": "2001:db8::11"
+    },
+    {
+      "label": "复制 东京 · edge-01 接入标识",
+      "expected": "node-1",
+      "actual": "node-1"
+    }
+  ],
+  "touch": {
+    "coarse": true,
+    "height": 44,
+    "hoverNone": true,
+    "opacity": "0.65"
+  },
+  "menuInstallCount": 1,
+  "installationTarget": "东京 · edge-01\n接入标识 node-1",
+  "consoleErrors": [],
+  "longIP": {
+    "gap": 6,
+    "overflow": false,
+    "pageOverflow": false
+  }
+}
