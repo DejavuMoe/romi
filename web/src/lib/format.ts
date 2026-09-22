@@ -24,7 +24,7 @@ export function pair(used: number, total: number): string {
  */
 export function axisBytes(v: number): string {
   if (!v || v < 0) return "0 B"
-  const unit = Math.min(Math.floor(Math.log(v) / Math.log(1024)), 5)
+  const unit = unitOf(v)
   return bytes(v, v / 1024 ** unit >= 100 ? 0 : 1).replace(".0 ", " ")
 }
 
@@ -44,15 +44,7 @@ export function daysUntil(date?: string | null): number | null {
   return Math.ceil((target - Date.now()) / 86400000)
 }
 
-// Hoisted out of `clock`: recharts calls a tickFormatter for every sample when
-// laying out an axis rather than once per tick drawn, and constructing an Intl
-// formatter per call was the largest single cost on the detail page -- 348 ms of
-// a 1531 ms click-to-chart. The zone now resolves once, which only an OS timezone
-// change under an open tab would notice.
-//
-// Both take epoch milliseconds, which is what the charts feed their time axis:
-// recharts passes `scale="time"` to a d3 time scale, and a scale given seconds
-// reads 1.79e9 as three weeks past the epoch. The hub answers in seconds.
+// Cache formatters; chart layout formats many epoch-millisecond values.
 const HHMM = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" })
 
 const MDHHMM = new Intl.DateTimeFormat("zh-CN", {
@@ -62,23 +54,15 @@ const MDHHMM = new Intl.DateTimeFormat("zh-CN", {
   minute: "2-digit",
 })
 
-export function clock(ms: number): string {
-  return HHMM.format(ms)
-}
-
 /**
  * Axis ticks for a window `hours` wide. Beyond a day a bare "14:00" recurs each
  * midnight and the axis no longer indicates which day it refers to.
  */
 export function clockFor(hours: number): (ms: number) => string {
-  return hours <= 24 ? clock : (ms: number) => MDHHMM.format(ms)
+  return (hours <= 24 ? HHMM : MDHHMM).format
 }
 
-/**
- * Distro and CPU names as vendors write them carry mostly redundant text: a
- * codename in brackets, "GNU/Linux", "(R)", a core count already printed
- * separately. Stripping it is what makes the line fit.
- */
+/** Remove the distribution codename while keeping its version. */
 export function osName(name: string): string {
   return name.replace("GNU/Linux ", "").replace(/\s*\([^)]*\)\s*$/, "")
 }
