@@ -83,15 +83,6 @@ export function osName(name: string): string {
   return name.replace("GNU/Linux ", "").replace(/\s*\([^)]*\)\s*$/, "")
 }
 
-export function cpuName(name: string): string {
-  return name
-    .replace(/\((R|TM|r|tm)\)/g, "")
-    .replace(/\s+(CPU|Processor)\b/g, "")
-    .replace(/\s+\d+-Core\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-}
-
 // Ticks on round clock values across `[from, to]`, in epoch milliseconds.
 //
 // recharts selects ticks by "nice number" on the raw value, which on a timestamp
@@ -110,64 +101,6 @@ export function timeTicks(from: number, to: number, count = 8): number[] {
   return ticks
 }
 
-/**
- * A zero-anchored axis top for a quantity with no capacity to measure against: a
- * utilisation percentage, a load average, a transfer rate.
- *
- * Derived from the gridline rather than the reverse -- the smallest round step
- * whose fourth multiple clears the data. Chosen the other way, the top is round
- * while the four gridlines beneath it are not: a ceiling of 75% draws lines at
- * 18.75 and 56.25. `base` is 1024 for a quantity written in binary units, so the
- * steps are round in the unit it is printed in.
- *
- * `floor` keeps an idle machine looking idle: tracked exactly, a host that never
- * exceeds 0.4% CPU would get an axis of 0-0.4 and render every scheduler blip as
- * a peak.
- */
-export function axisTop(max: number, floor: number, base = 10, cap = Infinity): number {
-  const target = Math.min(cap, Math.max(max, floor)) / 4
-  const scale = base ** Math.floor(Math.log(target) / Math.log(base))
-  const step = LADDER[base].map((m) => m * scale).find((n) => n >= target)
-  return Math.min(cap, (step ?? target) * 4)
-}
-
-/**
- * Round multipliers, per base. A decade of base 1024 spans 1024, so a decimal
- * ladder cannot reach across one: with `scale` at 1024^k the largest step it
- * offers is 10 · 1024^k, leaving any target above that unmatched and falling
- * through to `top = max` -- no round step and no round gridlines, which is what
- * this function exists to provide. That held only for a peak within
- * [4, 40) · 1024^k, so a byte axis was more often wrong than right: 40 KB/s to
- * 4 MB/s, the ordinary range for a VPS, drew 2.9 MB with quarters at 732.4 KB.
- *
- * Powers of two for base 1024, with no half-step between them. The four ticks are
- * `step · [1, 2, 3, 4]`, so the third constrains the ladder: `3m` must land on a
- * label `axisBytes` can print, and it prints one decimal. Every power of two does
- * (3 · 512 Ki = 1.5 Mi); the half-steps 384 and 768 do not, their third gridline
- * being 1.125 Ki and 2.25 Ki, printed as "1.1" and "2.3" -- one incorrect label
- * beneath a top and two gridlines that are correct. Those two rungs would be
- * selected for peaks in (1, 1.5] and (2, 3] · 1024^k, that is 1-1.5 MB/s and
- * 2-3 MB/s, within the range named above. The cost of dropping them is a top that
- * may overshoot the data by 2x rather than 1.5x.
- */
-const LADDER: Record<number, number[]> = {
-  10: [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10],
-  1024: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
-}
-
-/**
- * The gridlines for a zero-anchored axis: the top and the three quarters beneath
- * it.
- *
- * Specified explicitly rather than left to recharts, which selects "nice" decimal
- * values whatever domain it is given -- a top of 30 MiB returns 7.6, 15.3, 22.9,
- * 30, neither quarters nor round in the unit they are printed in.
- */
-export function quarters(top: number): number[] {
-  return [0, 0.25, 0.5, 0.75, 1].map((f) => top * f)
-}
-
-/** An absent history bucket is a gap, never a measured zero or a continuous line. */
 export function withHistoryGaps<T extends {ts:number;step?:number}>(points:T[]):(T|{ts:number})[] {
   return points.flatMap((point,index)=>{
     const previous=points[index-1], step=point.step??60

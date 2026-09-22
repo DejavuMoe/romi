@@ -5,24 +5,6 @@ import { api, ApiError } from "../../../shared/http.ts"
 export type { Node, Metrics } from "../../../shared/nodes.ts"
 export { api, ApiError } from "../../../shared/http.ts"
 
-/**
- * Fleet throughput, one sample per push. Held beside the stream that feeds it
- * rather than in the tile that draws it: the summary unmounts while a node page is
- * open, so a buffer held there would restart empty on every return. Two minutes at
- * the hub's push interval.
- */
-const KEEP = 60
-export const speedHistory: { rx: number; tx: number }[] = []
-
-function sample(nodes: Node[]) {
-  const live = nodes.filter((n) => n.online && n.metrics)
-  speedHistory.push({
-    rx: live.reduce((s, n) => s + n.metrics!.net_rx, 0),
-    tx: live.reduce((s, n) => s + n.metrics!.net_tx, 0),
-  })
-  if (speedHistory.length > KEEP) speedHistory.shift()
-}
-
 /** A malformed report must not remove every other node from the page. */
 export function safeNodes(nodes: Node[]): Node[] {
   const number = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0
@@ -56,7 +38,6 @@ export function useNodes() {
 
     const receive = (list: Node[]) => {
       const safe = safeNodes(list)
-      sample(safe)
       setNodes(safe)
       setError(null)
       setClosed(false)

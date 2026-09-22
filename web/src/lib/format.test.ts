@@ -4,7 +4,7 @@ import assert from "node:assert/strict"
 // requires no runner, framework or dependency.
 //
 // Nothing imports it, so the bundle never includes it.
-import { axisBytes, axisTop, bytes, cpuName, daysUntil, osName, pair, quarters, timeTicks, uptime } from "./format.ts"
+import { axisBytes, bytes, daysUntil, osName, pair, timeTicks, uptime } from "./format.ts"
 
 let failed = 0
 function eq(got: unknown, want: unknown, what: string) {
@@ -35,32 +35,6 @@ eq(pair(300 * 1024 ** 2, 3 * 1024 ** 3), "300 MiB / 3.00 GiB", "跨单位各写�
 eq(axisBytes(3.2 * 1024 ** 3), "3.2 GiB", "窄轴刻度保留一位")
 eq(axisBytes(2 * 1024 ** 3), "2 GiB", "整数刻度不写 .0")
 eq(axisBytes(0), "0 B", "零刻度")
-
-// axisTop: the top is derived from a round gridline, so quarters() lands on round
-// values in the unit the axis is printed in.
-eq(axisTop(0.4, 4, 10, 100), 4, "闲置机器拿到地板值")
-eq(axisTop(63, 4, 10, 100), 80, "63% -> 0/20/40/60/80")
-eq(axisTop(200, 4, 10, 100), 100, "百分比封顶")
-eq(axisTop(25_000_000, 1024, 1024), 32 * 1024 ** 2, "字节轴按 1024 取整")
-eq(quarters(32 * 1024 ** 2).map(axisBytes), ["0 B", "8 MiB", "16 MiB", "24 MiB", "32 MiB"], "四条网格线都是整值")
-// 四条刻度为 step·[1,2,3,4]，约束落在第三条：3m 必须能被 axisBytes 精确打印，
-// 而它只保留一位小数。2 的幂均满足；半档 384 与 768 不满足，其第三条刻度为
-// 1.125 Ki 与 2.25 Ki，将被打印为 "1.1" 与 "2.3"。这两档恰好覆盖 1–1.5 MiB/s
-// 与 2–3 MiB/s。断言针对标签本身，仅比较轴顶比例无法发现该问题。
-eq(quarters(axisTop(2_621_440, 1024, 1024)).map(axisBytes),
-   ["0 B", "1 MiB", "2 MiB", "3 MiB", "4 MiB"], "峰值 2.5 MiB/s 的四条刻度")
-eq(quarters(axisTop(1_258_291, 1024, 1024)).map(axisBytes),
-   ["0 B", "512 KiB", "1 MiB", "1.5 MiB", "2 MiB"], "峰值 1.2 MiB/s 的四条刻度")
-// 轴顶必须取自梯子而非数据本身。十进制梯子配合 1024 进制的 scale 最大仅到
-// 10·1024^k，越过该档后 find 落空，`?? target` 将轴顶回退为 max，网格线随之变为
-// max/4 这类非整值，正是本函数要避免的情形。该回退仅在 [4,40)·1024^k 的窄带内
-// 不出问题，而 40 KiB/s–4 MiB/s 恰是 VPS 最常见的区间。
-for (const max of [3_000, 300_000, 3_000_000, 300_000_000]) {
-  const top = axisTop(max, 1024, 1024)
-  eq(top > max, true, `${max} B/s 的轴顶不能等于数据本身`)
-  // 上界为 2 而非 1.5：梯子移除半档后，最坏情况是下一档 2 的幂。
-  eq(top / max < 2, true, `${max} B/s 的轴顶不能浪费整块面板`)
-}
 
 // timeTicks: round clock values, phased on local midnight rather than the epoch,
 // and never more than requested.
@@ -101,7 +75,6 @@ eq(uptime(3 * 3600 + 25 * 60), "3 小时 25 分", "不足一天")
 eq(uptime(2 * 86400 + 5 * 3600), "2 天 5 小时", "超过一天不再写分钟")
 
 eq(osName("Debian GNU/Linux 12 (bookworm)"), "Debian 12", "发行版名去掉代号")
-eq(cpuName("Intel(R) Xeon(R) CPU E5-2680 8-Core Processor"), "Intel Xeon E5-2680", "CPU 名去掉商标和核数")
 
 if (failed) {
   console.error(`\n${failed} 项不通过`)
