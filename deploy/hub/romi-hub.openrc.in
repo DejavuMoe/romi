@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+description="romi monitoring Hub"
+supervisor="supervise-daemon"
+command="@ROMI_HUB_BIN@"
+command_user="romi:romi"
+command_args="--listen 127.0.0.1:@ROMI_PORT@ --db @ROMI_STATE_DIR@/romi.duckdb --themes @ROMI_STATE_DIR@/themes --db-temp @ROMI_STATE_DIR@/tmp --bootstrap-password-file @ROMI_STATE_DIR@/bootstrap-password --distribution-dir @ROMI_DISTRIBUTION_DIR@"
+pidfile="/run/romi-hub.pid"
+respawn_delay=2
+respawn_max=0
+retry="TERM/15/KILL/5"
+output_log="/var/log/romi-hub.log"
+error_log="/var/log/romi-hub.log"
+umask=0077
+
+depend() { need net; }
+start_pre() {
+    checkpath -f -m 0600 -o "$command_user" "$output_log" || return 1
+    # Read literal values. Never source/eval an environment file as shell code.
+    while IFS= read -r line; do
+        case "$line" in ROMI_SITE=*) export "$line" ;; esac
+    done < "@ROMI_HUB_ENV@"
+}

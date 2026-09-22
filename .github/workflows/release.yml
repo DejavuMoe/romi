@@ -1,0 +1,135 @@
+name: Release
+
+# Dispatch prepares a public-shaped candidate but never publishes. A tag reuses
+# those exact archives after same-SHA checks and artifact-bound rehearsal.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: node pnpm python rust
+      - name: Validate the pushed tag
+        if: github.ref_type == 'tag'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/version.py check --tag "$RELEASE_TAG"
+      - name: Check packaging and installer regressions
+        run: make check-scripts check-release-scripts
+      - name: Download accepted native and Docker builds
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 scripts/release_matrix.py fetch-native
+      - name: Assemble a non-publishing public-shaped candidate
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 scripts/release_matrix.py prepare
+      - name: Build frontend references and install browser test dependencies
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          pnpm install --frozen-lockfile
+          make frontend
+          pnpm exec playwright install --with-deps --only-shell chromium
+      - name: Test the exact candidate package in the browser
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python3 scripts/release_matrix.py extract-target --target x86_64-unknown-linux-gnu --output dist/native-release
+          python3 -c 'import sys; sys.path.insert(0,"scripts"); import release; from pathlib import Path; release.extract_archive(Path("dist/native-release") / release.artifact_filename("hub", release.checked_version(release.ROOT)), Path("target/acceptance"))'
+          python3 scripts/smoke.py --bin-dir target/acceptance/bin
+          python3 scripts/check_live_capacity.py --bin-dir target/acceptance/bin
+          ROMI_E2E_BIN_DIR="$PWD/target/acceptance/bin" pnpm test:e2e
+      - name: Reuse the rehearsed candidate for a tag
+        if: github.event_name == 'push'
+        run: |
+          python3 scripts/release_gate.py
+          python3 scripts/release_matrix.py fetch-release
+          python3 scripts/release_matrix.py require-rehearsal
+      - name: Independently verify the complete release matrix
+        run: python3 scripts/release_matrix.py verify
+      - name: Preserve browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-browser-failures-${{ github.sha }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+      - name: Upload the verified bytes unchanged
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: romi-release-${{ github.sha }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish tagged test release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: romi-release-${{ github.sha }}
+          path: dist/release
+      - name: Verify identity and evidence without executing release binaries
+        run: |
+          set -euo pipefail
+          python3 scripts/version.py check --tag "$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")" = "$GITHUB_SHA"
+          python3 scripts/release_gate.py
+          python3 scripts/release_matrix.py verify
+          python3 scripts/release_matrix.py require-rehearsal
+      - name: Create or resume this commit's draft and upload assets
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/romi-release-notes.md"
+          cat "docs/release-$RELEASE_TAG.md" > "$notes"
+          printf '\nSource commit: `%s`\n\n<!-- romi-source:%s -->\n' "$GITHUB_SHA" "$GITHUB_SHA" >> "$notes"
+          if gh release view "$RELEASE_TAG" --json isDraft,body > "$RUNNER_TEMP/romi-existing-release.json" 2>/dev/null; then
+            python3 -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"romi-existing-release.json").read_text()); assert r["isDraft"] and "<!-- romi-source:"+os.environ["GITHUB_SHA"]+" -->" in r["body"], "refusing to overwrite a published or unrelated release"'
+          else
+            gh release create "$RELEASE_TAG" --draft --prerelease --verify-tag --latest=false \
+              --title "romi $RELEASE_TAG — testing release" --notes-file "$notes"
+          fi
+          gh release upload "$RELEASE_TAG" dist/release/* --clobber
+      - name: Attest every uploaded asset
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/release/*
+      - name: Publish the complete Pre-release
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

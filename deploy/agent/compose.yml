@@ -1,0 +1,22 @@
+services:
+  romi-agent:
+    image: romi-agent:0.0.1
+    pull_policy: never
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    uts: host
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 64m
+    env_file: agent.env
+    environment:
+      ROMI_HOST_ROOT: /host
+    volumes:
+      - type: bind
+        source: /
+        target: /host
+        read_only: true

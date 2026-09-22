@@ -1,0 +1,6 @@
+/target
+
+# 私有文档与本地 AI 配置，不进开源仓库
+/docs/
+/CLAUDE.md
+/.claude/

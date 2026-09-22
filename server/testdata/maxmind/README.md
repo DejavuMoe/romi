@@ -1,0 +1,1 @@
+MaxMind Country test database. Source: https://github.com/maxmind/MaxMind-DB/tree/86c7128d0987a40b4f352fec13b2c0d6cd457f87/test-data. Unmodified test data; MIT license included. Used only for deterministic parser, replacement and cancellation tests; never bundled as the production country database.

@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      ablation:
+        description: 'Run CI timing ablations (diagnostic, does not replace the PR gate)'
+        type: boolean
+        default: false
+      paired:
+        description: 'Compare cold Rust gates on the same VM in both orders'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ablation && 'ablation' || inputs.paired && 'paired' || 'checks' }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: ${{ !inputs.ablation && !inputs.paired }}
+    # A skipped experiment job must never satisfy the required PR check name.
+    name: ${{ (inputs.ablation || inputs.paired) && 'PR gate not run (ablation)' || 'Test and verify package' }}
+    runs-on: ubuntu-24.04
+    # A cold runner builds bundled DuckDB for the quality gates and release.
+    timeout-minutes: 60
+    env:
+      # CI still executes debug assertions and every test; only debug symbols
+      # are omitted. Local developer and release profiles are unchanged.
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up development tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: node pnpm python rust
+
+      - name: Ensure a C/C++ toolchain for DuckDB
+        # The image ships one; this states the requirement rather than assuming
+        # it, so a runner without it fails here instead of inside the crate build.
+        run: |
+          cc --version
+          c++ --version
+
+      - name: Install locked dependencies
+        run: make setup
+
+      - name: Install Chromium and its Linux dependencies
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      - name: Build frontends
+        run: make frontend
+
+      - name: Check scripts, frontends and formatting
+        run: make check-scripts check-release-scripts check-frontends check-format
+
+      - name: Identify the compiler image for caching
+        id: cache-image
+        run: |
+          echo "version=${ImageVersion:?}" >> "$GITHUB_OUTPUT"
+          lscpu | grep 'Model name'
+          c++ --version | head -n 1
+
+      - name: Restore compatible Rust build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target
+          key: rust-ci-nd0-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.version }}-${{ hashFiles('rust-toolchain.toml', 'server/Cargo.toml', 'server/Cargo.lock', 'agent/Cargo.toml', 'agent/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            rust-ci-nd0-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.version }}-${{ hashFiles('rust-toolchain.toml', 'server/Cargo.toml', 'server/Cargo.lock', 'agent/Cargo.toml', 'agent/Cargo.lock') }}-
+
+      - name: Run Clippy
+        run: make check-clippy
+
+      - name: Run Rust tests
+        run: make check-rust-tests
+
+      - name: Build and verify release package
+        run: |
+          make package
+          (cd dist && sha256sum --check ./*.sha256)
+          romi_unpack=$(mktemp -d)
+          tar -xzf dist/romi-*.tar.gz -C "$romi_unpack"
+          echo "ROMI_PACKAGE_BIN_DIR=$romi_unpack/bin" >> "$GITHUB_ENV"
+
+      - name: Smoke-test extracted binaries
+        run: python3 scripts/smoke.py --bin-dir "$ROMI_PACKAGE_BIN_DIR"
+
+      - name: Check live viewer resource boundaries
+        run: python3 scripts/check_live_capacity.py --bin-dir "$ROMI_PACKAGE_BIN_DIR"
+
+      - name: Run browser tests against extracted binaries
+        run: ROMI_E2E_BIN_DIR="$ROMI_PACKAGE_BIN_DIR" pnpm test:e2e
+
+      - name: Preserve browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-failures-${{ github.sha }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ablation:
+    if: ${{ inputs.ablation }}
+    name: Ablation ${{ matrix.variant }} / ${{ matrix.repeat }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        variant: [baseline, no-clippy, no-dev-debug]
+        repeat: [1, 2]
+    env:
+      CARGO_BUILD_JOBS: 4
+    steps:
+      - name: Check out the same source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up locked tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: node pnpm python rust
+      - name: Install dependencies outside the measured build phases
+        run: |
+          make setup
+          pnpm exec playwright install --with-deps --only-shell chromium
+      - name: Measure cold and warm gates
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: python3 scripts/ci_ablation.py --variant "$VARIANT"
+      - name: Preserve timing evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-ablation-${{ matrix.variant }}-${{ matrix.repeat }}
+          path: target/ci-ablation/
+          if-no-files-found: error
+          retention-days: 14
+
+  paired:
+    if: ${{ inputs.paired }}
+    name: Paired Rust gates / ${{ matrix.order }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        order: [baseline-first, nodebug-first]
+    env:
+      CARGO_BUILD_JOBS: 4
+    steps:
+      - name: Check out the same source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up locked tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: node pnpm python rust
+      - name: Install dependencies
+        run: make setup
+      - name: Measure both variants on this runner
+        env:
+          ORDER: ${{ matrix.order }}
+        run: python3 scripts/ci_ablation.py --paired "$ORDER"
+      - name: Preserve paired evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-paired-${{ matrix.order }}
+          path: target/ci-ablation/
+          if-no-files-found: error
+          retention-days: 14

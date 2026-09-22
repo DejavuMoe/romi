@@ -1,0 +1,17 @@
+{
+  "name": "romi",
+  "private": true,
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "author": "Dejavu Moe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DejavuMoe/romi.git"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
