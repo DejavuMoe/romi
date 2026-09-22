@@ -1,4 +1,22 @@
 import { test, expect, signIn, navigateAdmin } from './fixtures.mjs'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+
+async function visualReference(page, name) {
+  const directory = process.env.ROMI_VISUAL_REFERENCE
+  if (!directory) return
+  await page.evaluate(() => document.fonts.ready)
+  const image = await page.screenshot({ animations:'disabled', caret:'hide' })
+  const path = join(directory, `${test.info().project.name}-${name}.png`)
+  if (process.env.ROMI_VISUAL_RECORD === '1') {
+    await mkdir(directory, { recursive:true })
+    await writeFile(path, image)
+  } else {
+    const hash = bytes => createHash('sha256').update(bytes).digest('hex')
+    expect(hash(image), `unchanged rendering: ${name}`).toBe(hash(await readFile(path)))
+  }
+}
 
 test('node management keeps edits, cancellation and priority on real APIs', async ({ page, hub }) => {
   const first = await hub.node('第一台节点')
@@ -55,6 +73,7 @@ test('solid light/dark surfaces and operational copy hold across navigation', as
       expect(observed.blurred).toBe(false)
       expect(observed.primary).toBe(theme === 'dark' ? '#99b9dd' : '#205ea6')
       expect(observed.text).not.toMatch(/AI Slop|提示词|草绿色|米白|Hackerman|Flexoki|CONTROL PANEL|OVERVIEW \/ NODES/i)
+      if (['节点','监测','通知'].includes(section)) await visualReference(page, `${theme}-${section}`)
     }
     await navigateAdmin(page, '节点')
     await page.getByRole('button', { name: '编辑菜单 文案检查节点', exact: true }).click()
@@ -64,6 +83,7 @@ test('solid light/dark surfaces and operational copy hold across navigation', as
     await page.goto('/')
     await expect(page.getByRole('heading', { name: '节点状态', exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await visualReference(page, `${theme}-public`)
   }
   expect(paths.some(path => path.includes('/designs/') || path.includes('/vendor/'))).toBe(false)
 })
