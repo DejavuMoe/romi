@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "generator": "prototype-first-ui/collect_dom_content.js",
-  "capturedAt": "2026-09-23T06:32:41.595Z",
+  "capturedAt": "2026-09-23T06:41:40.445Z",
   "page": {
-    "url": "http://127.0.0.1:4311/romi-docs/guide.html",
-    "title": "部署 | romi 文档",
+    "url": "http://127.0.0.1:4311/romi-docs/release.html",
+    "title": "发布流程 | romi 文档",
     "language": "zh-CN",
     "viewport": {
       "width": 390,
@@ -23,8 +23,8 @@
   },
   "items": [
     {
-      "id": "dom-c01e997a",
-      "text": "部署 | romi 文档",
+      "id": "dom-51370f38",
+      "text": "发布流程 | romi 文档",
       "kind": "text",
       "channel": "text",
       "location": "html > head > title",
@@ -95,11 +95,11 @@
       "redacted": false
     },
     {
-      "id": "dom-9a6e1d93",
+      "id": "dom-b491cf94",
       "text": "部署",
       "kind": "text",
       "channel": "text",
-      "location": "html > body > header.site-header > div.header-inner > nav.desktop-nav > a.current:nth-of-type(2)",
+      "location": "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(2)",
       "visibility": "visually-hidden",
       "attribute": null,
       "reference": null,
@@ -299,11 +299,47 @@
       "redacted": false
     },
     {
-      "id": "dom-e6dbd71a",
-      "text": "GitHub ↗",
+      "id": "dom-86f604cb",
+      "text": "备份与恢复",
       "kind": "text",
       "channel": "text",
       "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(5)",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-056629c9",
+      "text": "安全边界",
+      "kind": "text",
+      "channel": "text",
+      "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(6)",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-49951516",
+      "text": "发布流程",
+      "kind": "text",
+      "channel": "text",
+      "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(7)",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-a0390109",
+      "text": "GitHub ↗",
+      "kind": "text",
+      "channel": "text",
+      "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(8)",
       "visibility": "visible",
       "attribute": null,
       "reference": null,
@@ -347,11 +383,11 @@
       "redacted": false
     },
     {
-      "id": "dom-706403a5",
+      "id": "dom-8b49a37a",
       "text": "部署",
       "kind": "text",
       "channel": "text",
-      "location": "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(2)",
+      "location": "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(2)",
       "visibility": "visually-hidden",
       "attribute": null,
       "reference": null,
@@ -431,11 +467,11 @@
       "redacted": false
     },
     {
-      "id": "dom-fb2aa997",
+      "id": "dom-5e06b34c",
       "text": "发布流程",
       "kind": "text",
       "channel": "text",
-      "location": "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(7)",
+      "location": "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(7)",
       "visibility": "visually-hidden",
       "attribute": null,
       "reference": null,
@@ -467,8 +503,8 @@
       "redacted": false
     },
     {
-      "id": "dom-bf5836c2",
-      "text": "部署",
+      "id": "dom-acc2c61c",
+      "text": "发布流程",
       "kind": "text",
       "channel": "text",
       "location": "main#main > p.breadcrumbs:nth-of-type(1)",
@@ -479,8 +515,8 @@
       "redacted": false
     },
     {
-      "id": "dom-eb6fb2cc",
-      "text": "部署",
+      "id": "dom-e0f3f81a",
+      "text": "发布流程",
       "kind": "text",
       "channel": "text",
       "location": "main#main > h1",
@@ -491,8 +527,8 @@
       "redacted": false
     },
     {
-      "id": "dom-ce90c19a",
-      "text": "Hub 与 Agent 支持 x86_64、ARM64 的 GNU 和 musl Linux 工件。Debian 使用 systemd，Alpine 使用 OpenRC。",
+      "id": "dom-65e114ac",
+      "text": "版本来源是仓库根目录的 VERSION，Hub 与 Agent 使用同一版本号。",
       "kind": "text",
       "channel": "text",
       "location": "main#main > p.doc-lead:nth-of-type(2)",
@@ -503,11 +539,11 @@
       "redacted": false
     },
     {
-      "id": "dom-57da7520",
-      "text": "安装前",
+      "id": "dom-af2baf6e",
+      "text": "候选构建",
       "kind": "text",
       "channel": "text",
-      "location": "main#main > div.notice > strong",
+      "location": "h2#section-1",
       "visibility": "visible",
       "attribute": null,
       "reference": null,
@@ -515,32 +551,8 @@
       "redacted": false
     },
     {
-      "id": "dom-7d711a49",
-      "text": "从已发布的归档获取工件，先验证来源证明与 SHA-256，再解压和安装。不要从可变的 master 分支直接执行安装脚本。",
-      "kind": "text",
-      "channel": "text",
-      "location": "main#main > div.notice > p",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-88f64ccb",
-      "text": "选择工件",
-      "kind": "text",
-      "channel": "text",
-      "location": "h2#choose",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-92aca975",
-      "text": "根据主机架构和 libc 选择对应的 Hub 归档。Agent 可以原生运行；Agent Docker 镜像按 x86_64 和 ARM64 分发。Hub Docker 不在当前支持范围。",
+      "id": "dom-ed3a3a70",
+      "text": "同一提交先通过 CI 和四个平台构建，再手动组装候选发行包。候选包不自动发布。",
       "kind": "text",
       "channel": "text",
       "location": "main#main > p:nth-of-type(3)",
@@ -551,11 +563,11 @@
       "redacted": false
     },
     {
-      "id": "dom-3ad31f44",
-      "text": "验证并安装 Hub",
+      "id": "dom-344865a1",
+      "text": "发行演练",
       "kind": "text",
       "channel": "text",
-      "location": "h2#verify",
+      "location": "h2#section-2",
       "visibility": "visible",
       "attribute": null,
       "reference": null,
@@ -563,8 +575,8 @@
       "redacted": false
     },
     {
-      "id": "dom-1786539a",
-      "text": "发布归档中包含目标平台的 Hub、Agent、安装器和校验信息。验证完成后，将归档解压到空目录，并从解压目录运行安装器：",
+      "id": "dom-e8684d7d",
+      "text": "发行演练使用候选包的相同字节，检查 systemd、TLS、注册、重装与重启持久性。失败或其他提交的结果不能替代本次验收。",
       "kind": "text",
       "channel": "text",
       "location": "main#main > p:nth-of-type(4)",
@@ -575,11 +587,11 @@
       "redacted": false
     },
     {
-      "id": "dom-b7465934",
-      "text": "mkdir romi-hub tar -xzf romi-hub-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz -C romi-hub sudo sh romi-hub/deploy/hub/install.sh --site https://hub.example.com",
+      "id": "dom-efa1773d",
+      "text": "版本标签",
       "kind": "text",
       "channel": "text",
-      "location": "main#main > pre > code",
+      "location": "h2#section-3",
       "visibility": "visible",
       "attribute": null,
       "reference": null,
@@ -587,107 +599,11 @@
       "redacted": false
     },
     {
-      "id": "dom-8316e977",
-      "text": "Hub 监听回环地址，外部 HTTPS 由可信反向代理提供。安装器不会下载源代码或二进制。",
+      "id": "dom-f3ee065f",
+      "text": "获授权后，标签工作流核对门禁并复用已验收归档。当前工作流创建 Pre-release，尚未配置稳定版发布。",
       "kind": "text",
       "channel": "text",
       "location": "main#main > p:nth-of-type(5)",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-4e1dcbfb",
-      "text": "首次登录与节点接入",
-      "kind": "text",
-      "channel": "text",
-      "location": "h2#bootstrap",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-0c050ce6",
-      "text": "全新数据库的管理员初始密码写入",
-      "kind": "text",
-      "channel": "text",
-      "location": "main#main > p:nth-of-type(6)",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-2b0c018f",
-      "text": "/var/lib/romi/bootstrap-password",
-      "kind": "text",
-      "channel": "text",
-      "location": "main#main > p:nth-of-type(6) > code",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-3e40705a",
-      "text": "，权限为 0600。修改密码后该文件会删除。",
-      "kind": "text",
-      "channel": "text",
-      "location": "main#main > p:nth-of-type(6)",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-0570521f",
-      "text": "管理员创建节点后，由节点从可信 Hub 获取精确版本的 Agent。下载内容会按大小、SHA-256 和 Agent 版本核验。",
-      "kind": "text",
-      "channel": "text",
-      "location": "main#main > p:nth-of-type(7)",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-2e0a6906",
-      "text": "下一篇",
-      "kind": "attribute",
-      "channel": "aria-label",
-      "location": "main#main > nav.doc-next",
-      "visibility": "visible",
-      "attribute": "aria-label",
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-4d57a8ac",
-      "text": "下一篇",
-      "kind": "text",
-      "channel": "text",
-      "location": "main#main > nav.doc-next > a > small",
-      "visibility": "visible",
-      "attribute": null,
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-0554ed75",
-      "text": "备份与恢复 →",
-      "kind": "text",
-      "channel": "text",
-      "location": "main#main > nav.doc-next > a > strong",
       "visibility": "visible",
       "attribute": null,
       "reference": null,
@@ -719,8 +635,8 @@
       "redacted": false
     },
     {
-      "id": "dom-d48e38b1",
-      "text": "选择工件",
+      "id": "dom-cc73bce0",
+      "text": "候选构建",
       "kind": "text",
       "channel": "text",
       "location": "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)",
@@ -731,8 +647,8 @@
       "redacted": false
     },
     {
-      "id": "dom-7b08083d",
-      "text": "验证并安装 Hub",
+      "id": "dom-3f0806ed",
+      "text": "发行演练",
       "kind": "text",
       "channel": "text",
       "location": "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)",
@@ -743,8 +659,8 @@
       "redacted": false
     },
     {
-      "id": "dom-90c5c17c",
-      "text": "首次登录与节点接入",
+      "id": "dom-4cec8cab",
+      "text": "版本标签",
       "kind": "text",
       "channel": "text",
       "location": "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)",
@@ -834,18 +750,6 @@
       "location": "input#site-search",
       "visibility": "visually-hidden",
       "attribute": "placeholder",
-      "reference": null,
-      "jsonPath": null,
-      "redacted": false
-    },
-    {
-      "id": "dom-ffa8e7ca",
-      "text": "没有匹配文档",
-      "kind": "text",
-      "channel": "text",
-      "location": "html > body > dialog.search-dialog > div.search-results > p",
-      "visibility": "visually-hidden",
-      "attribute": null,
       "reference": null,
       "jsonPath": null,
       "redacted": false

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generator": "prototype-first-ui/collect_dom_content.js",
-  "capturedAt": "2026-09-23T06:32:41.475Z",
+  "capturedAt": "2026-09-23T06:41:39.748Z",
   "page": {
     "url": "http://127.0.0.1:4311/romi-docs/guide.html",
     "title": "部署 | romi 文档",
@@ -299,11 +299,47 @@
       "redacted": false
     },
     {
-      "id": "dom-e6dbd71a",
-      "text": "GitHub ↗",
+      "id": "dom-86f604cb",
+      "text": "备份与恢复",
       "kind": "text",
       "channel": "text",
       "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(5)",
+      "visibility": "hidden",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-056629c9",
+      "text": "安全边界",
+      "kind": "text",
+      "channel": "text",
+      "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(6)",
+      "visibility": "hidden",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-49951516",
+      "text": "发布流程",
+      "kind": "text",
+      "channel": "text",
+      "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(7)",
+      "visibility": "hidden",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-a0390109",
+      "text": "GitHub ↗",
+      "kind": "text",
+      "channel": "text",
+      "location": "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(8)",
       "visibility": "hidden",
       "attribute": null,
       "reference": null,

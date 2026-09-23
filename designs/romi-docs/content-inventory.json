@@ -6,10 +6,15 @@
     "sources": [
       "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
       "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
-      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json"
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
     ],
-    "capturedAt": "2026-09-23T06:32:41Z",
+    "capturedAt": "2026-09-23T06:53:46Z",
     "surfaces": [
       {
         "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
@@ -32,9 +37,49 @@
         }
       },
       {
-        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
-        "url": "http://127.0.0.1:4311/romi-docs/guide.html",
-        "title": "部署 | romi 文档",
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
+        "url": "http://127.0.0.1:4311/romi-docs/features.html",
+        "title": "功能范围 | romi 文档",
+        "viewport": {
+          "width": 1360,
+          "height": 850,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json",
+        "url": "http://127.0.0.1:4311/romi-docs/storage.html",
+        "title": "备份与恢复 | romi 文档",
+        "viewport": {
+          "width": 1360,
+          "height": 850,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "url": "http://127.0.0.1:4311/romi-docs/security.html",
+        "title": "安全边界 | romi 文档",
+        "viewport": {
+          "width": 1360,
+          "height": 850,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "url": "http://127.0.0.1:4311/romi-docs/engineering.html",
+        "title": "开发流程 | romi 文档",
+        "viewport": {
+          "width": 1360,
+          "height": 850,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "url": "http://127.0.0.1:4311/romi-docs/release.html",
+        "title": "发布流程 | romi 文档",
         "viewport": {
           "width": 1360,
           "height": 850,
@@ -43,11 +88,21 @@
       },
       {
         "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "url": "http://127.0.0.1:4311/romi-docs/guide.html",
-        "title": "部署 | romi 文档",
+        "url": "http://127.0.0.1:4311/romi-docs/release.html",
+        "title": "发布流程 | romi 文档",
         "viewport": {
           "width": 390,
           "height": 844,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "url": "http://127.0.0.1:4311/romi-docs/guide.html",
+        "title": "部署 | romi 文档",
+        "viewport": {
+          "width": 1280,
+          "height": 720,
           "devicePixelRatio": 1
         }
       }
@@ -76,9 +131,14 @@
         "accessibility-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -101,7 +161,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -203,14 +262,39 @@
       "notes": null
     },
     {
+      "id": "content-231b6b997acf6aca",
+      "text": "Agent 上报 CPU、物理内存、ZRAM、Swap、磁盘、网络、进程数、连接数和运行时长。Hub 保存分钟与小时历史；缺少样本的区间保持空白。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
       "id": "content-041ebc7928fb7759",
       "text": "GitHub ↗",
       "channels": [
         "text"
       ],
       "locations": [
-        "html > body > div.mobile-menu > nav > a:nth-of-type(5)",
-        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(5)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(8)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(8)",
         "html > body > header.site-header > div.header-inner > div.header-actions > a.github-link"
       ],
       "visibility": [
@@ -218,10 +302,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -244,7 +333,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -253,6 +341,31 @@
       "evidence": {
         "source": "design-sources.json#romi-docs",
         "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-4839ce56bf70ce3f",
+      "text": "Hub 使用内嵌 DuckDB 保存节点、历史和管理数据。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p.doc-lead:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
       },
       "flags": [],
       "notes": null
@@ -271,7 +384,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -280,6 +392,56 @@
       "evidence": {
         "source": "design-sources.json#romi-docs",
         "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9e1cbfe368a71e41",
+      "text": "Hub 默认监听回环，由可信反向代理提供 HTTPS。Agent 默认验证 TLS；安装器只获取同一 Hub 提供的精确版本工件并检查大小、摘要和版本。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(4)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-92def18f9a6bd54e",
+      "text": "Linux 构建通过 linux-task.ps1 的 build 模式运行。按改动范围执行前端、Rust、脚本和浏览器测试；完整 Linux 门禁入口为 make check-linux。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(4)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
       },
       "flags": [],
       "notes": null
@@ -297,10 +459,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "legal-approved",
       "origin": "authoritative-policy",
@@ -326,7 +493,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -354,10 +520,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "orientation",
       "origin": "production-domain",
@@ -401,15 +572,95 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-117e0a1661e05bb2",
+      "text": "romi 是单 Hub、多 Agent 的 Linux 主机监测服务。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p.doc-lead:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-eeeae29b1c2f400c",
+      "text": "TCP 监测使用 host:port 目标，可指定执行节点和间隔。管理员可配置 Telegram、Webhook、离线恢复、流量与到期通知。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(4)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-79cec36a2f2c243e",
+      "text": "Windows 保存源码与 Git；Debian WSL2 用于可重建的 Linux 构建和测试。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p.doc-lead:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
       "flags": [],
       "notes": null
     },
@@ -427,10 +678,15 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -499,10 +755,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -524,10 +785,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -550,10 +816,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -578,7 +849,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "orientation",
@@ -602,10 +872,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "orientation",
       "origin": "production-domain",
@@ -675,7 +950,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -685,6 +959,79 @@
         "source": "design-sources.json#romi-docs",
         "reference": "repository requirements, deployment, storage or engineering documentation"
       },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-0308811eedf18d86",
+      "text": "传输与安装",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-2",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-175933877dea6d4c",
+      "text": "使用有明确目的的 Conventional Commits。发布和远端操作遵循单独的发布流程，测试结果必须对应实际提交和工件。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(5)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-66b6d48d4597dfd9",
+      "text": "候选构建",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-1",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
       "flags": [],
       "notes": null
     },
@@ -702,13 +1049,60 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-6e3331e264ce550a",
+      "text": "公开状态页",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-3",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-c788b7450b9011db",
+      "text": "公开页默认关闭，新节点默认公开。匿名页面可查看允许公开的节点和历史，但不返回管理地址、备注或凭据。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(5)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
       "flags": [],
       "notes": null
     },
@@ -748,10 +1142,15 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "user-action",
       "origin": "production-domain",
@@ -774,10 +1173,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "user-action",
       "origin": "production-domain",
@@ -793,10 +1197,14 @@
         "text"
       ],
       "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(3)",
         "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(3)",
         "html > body > div.mobile-menu > nav > a:nth-of-type(3)",
         "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(3)",
-        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(3)"
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a.current:nth-of-type(3)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(3)",
+        "main#main > h1",
+        "main#main > p.breadcrumbs:nth-of-type(1)"
       ],
       "visibility": [
         "hidden",
@@ -804,12 +1212,39 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-f8a25548e59b15d7",
+      "text": "功能范围 | romi 文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > head > title"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
@@ -838,6 +1273,29 @@
         "source": "design-sources.json#romi-docs",
         "reference": "repository requirements, deployment, storage or engineering documentation"
       },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-d1f810edb8cc2361",
+      "text": "历史保留",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-1",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
       "flags": [],
       "notes": null
     },
@@ -880,7 +1338,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -900,21 +1357,133 @@
         "text"
       ],
       "locations": [
-        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(7)"
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(7)",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(7)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(7)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(7)",
+        "main#main > h1",
+        "main#main > p.breadcrumbs:nth-of-type(1)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-f32c921de5761ee7",
+      "text": "发布流程 | romi 文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > head > title"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-485ed13974df2a75",
+      "text": "发行演练",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-2",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)"
       ],
       "visibility": [
         "visible",
         "visually-hidden"
       ],
       "captures": [
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
       ],
-      "purpose": "navigation",
+      "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-7fdcab3b2a16c63a",
+      "text": "发行演练使用候选包的相同字节，检查 systemd、TLS、注册、重装与重启持久性。失败或其他提交的结果不能替代本次验收。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(4)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-daafa1ca44f0ff47",
+      "text": "同一提交先通过 CI 和四个平台构建，再手动组装候选发行包。候选包不自动发布。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
       "flags": [],
       "notes": null
     },
@@ -925,20 +1494,53 @@
         "text"
       ],
       "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(4)",
         "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(4)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(5)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(5)",
+        "main#main > h1",
+        "main#main > p.breadcrumbs:nth-of-type(1)",
         "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(3) > h3"
       ],
       "visibility": [
+        "hidden",
         "visible",
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-e17f746cfe3c68ab",
+      "text": "备份与恢复 | romi 文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > head > title"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
@@ -959,7 +1561,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -973,24 +1574,106 @@
       "notes": null
     },
     {
+      "id": "content-0b594657c9883a69",
+      "text": "备份内容",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-2",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-74fad2d226f4e2b6",
+      "text": "备份是 gzip tar，包含持久表的 Parquet 文件和 manifest。会话表不进入备份，恢复后不会复活旧登录会话。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(4)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
       "id": "content-13527e1b3be295c6",
       "text": "安全边界",
       "channels": [
         "text"
       ],
       "locations": [
-        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(5)"
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(5)",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(5)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(6)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(6)",
+        "main#main > h1",
+        "main#main > p.breadcrumbs:nth-of-type(1)"
       ],
       "visibility": [
+        "hidden",
         "visible",
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-eb9599961c92d463",
+      "text": "安全边界 | romi 文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > head > title"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
@@ -1036,10 +1719,32 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-37979829426b0cdb",
+      "text": "工作区",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-1",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
+      ],
+      "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
@@ -1056,6 +1761,7 @@
         "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > p.sidebar-title:nth-of-type(3)",
         "html > body > div.mobile-menu > nav > a:nth-of-type(4)",
         "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(4)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a.current:nth-of-type(4)",
         "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(4)"
       ],
       "visibility": [
@@ -1064,10 +1770,15 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -1083,18 +1794,48 @@
         "text"
       ],
       "locations": [
-        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(6)"
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(6)",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(6)",
+        "main#main > h1",
+        "main#main > p.breadcrumbs:nth-of-type(1)"
       ],
       "visibility": [
         "visible",
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-e445ae0822576f51",
+      "text": "开发流程 | romi 文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > head > title"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
+      ],
+      "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
@@ -1115,11 +1856,64 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-fcf2d6a0e1dfd0f6",
+      "text": "恢复先检查归档成员、路径、大小、关系和 SHA-256，再构建临时数据库。只有完整校验成功后才切换正式数据库。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(5)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-30adcd2c38956f4d",
+      "text": "恢复检查",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-3",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "orientation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
@@ -1139,9 +1933,14 @@
         "hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "user-action",
       "origin": "production-domain",
@@ -1175,6 +1974,29 @@
       "notes": null
     },
     {
+      "id": "content-f6c64a1bea46dc2b",
+      "text": "提交与交付",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-3",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
       "id": "content-74c43e2e98f59e1c",
       "text": "搜索文档",
       "channels": [
@@ -1193,10 +2015,15 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "user-action",
       "origin": "production-domain",
@@ -1219,15 +2046,68 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-568c33edd67e24ad",
+      "text": "数据与日志",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-3",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-52fd0015c5cf93a9",
+      "text": "数据库和备份包含敏感管理配置。日志、截图和 CI 报告不得携带永久凭据或生产数据库。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(5)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
       "flags": [],
       "notes": null
     },
@@ -1245,10 +2125,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -1315,9 +2200,37 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9d0d5e235eff1a6d",
+      "text": "本地验证",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-2",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
       ],
       "purpose": "orientation",
       "origin": "production-domain",
@@ -1343,9 +2256,14 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "orientation",
       "origin": "production-domain",
@@ -1415,7 +2333,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -1447,10 +2364,15 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -1469,11 +2391,9 @@
         "html > body > dialog.search-dialog > div.search-results > p"
       ],
       "visibility": [
-        "visible",
-        "visually-hidden"
+        "visible"
       ],
       "captures": [
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "empty-state",
@@ -1483,6 +2403,80 @@
         "source": "designs/romi-docs/prototype.js",
         "reference": "zero search results"
       },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-f3e908a08fcbe0a3",
+      "text": "版本来源是仓库根目录的 VERSION，Hub 与 Agent 使用同一版本号。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p.doc-lead:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-4a78db0bf942d4b2",
+      "text": "版本标签",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-3",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-f87f2b38170e19a0",
+      "text": "监测与通知",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-2",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
       "flags": [],
       "notes": null
     },
@@ -1501,10 +2495,15 @@
         "visible"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "orientation",
       "origin": "production-domain",
@@ -1527,7 +2526,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "approved-content",
@@ -1536,6 +2534,107 @@
       "evidence": {
         "source": "design-sources.json#romi-docs",
         "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-19e9dabfe45a1e5a",
+      "text": "管理接口由 Hub 校验会话与权限，公开接口只提供匿名可见的数据。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p.doc-lead:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-95e20bd0154cb5e4",
+      "text": "管理端和公开页属于同一 pnpm workspace。Hub 与 Agent 分别位于 server/ 和 agent/；生产文档位于 docs/。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-dbde35bae94cb20a",
+      "text": "节点永久令牌仅在创建或轮换时展示，数据库保存摘要。公开页默认关闭；匿名节点数据不包含 IP、主机名、备注或凭据。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-a79452f718217f2f",
+      "text": "获授权后，标签工作流核对门禁并复用已验收归档。当前工作流创建 Pre-release，尚未配置稳定版发布。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(5)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
       },
       "flags": [],
       "notes": null
@@ -1563,6 +2662,52 @@
       "notes": null
     },
     {
+      "id": "content-9986da71bd85cf8a",
+      "text": "资源与历史",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-1",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-080b86fde66ede74",
+      "text": "身份与访问",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#section-1",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
       "id": "content-2805edf2fbc2a32b",
       "text": "运维",
       "channels": [
@@ -1576,9 +2721,14 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -1623,12 +2773,10 @@
         "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)"
       ],
       "visibility": [
-        "visible",
-        "visually-hidden"
+        "visible"
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "navigation",
@@ -1646,6 +2794,7 @@
       ],
       "locations": [
         "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(2)",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(2)",
         "html > body > div.mobile-menu > nav > a:nth-of-type(2)",
         "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(2)",
         "html > body > header.site-header > div.header-inner > nav.desktop-nav > a.current:nth-of-type(2)",
@@ -1659,10 +2808,15 @@
         "visually-hidden"
       ],
       "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\engineering.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\features.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\release.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\security.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
@@ -1685,7 +2839,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "orientation",
@@ -1750,12 +2903,10 @@
         "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)"
       ],
       "visibility": [
-        "visible",
-        "visually-hidden"
+        "visible"
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "navigation",
@@ -1776,18 +2927,41 @@
         "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)"
       ],
       "visibility": [
-        "visible",
-        "visually-hidden"
+        "visible"
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "navigation",
       "origin": "production-domain",
       "decision": "allow",
       "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-b5b6bc0f1bd27fa7",
+      "text": "默认分钟明细保留 30 天，小时历史保留 365 天。累计流量独立保存，不因历史清理而减少。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\storage.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "current requirements, deployment, storage, security, engineering or release documentation"
+      },
       "flags": [],
       "notes": null
     },
@@ -1805,7 +2979,6 @@
       ],
       "captures": [
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
-        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
         "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
       ],
       "purpose": "navigation",

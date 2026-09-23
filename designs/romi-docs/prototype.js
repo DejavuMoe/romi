@@ -22,10 +22,11 @@ const results = dialog.querySelector('.search-results');
 const pages = [
   { title: '概览', section: '文档', href: 'index.html' },
   { title: '部署', section: '开始使用', href: 'guide.html' },
-  { title: '功能范围', section: '产品', href: 'https://github.com/DejavuMoe/romi/blob/master/docs/requirements.md' },
-  { title: '备份与恢复', section: '运维', href: 'https://github.com/DejavuMoe/romi/blob/master/docs/storage.md' },
-  { title: '安全边界', section: '运维', href: 'https://github.com/DejavuMoe/romi/blob/master/docs/security-baseline.md' },
-  { title: '开发流程', section: '开发', href: 'https://github.com/DejavuMoe/romi/blob/master/docs/engineering.md' },
+  { title: '功能范围', section: '产品', href: 'features.html' },
+  { title: '备份与恢复', section: '运维', href: 'storage.html' },
+  { title: '安全边界', section: '运维', href: 'security.html' },
+  { title: '开发流程', section: '开发', href: 'engineering.html' },
+  { title: '发布流程', section: '开发', href: 'release.html' },
 ];
 function search() {
   const matches = pages.filter(page => page.title.includes(input.value.trim()));
