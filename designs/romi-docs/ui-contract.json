@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "project": {
+    "name": "romi 文档网站",
+    "slug": "romi-docs",
+    "surfaceType": "documentation"
+  },
+  "content": {
+    "defaultProfile": "content-approved",
+    "inventory": "content-inventory.json",
+    "approvedCopySources": ["design-sources.json#romi-docs"]
+  },
+  "designSources": "design-sources.json",
+  "surfaces": [
+    {
+      "id": "docs-home",
+      "contentProfile": "content-approved",
+      "prototype": {
+        "entry": "index.html",
+        "assetPath": "index.html",
+        "files": ["index.html", "styles.css", "prototype.js"],
+        "states": ["light", "dark", "mobile-navigation", "search-results", "search-empty"],
+        "stableIds": ["home", "topics"]
+      },
+      "production": {
+        "routeOrWindow": "/",
+        "files": ["docs/index.md", "docs/.vitepress/config.mts"],
+        "interfaces": ["VitePress default theme"],
+        "tests": ["docs build", "desktop and mobile browser checks"]
+      },
+      "status": "prototype"
+    },
+    {
+      "id": "docs-deployment",
+      "contentProfile": "content-approved",
+      "prototype": {
+        "entry": "guide.html",
+        "assetPath": "guide.html",
+        "files": ["guide.html", "styles.css", "prototype.js"],
+        "states": ["light", "dark", "mobile-navigation", "search-results", "search-empty"],
+        "stableIds": ["choose", "verify", "bootstrap"]
+      },
+      "production": {
+        "routeOrWindow": "/deployment",
+        "files": ["docs/deployment.md", "docs/.vitepress/config.mts"],
+        "interfaces": ["VitePress default theme"],
+        "tests": ["docs build", "desktop and mobile browser checks"]
+      },
+      "status": "prototype"
+    }
+  ]
+}

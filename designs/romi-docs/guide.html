@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>部署 | romi 文档</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="romi 文档首页">romi <span>文档</span></a>
+      <nav class="desktop-nav" aria-label="主导航">
+        <a href="index.html">概览</a>
+        <a class="current" href="guide.html" aria-current="page">部署</a>
+        <a href="https://github.com/DejavuMoe/romi/blob/master/docs/requirements.md">功能范围</a>
+        <a href="https://github.com/DejavuMoe/romi/blob/master/docs/engineering.md">开发</a>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-button search-trigger" type="button" aria-label="搜索文档" title="搜索文档">⌕</button>
+        <button class="icon-button theme-trigger" type="button" aria-label="切换深浅主题" title="切换深浅主题">◐</button>
+        <a class="github-link" href="https://github.com/DejavuMoe/romi">GitHub ↗</a>
+        <button class="icon-button menu-trigger" type="button" aria-label="打开导航" aria-expanded="false">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="mobile-menu" hidden>
+    <nav aria-label="移动导航">
+      <a href="index.html">概览</a>
+      <a href="guide.html" aria-current="page">部署</a>
+      <a href="https://github.com/DejavuMoe/romi/blob/master/docs/requirements.md">功能范围</a>
+      <a href="https://github.com/DejavuMoe/romi/blob/master/docs/engineering.md">开发</a>
+      <a href="https://github.com/DejavuMoe/romi">GitHub ↗</a>
+    </nav>
+  </div>
+
+  <div class="docs-layout">
+    <aside class="sidebar" aria-label="文档目录">
+      <p class="sidebar-title">开始使用</p>
+      <a href="index.html">概览</a>
+      <a class="current" href="guide.html" aria-current="page">部署</a>
+      <a href="https://github.com/DejavuMoe/romi/blob/master/docs/requirements.md">功能范围</a>
+      <p class="sidebar-title">运维</p>
+      <a href="https://github.com/DejavuMoe/romi/blob/master/docs/storage.md">备份与恢复</a>
+      <a href="https://github.com/DejavuMoe/romi/blob/master/docs/security-baseline.md">安全边界</a>
+      <p class="sidebar-title">开发</p>
+      <a href="https://github.com/DejavuMoe/romi/blob/master/docs/engineering.md">开发流程</a>
+      <a href="https://github.com/DejavuMoe/romi/blob/master/docs/release.md">发布流程</a>
+    </aside>
+
+    <main id="main" class="doc-content">
+      <p class="breadcrumbs"><a href="index.html">文档</a><span aria-hidden="true">/</span>部署</p>
+      <h1>部署</h1>
+      <p class="doc-lead">Hub 与 Agent 支持 x86_64、ARM64 的 GNU 和 musl Linux 工件。Debian 使用 systemd，Alpine 使用 OpenRC。</p>
+      <div class="notice"><strong>安装前</strong><p>从已发布的归档获取工件，先验证来源证明与 SHA-256，再解压和安装。不要从可变的 master 分支直接执行安装脚本。</p></div>
+
+      <h2 id="choose">选择工件</h2>
+      <p>根据主机架构和 libc 选择对应的 Hub 归档。Agent 可以原生运行；Agent Docker 镜像按 x86_64 和 ARM64 分发。Hub Docker 不在当前支持范围。</p>
+
+      <h2 id="verify">验证并安装 Hub</h2>
+      <p>发布归档中包含目标平台的 Hub、Agent、安装器和校验信息。验证完成后，将归档解压到空目录，并从解压目录运行安装器：</p>
+      <pre><code>mkdir romi-hub
+tar -xzf romi-hub-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz -C romi-hub
+sudo sh romi-hub/deploy/hub/install.sh --site https://hub.example.com</code></pre>
+      <p>Hub 监听回环地址，外部 HTTPS 由可信反向代理提供。安装器不会下载源代码或二进制。</p>
+
+      <h2 id="bootstrap">首次登录与节点接入</h2>
+      <p>全新数据库的管理员初始密码写入 <code>/var/lib/romi/bootstrap-password</code>，权限为 0600。修改密码后该文件会删除。</p>
+      <p>管理员创建节点后，由节点从可信 Hub 获取精确版本的 Agent。下载内容会按大小、SHA-256 和 Agent 版本核验。</p>
+
+      <nav class="doc-next" aria-label="下一篇"><a href="https://github.com/DejavuMoe/romi/blob/master/docs/storage.md"><small>下一篇</small><strong>备份与恢复 →</strong></a></nav>
+    </main>
+
+    <aside class="page-outline" aria-label="本页目录"><p>本页目录</p><a href="#choose">选择工件</a><a href="#verify">验证并安装 Hub</a><a href="#bootstrap">首次登录与节点接入</a></aside>
+  </div>
+
+  <footer class="site-footer"><span>romi</span><span>MIT · Dejavu Moe</span></footer>
+  <dialog class="search-dialog" aria-label="搜索文档">
+    <form method="dialog" class="search-head"><label for="site-search">搜索文档</label><button type="submit" aria-label="关闭搜索">×</button></form>
+    <input id="site-search" type="search" placeholder="搜索标题" autocomplete="off">
+    <div class="search-results" aria-live="polite"></div>
+  </dialog>
+  <script src="prototype.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "文档首页": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-09-23T06:25:50.440Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1360,
+            "height": 850
+          }
+        }
+      ]
+    },
+    "部署文档": {
+      "versions": [
+        {
+          "path": "guide.html",
+          "createdAt": "2026-09-23T06:25:50.509Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1360,
+            "height": 850
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-23T06:25:50.441Z",
+  "updatedAt": "2026-09-23T06:32:54.828Z"
+}

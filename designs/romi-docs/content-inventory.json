@@ -1,0 +1,1819 @@
+{
+  "schemaVersion": 1,
+  "profile": "content-approved",
+  "capture": {
+    "method": "rendered-dom",
+    "sources": [
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+      "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json"
+    ],
+    "capturedAt": "2026-09-23T06:32:41Z",
+    "surfaces": [
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "url": "http://127.0.0.1:4311/romi-docs/index.html",
+        "title": "romi 文档",
+        "viewport": {
+          "width": 1360,
+          "height": 850,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "url": "http://127.0.0.1:4311/romi-docs/guide.html",
+        "title": "部署 | romi 文档",
+        "viewport": {
+          "width": 1360,
+          "height": 850,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json",
+        "url": "http://127.0.0.1:4311/romi-docs/guide.html",
+        "title": "部署 | romi 文档",
+        "viewport": {
+          "width": 1360,
+          "height": 850,
+          "devicePixelRatio": 1
+        }
+      },
+      {
+        "source": "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "url": "http://127.0.0.1:4311/romi-docs/guide.html",
+        "title": "部署 | romi 文档",
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "devicePixelRatio": 1
+        }
+      }
+    ],
+    "limitations": [
+      "Canvas/WebGL text, cross-origin frame content, native browser chrome, and OS-native dialogs are not captured.",
+      "Closed shadow roots cannot be inspected.",
+      "Only the currently rendered state is captured; exercise other states separately.",
+      "Ordinary input values and sensitive-looking attributes/JSON keys are deliberately omitted.",
+      "Use sanitized test data: arbitrary text nodes or data attributes can still contain private product data."
+    ]
+  },
+  "briefSources": [],
+  "approvedCopySources": [],
+  "items": [
+    {
+      "id": "content-8a5edab282632443",
+      "text": "/",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p.breadcrumbs:nth-of-type(1) > span"
+      ],
+      "visibility": [
+        "accessibility-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-a3b267d88e79cc60",
+      "text": "/var/lib/romi/bootstrap-password",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(6) > code"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-4d2d106c90abd4f5",
+      "text": "01 / 部署",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(1) > span.topic-index"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-6ee82b990273e368",
+      "text": "02 / 功能",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(2) > span.topic-index"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-12ab1a4062050b61",
+      "text": "03 / 运维",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(3) > span.topic-index"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-06edeee97be9b178",
+      "text": "04 / 开发",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(4) > span.topic-index"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-041ebc7928fb7759",
+      "text": "GitHub ↗",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.mobile-menu > nav > a:nth-of-type(5)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(5)",
+        "html > body > header.site-header > div.header-inner > div.header-actions > a.github-link"
+      ],
+      "visibility": [
+        "hidden",
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-b24d4b986e7a769d",
+      "text": "Hub 与 Agent 支持 x86_64、ARM64 的 GNU 和 musl Linux 工件。Debian 使用 systemd，Alpine 使用 OpenRC。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p.doc-lead:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-ce2887c2fd29bc7b",
+      "text": "Hub 监听回环地址，外部 HTTPS 由可信反向代理提供。安装器不会下载源代码或二进制。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(5)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-3d051418a7e957c9",
+      "text": "MIT · Dejavu Moe",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > footer.site-footer > span:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "legal-approved",
+      "origin": "authoritative-policy",
+      "decision": "allow",
+      "evidence": {
+        "source": "LICENSE",
+        "reference": "copyright and MIT license"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-79804bb9c2f637ce",
+      "text": "mkdir romi-hub tar -xzf romi-hub-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz -C romi-hub sudo sh romi-hub/deploy/hub/install.sh --site https://hub.example.com",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > pre > code"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-8ca54a93809366c6",
+      "text": "romi",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > footer.site-footer > span:nth-of-type(1)",
+        "html > body > header.site-header > div.header-inner > a.brand",
+        "main#main > section.hero:nth-of-type(1) > h1"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9b20cb8cf2f9b048",
+      "text": "romi 文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > head > title"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-b9c41e021c88efba",
+      "text": "romi 文档首页",
+      "channels": [
+        "aria-label"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > a.brand"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-8db71ed28b0f2f14",
+      "text": "×",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > dialog.search-dialog > form.search-head > button"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-161660030aa6c9e3",
+      "text": "→",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.hero:nth-of-type(1) > div.hero-actions > a.button.primary:nth-of-type(1) > span"
+      ],
+      "visibility": [
+        "accessibility-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-ca29edb4680a64bc",
+      "text": "↗",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(1) > h3 > span",
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(2) > h3 > span",
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(3) > h3 > span",
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(4) > h3 > span"
+      ],
+      "visibility": [
+        "accessibility-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-c19732df495ef97e",
+      "text": "⌕",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > div.header-actions > button.icon-button.search-trigger:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-88063e5a3c40660c",
+      "text": "◐",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > div.header-actions > button.icon-button.theme-trigger:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-67cfd5703605f042",
+      "text": "☰",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > div.header-actions > button.icon-button.menu-trigger:nth-of-type(3)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-673ee5a5a418eee6",
+      "text": "下一篇",
+      "channels": [
+        "aria-label",
+        "text"
+      ],
+      "locations": [
+        "main#main > nav.doc-next",
+        "main#main > nav.doc-next > a > small"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9bae680405099fc8",
+      "text": "主导航",
+      "channels": [
+        "aria-label"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav"
+      ],
+      "visibility": [
+        "hidden",
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9fa05b9138a92bd0",
+      "text": "了解数据库文件、备份验证、恢复与回退边界。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(3) > p"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-520a0bfa504044eb",
+      "text": "了解监测范围",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(2) > h3"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-73bf30efd9362d70",
+      "text": "从已发布的归档获取工件，先验证来源证明与 SHA-256，再解压和安装。不要从可变的 master 分支直接执行安装脚本。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > div.notice > p"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9793cc197e92be97",
+      "text": "全新数据库的管理员初始密码写入",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(6)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-baf9f5c82ab8ea15",
+      "text": "关闭导航",
+      "channels": [
+        "aria-label"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > div.header-actions > button.icon-button.menu-trigger:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json"
+      ],
+      "purpose": "user-action",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-ab008ef18dac8f83",
+      "text": "关闭搜索",
+      "channels": [
+        "aria-label"
+      ],
+      "locations": [
+        "html > body > dialog.search-dialog > form.search-head > button"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "user-action",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-ba09b42d4fc98e45",
+      "text": "切换深浅主题",
+      "channels": [
+        "aria-label",
+        "title"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > div.header-actions > button.icon-button.theme-trigger:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "user-action",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-eed7e234873410a6",
+      "text": "功能范围",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(3)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(3)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(3)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(3)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-ffbb0d8f6cffa204",
+      "text": "单 Hub、多 Agent 的 Linux 主机监测",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.hero:nth-of-type(1) > p.hero-lead:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-1e00459ee3acaef6",
+      "text": "参与开发",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(4) > h3"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-507e99b1001ea16c",
+      "text": "发布归档中包含目标平台的 Hub、Agent、安装器和校验信息。验证完成后，将归档解压到空目录，并从解压目录运行安装器：",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(4)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-367836959de92267",
+      "text": "发布流程",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(7)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-6beda481d19d4185",
+      "text": "备份与恢复",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(4)",
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(3) > h3"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-b61d0388c973416f",
+      "text": "备份与恢复 →",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > nav.doc-next > a > strong"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-13527e1b3be295c6",
+      "text": "安全边界",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(5)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-fbed7909d4ff558b",
+      "text": "安装 Hub 与 Agent",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(1) > h3"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-fb0eb8798f5501c6",
+      "text": "安装前",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > div.notice > strong"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9ec428625fee9e42",
+      "text": "开发",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > p.sidebar-title:nth-of-type(3)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(4)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(4)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(4)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-4e999fb2357eec61",
+      "text": "开发流程",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(6)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-715ee9dc842f34e4",
+      "text": "开始使用",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > p.sidebar-title:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-38e4f2ee1b9a3b96",
+      "text": "打开导航",
+      "channels": [
+        "aria-label"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > div.header-actions > button.icon-button.menu-trigger:nth-of-type(3)"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "user-action",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-4c6ea21697f01f08",
+      "text": "按任务查找",
+      "channels": [
+        "aria-labelledby",
+        "text"
+      ],
+      "locations": [
+        "h2#topics-title",
+        "main#main > section.topic-section:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-74c43e2e98f59e1c",
+      "text": "搜索文档",
+      "channels": [
+        "aria-label",
+        "text",
+        "title"
+      ],
+      "locations": [
+        "html > body > dialog.search-dialog",
+        "html > body > dialog.search-dialog > form.search-head > label",
+        "html > body > header.site-header > div.header-inner > div.header-actions > button.icon-button.search-trigger:nth-of-type(1)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "user-action",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-d53c6377ae44c65c",
+      "text": "搜索标题",
+      "channels": [
+        "placeholder"
+      ],
+      "locations": [
+        "input#site-search"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-2687ccdbb1d2288a",
+      "text": "文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > header.site-header > div.header-inner > a.brand > span",
+        "main#main > p.breadcrumbs:nth-of-type(1) > a"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-cbfab01255c2c313",
+      "text": "文档 / 概览",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.hero:nth-of-type(1) > p.eyebrow:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-6bd98e9b7b5ff719",
+      "text": "文档导航",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.section-heading:nth-of-type(1) > p.eyebrow"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-a6d5dbec6b3142c7",
+      "text": "文档目录",
+      "channels": [
+        "aria-label"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-a610e0c62b3e1e39",
+      "text": "本页目录",
+      "channels": [
+        "aria-label",
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2)",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > p"
+      ],
+      "visibility": [
+        "hidden",
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-cb0adc8fa5d20e5e",
+      "text": "查看功能范围",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.hero:nth-of-type(1) > div.hero-actions > a.button.secondary:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "user-action",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-fe7fb0ec5589cb08",
+      "text": "查看资源、历史和 TCP 监测结果，管理通知、节点与数据。Hub 使用 DuckDB；Agent 负责采集和探测。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.hero:nth-of-type(1) > p.hero-description:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-3859bc235113542d",
+      "text": "根据主机架构和 libc 选择对应的 Hub 归档。Agent 可以原生运行；Agent Docker 镜像按 x86_64 和 ARM64 分发。Hub Docker 不在当前支持范围。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-fea405f9b01d1416",
+      "text": "概览",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a:nth-of-type(1)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(1)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(1)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a.current:nth-of-type(1)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(1)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-34c63b08f709d3a2",
+      "text": "没有匹配文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > dialog.search-dialog > div.search-results > p"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "empty-state",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "designs/romi-docs/prototype.js",
+        "reference": "zero search results"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-a2c6fa54f086aebe",
+      "text": "移动导航",
+      "channels": [
+        "aria-label"
+      ],
+      "locations": [
+        "html > body > div.mobile-menu > nav",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav"
+      ],
+      "visibility": [
+        "hidden",
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-9a93f2b604e116ea",
+      "text": "管理员创建节点后，由节点从可信 Hub 获取精确版本的 Agent。下载内容会按大小、SHA-256 和 Agent 版本核验。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(7)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-c01ac0fe3cfbad6e",
+      "text": "资源、流量、历史、TCP 监测、通知和公开状态页。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(2) > p"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-2805edf2fbc2a32b",
+      "text": "运维",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > p.sidebar-title:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-e52e1eaf5db618e9",
+      "text": "选择 GNU 或 musl 工件，验证归档，再安装原生服务。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(1) > p"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "approved-content",
+      "origin": "production-behavior",
+      "decision": "allow",
+      "evidence": {
+        "source": "design-sources.json#romi-docs",
+        "reference": "repository requirements, deployment, storage or engineering documentation"
+      },
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-872802f53db4cca4",
+      "text": "选择工件",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#choose",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-3ca7718593c06f4f",
+      "text": "部署",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > body > div.docs-layout:nth-of-type(2) > aside.sidebar:nth-of-type(1) > a.current:nth-of-type(2)",
+        "html > body > div.mobile-menu > nav > a:nth-of-type(2)",
+        "html > body > div.mobile-menu:nth-of-type(1) > nav > a:nth-of-type(2)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a.current:nth-of-type(2)",
+        "html > body > header.site-header > div.header-inner > nav.desktop-nav > a:nth-of-type(2)",
+        "main#main > h1",
+        "main#main > p.breadcrumbs:nth-of-type(1)"
+      ],
+      "visibility": [
+        "hidden",
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-2be6483ae916edd2",
+      "text": "部署 | romi 文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "html > head > title"
+      ],
+      "visibility": [
+        "hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "orientation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-069440e145f02104",
+      "text": "阅读工作区结构、验证命令和提交约定。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.topic-section:nth-of-type(2) > div.topic-grid:nth-of-type(2) > a.topic:nth-of-type(4) > p"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-0a9467d71dc94031",
+      "text": "阅读部署文档",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section.hero:nth-of-type(1) > div.hero-actions > a.button.primary:nth-of-type(1)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\home.json"
+      ],
+      "purpose": "user-action",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-0c21e37ad10f7503",
+      "text": "首次登录与节点接入",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#bootstrap",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(3)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-d5c525fb61f0b5f4",
+      "text": "验证并安装 Hub",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "h2#verify",
+        "html > body > div.docs-layout:nth-of-type(2) > aside.page-outline:nth-of-type(2) > a:nth-of-type(2)"
+      ],
+      "visibility": [
+        "visible",
+        "visually-hidden"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    },
+    {
+      "id": "content-d1c9b3cda6aba833",
+      "text": "，权限为 0600。修改密码后该文件会删除。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > p:nth-of-type(6)"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\guide.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\mobile-menu.json",
+        "D:\\Forgejo\\romi\\designs\\romi-docs\\captures\\search-empty.json"
+      ],
+      "purpose": "navigation",
+      "origin": "production-domain",
+      "decision": "allow",
+      "evidence": null,
+      "flags": [],
+      "notes": null
+    }
+  ]
+}
