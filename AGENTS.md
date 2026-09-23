@@ -23,6 +23,7 @@ Read `docs/README.md`, then the relevant requirement, module and test. Read only
 - Rust/storage: relevant Cargo tests and integration checks. `make check-linux` is the broad Linux gate.
 - Packaging: run changed script checks. Git-mutating fixtures run on Windows or disposable CI, never in the WSL build mirror.
 - Commit focused changes with Conventional Commits. Report executed checks, remaining limitations and exact branch/commit.
+- Use `origin` (`ssh://git@ssh.via.moe/dejavu/romi.git`) as the sole Git remote. That Forgejo instance mirrors to GitHub automatically; do not add, push to, or manage a separate GitHub remote.
 - History replacement, remote mutation and publishing require explicit authorization and the applicable recovery/release procedure.
 
 See `docs/engineering.md` for phases and `docs/testing.md` for commands.
