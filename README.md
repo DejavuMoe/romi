@@ -27,6 +27,7 @@ linux-task.ps1 -Mode build -Project (Get-Location).Path -Command 'make setup && 
 
 原生 Linux 环境可在仓库根运行 `make setup && make check-linux`。
 开发入口是 `make dev-server`、`make dev-admin`、`make dev-web`，分别监听回环的 9911、5173、5174 端口。
+文档网站复用 `docs/` 中的正文：`pnpm docs:dev` 在 `127.0.0.1:4312` 预览，`make check-docs` 构建并检查站内链接、搜索和移动布局。
 DuckDB 的 bundled 构建需要 C/C++ 编译器。浏览器检查见 [testing](docs/testing.md)。
 
 | 目录 | 责任 |
@@ -36,5 +37,5 @@ DuckDB 的 bundled 构建需要 C/C++ 编译器。浏览器检查见 [testing](d
 | `admin/` / `web/` | 管理后台 / 公开状态页 |
 | `shared/` / `styles/` | 共享契约、格式化与视觉规则 |
 | `deploy/` / `scripts/` / `e2e/` | 安装、构建验证、发布与浏览器回归 |
-| `docs/` | 当前产品和工程事实 |
+| `docs/` | 当前产品和工程事实、VitePress 文档网站 |
 | `designs/romi-next/` | 当前已批准的界面契约 |

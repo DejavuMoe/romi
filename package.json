@@ -3,7 +3,11 @@
   "private": true,
   "packageManager": "pnpm@12.4.2",
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "docs:dev": "pnpm --filter @romi/docs dev",
+    "docs:build": "pnpm --filter @romi/docs build",
+    "docs:preview": "pnpm --filter @romi/docs preview",
+    "docs:test": "node scripts/check_docs_site.mjs"
   },
   "author": "Dejavu Moe",
   "license": "MIT",

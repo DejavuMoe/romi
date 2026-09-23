@@ -14,12 +14,14 @@ Windows 保存源码和 Git；Debian WSL2 只运行可重建的 Linux 构建/测
 
 UI 使用项目本地 `prototype-first-ui` 与 `baoyu-design`。设计、批准和生产实现分别提交。
 原型是界面规格，不是生产运行时；模拟数据、接口和成功反馈不能进入生产逻辑。
+VitePress 文档页面直接维护本目录正文，不走产品 UI 原型门禁。
 
 ## 检查选择
 
 | 改动 | 最小检查 |
 | --- | --- |
 | 文档 | 本地链接、事实、diff；操作命令改变时实际执行 |
+| VitePress 站点 | `make check-docs`（构建、站内链接、搜索和移动布局） |
 | 前端/共享契约 | `make frontend check-frontends`，再跑受影响 E2E |
 | Hub/Agent | 对应 Rust 测试、fmt、Clippy；Linux 行为在 Linux 验证 |
 | 存储 | 事务、精度、并发、恢复失败和迁移回归 |

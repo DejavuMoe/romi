@@ -1,3 +1,7 @@
 packages:
   - admin
   - web
+  - docs
+
+allowBuilds:
+  esbuild: true

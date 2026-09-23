@@ -24,6 +24,7 @@ Agent Docker 使用 Release 镜像归档，见本文末尾；Hub Docker 不在 0
 
 ```sh
 # 示例（下载后先按 docs/release.md 验证 attestation 与 SHA256SUMS）
+mkdir romi-hub
 tar -xzf romi-hub-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz -C romi-hub
 sudo sh romi-hub/deploy/hub/install.sh --site https://hub.example.com
 ```
@@ -288,7 +289,7 @@ Docker Desktop 的宿主视图是它的 Linux VM，不代表 Windows/macOS 的�
 
 建议 Hub 从 1 GiB RAM 起配置，并随历史规模、并发查询与备份/恢复实测调整。
 `--db-memory` 是 DuckDB 引擎预算，不是整个进程 RSS 上限；队列、连接、索引与恢复 staging 都需要空间。
-Agent 默认每秒采集上报，无本地数据库；Hub 默认分钟明细 30 天、小时历史 365 天。
+Agent 默认每 3 秒采集上报，无本地数据库；Hub 默认分钟明细 30 天、小时历史 365 天。
 公共实时连接上限 64，管理员预留 32；历史查询与密码校验有独立并发限制。
 压力实验使用模拟 100/500 Agent，不是对任意硬件、WAN 或全年在线稳定性的保证。
 
