@@ -1,13 +1,14 @@
 .DEFAULT_GOAL := help
 export CARGO_TARGET_DIR := $(CURDIR)/target
 .PHONY: help setup frontend build release release-candidate release-package release-rehearsal systemd-rehearsal package check check-linux smoke e2e bench bench-fixture dev-server dev-admin dev-web
-.PHONY: check-scripts check-frontends check-format check-clippy check-rust-tests check-release-scripts
+.PHONY: check-scripts check-frontends check-docs check-format check-clippy check-rust-tests check-release-scripts
 
 help:
 	@echo 'make setup       Install locked frontend dependencies and fetch Rust dependencies'
 	@echo 'make build       Build both frontends, server and agent (debug)'
 	@echo 'make check       Lint, typecheck/build frontends and run existing tests'
 	@echo 'make check-linux Run runtime checks without Git metadata or Git-mutating release fixtures'
+	@echo 'make check-docs  Build and exercise the VitePress documentation site'
 	@echo 'make smoke       Build and verify server + agent over loopback'
 	@echo 'make e2e         Build and run desktop/mobile browser tests against a temporary Hub'
 	@echo 'make bench       Run the storage benchmark against target/release (see scripts/bench.py)'
@@ -111,6 +112,10 @@ check-frontends:
 	pnpm --dir admin test
 	pnpm --dir web run lint
 	pnpm --dir web test
+
+check-docs:
+	pnpm docs:build
+	pnpm docs:test
 
 check-format:
 	cargo fmt --manifest-path server/Cargo.toml --all --check

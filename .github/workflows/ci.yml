@@ -65,7 +65,7 @@ jobs:
         run: make frontend
 
       - name: Check scripts, frontends and formatting
-        run: make check-scripts check-release-scripts check-frontends check-format
+        run: make check-scripts check-release-scripts check-frontends check-docs check-format
 
       - name: Identify the compiler image for caching
         id: cache-image

@@ -21,6 +21,7 @@ python -X utf8 scripts/test_release_matrix.py
 ```
 
 只改前端时运行 `make frontend check-frontends`；Rust 局部修改运行对应 Cargo 测试，按影响扩展到集成检查。
+文档站改动运行 `make check-docs`；它需要已安装的 Playwright Chromium，检查生成页面的站内链接、中文搜索和窄屏溢出。
 
 ## 浏览器和原生进程
 
