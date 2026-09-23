@@ -14,7 +14,7 @@ Read `docs/README.md`, then the relevant requirement, module and test. Read only
 - Edit source and perform Git operations in the Windows checkout. Use `linux-task.ps1 -Mode build -Project <repo> -Command '<command>'` for Linux builds/tests.
 - Never copy `.git` into WSL, edit only a build mirror, or synchronize two build jobs for this project concurrently.
 - Start with an acceptance check. Reuse existing code and dependencies; prefer a small complete change over new layers.
-- Visible UI changes use the project-local `prototype-first-ui` skill. Separate prototype, approval and implementation commits. Do not import prototype runtimes or fixtures into production.
+- Product UI changes use the project-local `prototype-first-ui` skill. Separate prototype, approval and implementation commits. VitePress documentation pages are exempt; maintain them directly from the repository's factual docs. Do not import prototype runtimes or fixtures into production.
 - Update the document that owns a changed fact; use `docs/README.md` to find it. Remove stale statements instead of appending another status narrative.
 
 ## Verify and deliver
