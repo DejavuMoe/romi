@@ -156,6 +156,7 @@ class InstallerTests(unittest.TestCase):
         hub_unit = self.prefix / 'etc/init.d/romi-hub'
         self.assertEqual(hub_unit.stat().st_mode & 0o777, 0o755)
         self.assertIn('command_user="romi:romi"', hub_unit.read_text())
+        self.assertNotIn('--themes', hub_unit.read_text())
         subprocess.run(['sh', '-n', str(hub_unit)], check=True)
         binary = f'#!/bin/sh\necho "romi-agent {VERSION}"\n'.encode()
         agent_root = self.base / 'agent-host'
@@ -232,6 +233,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(str(current / 'romi-hub'), unit)
         self.assertIn('--bootstrap-password-file', unit)
         self.assertIn('--distribution-dir', unit)
+        self.assertNotIn('--themes', unit)
         self.assertIn('--site ${ROMI_SITE}', unit)
         self.assertNotIn('ROMI_TOKEN', unit)
         hub_env = (self.prefix / 'etc/romi/hub.env').read_text()

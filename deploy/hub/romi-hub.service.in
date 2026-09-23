@@ -10,7 +10,7 @@ User=romi
 Group=romi
 UMask=0077
 EnvironmentFile=-@ROMI_HUB_ENV@
-ExecStart=@ROMI_HUB_BIN@ --listen 127.0.0.1:@ROMI_PORT@ --db @ROMI_STATE_DIR@/romi.duckdb --themes @ROMI_STATE_DIR@/themes --db-temp @ROMI_STATE_DIR@/tmp --bootstrap-password-file @ROMI_STATE_DIR@/bootstrap-password --distribution-dir @ROMI_DISTRIBUTION_DIR@ --site ${ROMI_SITE}
+ExecStart=@ROMI_HUB_BIN@ --listen 127.0.0.1:@ROMI_PORT@ --db @ROMI_STATE_DIR@/romi.duckdb --db-temp @ROMI_STATE_DIR@/tmp --bootstrap-password-file @ROMI_STATE_DIR@/bootstrap-password --distribution-dir @ROMI_DISTRIBUTION_DIR@ --site ${ROMI_SITE}
 Restart=on-failure
 RestartSec=2s
 
