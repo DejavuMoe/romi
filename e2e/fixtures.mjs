@@ -77,7 +77,12 @@ export const test = base.extend({
       const bootstrap = (await readFile(credential, 'utf8')).trim()
       secrets.add(bootstrap)
       await request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: bootstrap } })
-      await request('/api/settings', { method: 'PUT', body: { admin_password: PASSWORD } })
+      // Replacing a credential is proven with the password being replaced, which
+      // here is the bootstrap one this Hub just generated.
+      await request('/api/settings', {
+        method: 'PUT',
+        body: { admin_password: PASSWORD, current_password: bootstrap },
+      })
       await use({
         url, request,
         node: async (name, isPublic = false) => {

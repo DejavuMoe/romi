@@ -63,6 +63,15 @@ pub fn hash_password(password: &str) -> Result<String> {
         .to_string())
 }
 
+/// Whether `password` is the administrator's current one.
+///
+/// Used by the settings route to confirm an account or password change. The
+/// session alone is not proof of the password: a borrowed or forgotten session
+/// would otherwise be enough to take the account over outright.
+pub fn password_matches(app: &App, password: &str) -> bool {
+    app.db.get("admin_password_hash").is_some_and(|stored| verify_password(password, &stored))
+}
+
 fn verify_password(password: &str, stored: &str) -> bool {
     PasswordHash::new(stored)
         .map(|parsed| Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok())

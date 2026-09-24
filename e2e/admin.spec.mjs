@@ -114,7 +114,9 @@ test('v7 node settings, card navigation and maintenance persist through real API
 })
 
 test('local login requires both the configured account and password',async({page,hub})=>{
-  await hub.request('/api/settings',{method:'PUT',body:{admin_username:'operator'}})
+  // Renaming the account is a credential change, so it carries the password it
+  // is proven with.
+  await hub.request('/api/settings',{method:'PUT',body:{admin_username:'operator',current_password:'romi-e2e-only-password'}})
   await page.goto('/admin/')
   await page.getByLabel('账号',{exact:true}).fill('admin')
   await page.getByLabel('密码',{exact:true}).fill('romi-e2e-only-password')

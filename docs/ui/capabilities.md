@@ -16,13 +16,13 @@
 | probes | `/admin/ping` | 新增/编辑/删除 host:port、间隔、节点指派 | `Admin.tsx` 的 Ping；`api::save_ping_task` |
 | notifications | `/admin/notify` | Telegram/Webhook、模板预览、按渠道测试、未保存禁用测试、阈值、节点离线开关 | `Admin.tsx` 的 Notify/OfflineNodes；`notify.rs` |
 | data | `/admin/data` | 数据统计、下载备份、上传恢复、取消、维护确认与周期配置 | `Admin.tsx` 的 Data；`api::db_*` |
-| security | `/admin/security` | GitHub 配置/允许用户、修改账号/密码、会话撤销 | `Admin.tsx` 的 Security/Sessions；`auth.rs` |
+| security | `/admin/security` | GitHub 配置/允许名单、修改账号/密码（需当前密码）、会话撤销 | `Admin.tsx` 的 Security/Sessions；`auth.rs` |
 | settings | `/admin/settings` | 站点名、分钟保留期、公开页及默认视图、连续在线阈值、本地 GeoLite Country 更新 | `Admin.tsx` 的 SettingsTab/GeoSettings；`api::save_settings`、`geo.rs` |
 
 ## 领域对象与权限
 
 节点包含身份、排序、公开性、静态硬件事实、在线态、最新指标、累计流量、账单与到期信息。
-节点的 `public` 字段可通过管理 API 修改；当前后台编辑弹窗没有公开/私有切换控件，只显示私有标记。
+节点的 `public` 字段由编辑弹窗的「公开状态页」显示/不显示选择控制，管理列表同时保留「私有」标记。
 IP/主机名/备注和凭据相关管理字段不向匿名快照公开。公开历史最多七天，管理员可查询一年。
 探测对象包含名称、目标、间隔和节点集合；公开历史只给名称和结果，不公开探测目标/指派管理接口。
 通知设置的凭据只返回已配置标记；未输入表示保持，清除是明确动作。

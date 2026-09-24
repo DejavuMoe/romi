@@ -1517,11 +1517,27 @@ fn setting_error(_app: &App, key: &str, value: &Value) -> Option<String> {
         }
         "admin_password" if value.len() < 12 => Some("password must be at least 12 characters".into()),
         "admin_password" => None,
+        // Consumed by `save_settings`, never stored: it is the proof that the
+        // caller knows the password they are replacing.
+        CURRENT_PASSWORD if value.is_empty() => Some("current password is required".into()),
+        CURRENT_PASSWORD => None,
         k if k.starts_with("notify_") => crate::notify::setting_error(k, value),
         k if READABLE_SETTINGS.contains(&k) || k == "github_client_secret" => None,
         _ => Some(format!("unknown setting: {key}")),
     }
 }
+
+/// Field carrying the caller's existing password. Verified and discarded; it is
+/// never written to `setting`.
+const CURRENT_PASSWORD: &str = "current_password";
+
+/// Settings whose change has to be proven with the current password.
+///
+/// Both of them are the credential itself: together they are the whole local
+/// sign-in. A session is not proof of the password -- one left open on an
+/// unattended machine, or lifted from a browser, would otherwise be enough to
+/// lock the operator out of their own hub.
+const CREDENTIAL_SETTINGS: [&str; 2] = ["admin_password", "admin_username"];
 
 pub async fn save_settings(
     _: Admin,
@@ -1535,12 +1551,31 @@ pub async fn save_settings(
             return bad(&message);
         }
     }
+    // Before anything is written, and before the expensive verification below,
+    // so a patch that changes a credential without offering proof costs nothing.
+    if map.keys().any(|key| CREDENTIAL_SETTINGS.contains(&key.as_str())) {
+        let Some(offered) = map.get(CURRENT_PASSWORD).and_then(Value::as_str) else {
+            return (StatusCode::BAD_REQUEST, "current password is required").into_response();
+        };
+        // The same gate the sign-in page holds: argon2 saturates a core, and
+        // this route is reachable by anyone holding a session.
+        let Ok(_permit) = app.password_gate.try_acquire() else {
+            return (StatusCode::TOO_MANY_REQUESTS, "too many attempts, try again later").into_response();
+        };
+        if !crate::auth::password_matches(&app, offered) {
+            return (StatusCode::FORBIDDEN, "current password is incorrect").into_response();
+        }
+    }
     // Set when the password changed, so the caller receives a fresh session rather
     // than being logged out by their own change.
     // Owned before the first await: the request body is borrowed by `map`, and a
     // reference into it cannot cross into a blocking task.
-    let entries: Vec<(String, String)> =
-        map.iter().map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_owned())).collect();
+    // The proof is dropped here: it was verified above and has no stored form.
+    let entries: Vec<(String, String)> = map
+        .iter()
+        .filter(|(key, _)| key.as_str() != CURRENT_PASSWORD)
+        .map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_owned()))
+        .collect();
     let mut reissued = String::new();
     for (key, value) in entries {
         if key == "maintenance_days" {
@@ -2652,13 +2687,59 @@ mod tests {
         assert_eq!(quarter, week, "an anonymous window past a week is clamped to one");
     }
 
+    /// Both halves of the local credential are proven with the password being
+    /// replaced. A session is not that proof: one left open on an unattended
+    /// machine would otherwise be enough to take the account over.
+    #[tokio::test]
+    async fn changing_a_credential_requires_the_current_password() {
+        let app = std::sync::Arc::new(app());
+        app.db.set("admin_password_hash", &hash_password("the-current-password").unwrap()).unwrap();
+        let save = |body: Value| {
+            let app = app.clone();
+            async move { save_settings(Admin, axum::extract::State(app), HeaderMap::new(), Json(body)).await }
+        };
+
+        for key in ["admin_password", "admin_username"] {
+            let value = if key == "admin_password" { "a-long-enough-password" } else { "operator" };
+            let missing = save(json!({key: value})).await;
+            assert_eq!(missing.status(), StatusCode::BAD_REQUEST, "{key} without proof");
+
+            let wrong = save(json!({key: value, "current_password": "not-the-password"})).await;
+            assert_eq!(wrong.status(), StatusCode::FORBIDDEN, "{key} with the wrong proof");
+        }
+        // Nothing was written by either refusal.
+        assert_eq!(app.db.get("admin_username"), None);
+        assert!(crate::auth::password_matches(&app, "the-current-password"));
+
+        // An empty proof is refused by validation rather than reaching argon2.
+        let empty = save(json!({"admin_password": "a-long-enough-password", "current_password": ""})).await;
+        assert_eq!(empty.status(), StatusCode::BAD_REQUEST);
+
+        // Settings that are not the credential need no proof at all.
+        let ordinary = save(json!({"site_name": "romi"})).await;
+        assert_eq!(ordinary.status(), StatusCode::OK);
+        assert_eq!(app.db.get("site_name").as_deref(), Some("romi"));
+
+        // With the proof, the change lands and the proof itself is not stored.
+        let accepted = save(
+            json!({"admin_password": "a-long-enough-password", "current_password": "the-current-password"}),
+        )
+        .await;
+        assert_eq!(accepted.status(), StatusCode::OK);
+        assert!(crate::auth::password_matches(&app, "a-long-enough-password"));
+        assert_eq!(app.db.get("current_password"), None, "the proof has no stored form");
+    }
+
     #[tokio::test]
     async fn changing_the_password_kills_other_sessions_but_not_the_caller() {
         let app = std::sync::Arc::new(app());
+        app.db.set("admin_password_hash", &hash_password("the-current-password").unwrap()).unwrap();
         let stale = random_token();
         app.db.create_session(&sha256(&stale), Utc::now().timestamp() + 3_600).unwrap();
 
-        let body = Json(json!({"admin_password": "a-long-enough-password"}));
+        let body = Json(
+            json!({"admin_password": "a-long-enough-password", "current_password": "the-current-password"}),
+        );
         let response = save_settings(Admin, axum::extract::State(app.clone()), HeaderMap::new(), body).await;
 
         assert!(!app.db.session_valid(&sha256(&stale)), "sessions must not outlive the old password");
@@ -2870,13 +2951,15 @@ mod tests {
 
         let mut app = app();
         app.bootstrap_password_file = Some(path.clone());
-        app.db.set("admin_password_hash", "old-hash").unwrap();
+        // The real shape of this moment: the operator replaces the generated
+        // bootstrap password, and proves it with the one they were handed.
+        app.db.set("admin_password_hash", &hash_password("one-time-secret").unwrap()).unwrap();
         let app = std::sync::Arc::new(app);
         let response = save_settings(
             Admin,
             State(app.clone()),
             HeaderMap::new(),
-            Json(json!({"admin_password": "a-long-enough-one"})),
+            Json(json!({"admin_password": "a-long-enough-one", "current_password": "one-time-secret"})),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);

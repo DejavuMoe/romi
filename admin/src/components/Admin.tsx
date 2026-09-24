@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { addresses, agentCommand, api, changes, GIB, registrationCommand, trafficCorrection, upload, type Node, type PingTask } from "@/lib/api"
+import { addresses, agentCommand, api, ApiError, changes, GIB, registrationCommand, trafficCorrection, upload, type Node, type PingTask } from "@/lib/api"
 import { connectionLabel } from "../../../shared/nodes"
 import { bytes, CYCLES, FOREVER, money, uptime } from "@/lib/format"
 
@@ -168,6 +168,7 @@ function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
       traffic_limit: Math.round(limit * GIB),
       traffic_unit: unit,
       priority: Number(priority),
+      public: form.public ?? true,
       bandwidth_down: form.bandwidth_down ?? 0,
       bandwidth_up: sameBandwidth ? form.bandwidth_down ?? 0 : form.bandwidth_up ?? 0,
       has_ipv4: form.has_ipv4 ?? true,
@@ -237,6 +238,7 @@ function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="展示优先级" hint="0–999999 整数，数字越大越靠前"><Input type="number" min={0} max={999999} step={1} value={priority} onChange={e=>setPriority(e.target.value)}/></Field>
+            <Field label="公开状态页" hint="私有节点只在管理列表显示。"><Select value={(form.public ?? true)?"public":"private"} onValueChange={v=>set("public",v==="public")}><SelectTrigger className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="public">显示</SelectItem><SelectItem value="private">不显示</SelectItem></SelectContent></Select></Field>
             {(["has_ipv4","has_ipv6"] as const).map((key,index)=><Field key={key} label={index ? "IPv6" : "IPv4"}><Select value={(form[key] ?? !index)?"yes":"no"} onValueChange={v=>set(key,v==="yes")}><SelectTrigger className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="yes">有</SelectItem><SelectItem value="no">无</SelectItem></SelectContent></Select></Field>)}
           </div>
           <fieldset className="border p-4 space-y-3"><legend className="px-1 text-sm">可用带宽</legend>
@@ -858,10 +860,12 @@ function useSettings() {
     error,
     retry: () => { setError(""); setReload((n) => n + 1) },
     set: (k: string, v: string) => setS((old) => ({ ...(old ?? {}), [k]: v })),
-    // Reports whether the save landed. The errors are handled here, so callers
-    // need not, but a caller that discards what it just sent -- the password
-    // field -- has to be able to tell a rejection from a success.
-    save: async (patch: Record<string, string>): Promise<boolean> => {
+    // `null` when the save landed, otherwise the refusal. The errors are
+    // reported here, so callers need not, but a caller that discards what it
+    // just sent -- the password fields -- has to tell a rejection from a
+    // success, and one that attributes a refusal to a particular field needs
+    // its status.
+    save: async (patch: Record<string, string>): Promise<Error | null> => {
       setError("")
       try {
         await api("/settings", { method: "PUT", body: JSON.stringify(patch) })
@@ -877,11 +881,11 @@ function useSettings() {
           for (const [key, value] of Object.entries(fresh)) if (key.endsWith("_set")) next[key] = value
           return next
         })
-        return true
+        return null
       } catch (e) {
         setError((e as Error).message)
         toast.error((e as Error).message)
-        return false
+        return e as Error
       }
     },
   }
@@ -1222,6 +1226,8 @@ function Sessions() {
 function Security({ site }: { site: string }) {
   const { s, set, save, error, retry } = useSettings()
   const [password, setPassword] = useState("")
+  const [current, setCurrent] = useState("")
+  const [currentError, setCurrentError] = useState("")
   if (!s) return <LoadState error={error} retry={retry} />
   const callback = `${site}/api/auth/github/callback`
 
@@ -1283,20 +1289,36 @@ function Security({ site }: { site: string }) {
           </p>
         </div>
         <Field label="账号"><Input value={String(s.admin_username ?? "admin")} onChange={e=>set("admin_username",e.target.value)}/></Field>
+        <Field label="当前密码" hint="修改账号或密码都需要先验证当前密码。" error={currentError}>
+          <Input type="password" value={current} onChange={(e) => { setCurrent(e.target.value); setCurrentError("") }} autoComplete="current-password" />
+        </Field>
         <Field label="新密码" hint="至少 12 位">
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </Field>
         <div>
           <Button
             size="sm"
-            disabled={password.length < 12}
+            disabled={password.length < 12 || current === ""}
             onClick={() =>
-              save({ admin_username: String(s.admin_username ?? "admin"), admin_password: password }).then(
+              save({
+                admin_username: String(s.admin_username ?? "admin"),
+                admin_password: password,
+                current_password: current,
+              }).then((failure) => {
                 // Cleared only once the hub accepted it. A rejected change that
-                // empties the field leaves the operator retyping a password the
+                // empties the fields leaves the operator retyping a password the
                 // panel never said it refused.
-                (ok) => ok && setPassword(""),
-              )
+                if (!failure) {
+                  setPassword("")
+                  setCurrent("")
+                  return
+                }
+                // A wrong password is the one refusal that belongs on a field.
+                // Anything else is a failure of the request, which `save`
+                // already reported.
+                const refused = failure instanceof ApiError && failure.status === 403
+                setCurrentError(refused ? "当前密码不正确" : "")
+              })
             }
           >
             修改密码

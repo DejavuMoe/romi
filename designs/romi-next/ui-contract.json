@@ -91,7 +91,8 @@
           "e2e/admin.spec.mjs",
           "e2e/public.spec.mjs",
           "e2e/visual-contract.spec.mjs",
-          "e2e/approved-v12.spec.mjs"
+          "e2e/approved-v12.spec.mjs",
+          "e2e/approved-v13.spec.mjs"
         ]
       },
       "views": [
@@ -141,7 +142,7 @@
           "interface": "POST /api/auth/login; GET /api/auth/github"
         }
       ],
-      "status": "approved"
+      "status": "implemented"
     },
     {
       "id": "public-status-v12",
@@ -200,7 +201,8 @@
         "tests": [
           "e2e/public.spec.mjs",
           "e2e/visual-contract.spec.mjs",
-          "e2e/approved-v12.spec.mjs"
+          "e2e/approved-v12.spec.mjs",
+          "e2e/approved-v13.spec.mjs"
         ]
       },
       "views": [
@@ -210,7 +212,7 @@
           "interface": "GET /api/nodes/{id}/metrics"
         }
       ],
-      "status": "approved"
+      "status": "implemented"
     }
   ]
 }
