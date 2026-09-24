@@ -8,6 +8,12 @@
 @import "tailwindcss" source(none);
 @source "../index.html";
 @source "../src";
+/* The detail page's range picker is the admin app's Select primitive. With only
+   this app's own source scanned, the classes that component carries -- its
+   dropdown layer, its trigger sizing -- are compiled into the admin stylesheet
+   and nowhere else, so the control renders unstyled here. The admin build states
+   the mirror of this for the components it borrows back. */
+@source "../../admin/src/components/ui";
 @import "tw-animate-css";
 
 @import "../../styles/theme.css";

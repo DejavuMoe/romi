@@ -47,9 +47,19 @@ function useTheme() {
   })
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark)
-    localStorage.setItem("theme", dark ? "dark" : "light")
   }, [dark])
-  return [dark, () => setDark((d) => !d)] as const
+  // Written on the toggle rather than on every render of it: storing the
+  // resolved value at mount pins whatever the system preferred at the first
+  // visit, and the visitor who never touched the switch stops following their
+  // own system from then on.
+  return [
+    dark,
+    () => {
+      const next = !dark
+      localStorage.setItem("theme", next ? "dark" : "light")
+      setDark(next)
+    },
+  ] as const
 }
 
 export default function App() {

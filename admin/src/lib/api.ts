@@ -135,6 +135,25 @@ export function useNodes() {
     let retry: ReturnType<typeof setTimeout> | null = null
     let closed = false
 
+    // A 401 is an answer, not an outage. Signed out with the public page off --
+    // which is the default, and therefore the state the login screen is normally
+    // in -- retrying would ask the same refused question every five seconds and
+    // reopen the stream forever behind an unattended login form. Retrying is
+    // what covers an unreachable hub; it cannot make a refusal succeed.
+    const stop = () => {
+      closed = true
+      socket?.close()
+      socket = null
+      if (poll) {
+        clearInterval(poll)
+        poll = null
+      }
+      if (retry) {
+        clearTimeout(retry)
+        retry = null
+      }
+    }
+
     const fetchOnce = () =>
       api<{ nodes: Node[]; admin: boolean }>("/nodes")
         .then((d) => {
@@ -147,7 +166,10 @@ export function useNodes() {
           // With the public page switched off, a revoked session receives a 401
           // here and on the stream, so the frame that would report admin=false
           // never arrives and the panel would retain the list it already had.
-          if (e instanceof ApiError && e.status === 401) setAdmin(false)
+          if (e instanceof ApiError && e.status === 401) {
+            setAdmin(false)
+            stop()
+          }
         })
 
     fetchOnce()
@@ -183,14 +205,11 @@ export function useNodes() {
     }
     connect()
 
-    return () => {
-      closed = true
-      socket?.close()
-      if (poll) clearInterval(poll)
-      if (retry) clearTimeout(retry)
-    }
+    return stop
   }, [reload])
 
+  // `refresh` is also how the panel resumes after signing in: the effect reruns,
+  // which is what restarts a stream stopped by the 401 above.
   return { nodes, admin, error, refresh: () => setReload((n) => n + 1) }
 }
 

@@ -858,7 +858,10 @@ function useSettings() {
     error,
     retry: () => { setError(""); setReload((n) => n + 1) },
     set: (k: string, v: string) => setS((old) => ({ ...(old ?? {}), [k]: v })),
-    save: async (patch: Record<string, string>) => {
+    // Reports whether the save landed. The errors are handled here, so callers
+    // need not, but a caller that discards what it just sent -- the password
+    // field -- has to be able to tell a rejection from a success.
+    save: async (patch: Record<string, string>): Promise<boolean> => {
       setError("")
       try {
         await api("/settings", { method: "PUT", body: JSON.stringify(patch) })
@@ -874,9 +877,11 @@ function useSettings() {
           for (const [key, value] of Object.entries(fresh)) if (key.endsWith("_set")) next[key] = value
           return next
         })
+        return true
       } catch (e) {
         setError((e as Error).message)
         toast.error((e as Error).message)
+        return false
       }
     },
   }
@@ -1236,7 +1241,11 @@ function Security({ site }: { site: string }) {
             <Input value={String(s.github_client_id ?? "")} onChange={(e) => set("github_client_id", e.target.value)} />
           </Field>
           <Field label="Client Secret" hint={s.github_secret_set ? "已设置，留空不变" : "未设置"}>
-            <Input type="password" placeholder={s.github_secret_set ? "••••••••" : ""} onChange={(e) => set("github_client_secret", e.target.value)} />
+            {/* Controlled, so that saving empties it. The hub answers with a
+                `github_secret_set` flag and never the secret itself, so an
+                uncontrolled field kept the typed value on screen after a save
+                that had already stored it. */}
+            <Input type="password" value={String(s.github_client_secret ?? "")} placeholder={s.github_secret_set ? "••••••••" : ""} onChange={(e) => set("github_client_secret", e.target.value)} />
           </Field>
         </div>
         {String(s.github_client_id ?? "") !== "" && String(s.github_allowed_users ?? "").trim() === "" && (
@@ -1281,7 +1290,14 @@ function Security({ site }: { site: string }) {
           <Button
             size="sm"
             disabled={password.length < 12}
-            onClick={() => save({ admin_username: String(s.admin_username ?? "admin"), admin_password: password }).then(() => setPassword(""))}
+            onClick={() =>
+              save({ admin_username: String(s.admin_username ?? "admin"), admin_password: password }).then(
+                // Cleared only once the hub accepted it. A rejected change that
+                // empties the field leaves the operator retyping a password the
+                // panel never said it refused.
+                (ok) => ok && setPassword(""),
+              )
+            }
           >
             修改密码
           </Button>
