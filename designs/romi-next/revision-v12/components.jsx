@@ -38,21 +38,26 @@ function validateInput(input) {
 function Form({ onSubmit, children, ...props }) {
   return <form {...props} noValidate onSubmit={e=>{e.preventDefault();e.currentTarget.querySelectorAll("[data-value-type]").forEach(validateInput);if(!e.currentTarget.checkValidity()){e.currentTarget.querySelector(":invalid")?.focus();return;}onSubmit?.(e);}}>{children}</form>;
 }
-function Field({ label, hint, children, wide, ...props }) {
+// `error` is a refusal the field cannot discover for itself -- one the hub
+// returns, such as a rejected current password. It renders in the same slot and
+// with the same wiring as a validation error, so the message stays attached to
+// the input it concerns instead of floating between two fields.
+function Field({ label, hint, error: refusal, children, wide, ...props }) {
   const id=React.useId(),[error,setError]=useState(""),[touched,setTouched]=useState(false);
   const message=input=>input.validity.valueMissing?"请填写此项":input.validity.typeMismatch?"请输入有效地址":input.validity.patternMismatch?"请检查输入格式":input.validationMessage;
   const invalid=e=>{e.preventDefault();setTouched(true);setError(message(e.currentTarget));};
-  const described=error?id+"-error":hint?id+"-hint":undefined;
+  const shown=refusal||error;
+  const described=shown?id+"-error":hint?id+"-hint":undefined;
   return <label htmlFor={id} className={`field ${wide?"full":""}`}><span>{label}</span>
     {children?React.cloneElement(children,{id,"aria-label":children.props["aria-label"]||label,"aria-describedby":described,onInvalid:invalid}):<input {...props} id={id}
       type={["number","date"].includes(props.type)?"text":props.type}
       data-value-type={["number","date"].includes(props.type)?props.type:undefined}
       inputMode={props.type==="number"?(props.step==="any"||props.step==="0.01"?"decimal":"numeric"):props.type==="date"?"numeric":props.inputMode}
       placeholder={props.type==="date"?"YYYY-MM-DD":props.placeholder}
-      aria-label={label} aria-invalid={!!error} aria-describedby={described} onInvalid={invalid}
+      aria-label={label} aria-invalid={!!shown} aria-describedby={described} onInvalid={invalid}
       onBlur={e=>{validateInput(e.currentTarget);setTouched(true);setError(e.currentTarget.validity.valid?"":message(e.currentTarget));props.onBlur?.(e);}}
       onInput={e=>{props.onInput?.(e);validateInput(e.currentTarget);if(touched)setError(e.currentTarget.validity.valid?"":message(e.currentTarget));}}/>}
-    <span className={`field-feedback ${hint?"with-hint":""}`}>{error?<span id={id+"-error"} className="field-error" role="alert">{error}</span>:hint?<span id={id+"-hint"} className="hint">{hint}</span>:null}</span>
+    <span className={`field-feedback ${hint?"with-hint":""}`}>{shown?<span id={id+"-error"} className="field-error" role="alert">{shown}</span>:hint?<span id={id+"-hint"} className="hint">{hint}</span>:null}</span>
   </label>;
 }
 function Select({ children, value, defaultValue, onChange, name, disabled, ...props }) {

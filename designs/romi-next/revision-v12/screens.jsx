@@ -476,9 +476,9 @@ function Security({ onSave, onConfirm, account, setAccount }) {
             required
             autoComplete="current-password"
             hint="修改账号或密码都需要先验证当前密码。"
+            error={currentPasswordError}
             onChange={() => setCurrentPasswordError("")}
           />
-          <p className="field-error" role={currentPasswordError ? "alert" : undefined}>{currentPasswordError}</p>
           <Field
             label="新密码"
             type="password"
