@@ -385,6 +385,15 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(os.readlink(agent_current), 'releases/0.9.9')
         self.assertTrue((agent_current / 'romi-agent').is_file())
 
+        # The shared parent has to stay traversable. Both installers run under
+        # `umask 077`, so a parent created as a side effect of the component
+        # path is owner-only and the service account cannot reach its own binary
+        # through it -- which surfaces only as "Permission denied" at exec time.
+        shared = self.prefix / 'opt/romi'
+        self.assertEqual(oct(shared.stat().st_mode & 0o777), '0o755')
+        for component in ('hub', 'agent'):
+            self.assertEqual(oct((shared / component).stat().st_mode & 0o777), '0o755', component)
+
         # The shared configuration directory keeps the stricter mode, and each
         # environment file keeps its own.
         etc = self.prefix / 'etc/romi'

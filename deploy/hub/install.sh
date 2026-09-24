@@ -297,6 +297,13 @@ fi
 
 # Root-controlled release and distribution directories; Hub-owned state
 # directories retain anything already present.
+#
+# The shared parent is named on its own line. This script runs under `umask 077`
+# so that the credentials it writes are owner-only, and an intermediate
+# directory created as a side effect of the component path inherits that: the
+# service account could then not traverse /opt/romi to reach its own binary, and
+# the failure surfaces only as "Permission denied" at exec time.
+install -d -m 0755 "$(dirname "$OPT_ROOT")"
 install -d -m 0755 "$OPT_ROOT" "$OPT_RELEASES"
 install -d -m 0750 "$STATE_DIR"
 # DuckDB spill files contain database rows; match the Hub's owner-only policy.

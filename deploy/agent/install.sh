@@ -467,6 +467,11 @@ if [ -z "$ROOT_PREFIX" ]; then
     fi
 fi
 
+# The shared parent is named on its own line, for the reason the Hub installer
+# gives: this script also runs under `umask 077`, and an intermediate directory
+# created as a side effect of the component path would be owner-only, leaving
+# the service account unable to traverse /opt/romi to reach its own binary.
+install -d -m 0755 "$(dirname "$OPT_ROOT")"
 install -d -m 0755 "$OPT_ROOT" "$OPT_RELEASES"
 if [ -e "$OPT_VERSION" ]; then
     [ -x "$OPT_VERSION/romi-agent" ] || die "$OPT_VERSION exists but has no runnable Agent"

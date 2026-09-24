@@ -158,7 +158,15 @@ def main():
                 assert agent.poll() is None, 'agent exited'
                 assert any(n.get('agent_version') == version for n in nodes()), \
                     f'agent must report romi version {version}'
-                with request(f'/api/nodes/{node_id}/token', {}) as response:
+                # Rotation hands back a long-lived node credential, so it is
+                # behind the same https-domain entry check as creating one.
+                rotate = f'/api/nodes/{node_id}/token'
+                try:
+                    request(rotate, {}).close()
+                    raise AssertionError('rotation must refuse a plain-http entry point')
+                except urllib.error.HTTPError as refused:
+                    assert refused.code == 403, refused.code
+                with request(rotate, {}, {'Host': 'romi.test', 'X-Forwarded-Proto': 'https'}) as response:
                     fresh = json.load(response)['token']
                     assert fresh != token
                 wait_for(lambda: all(not n['online'] for n in nodes()), 'rotation did not disconnect old agent')
