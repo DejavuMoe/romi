@@ -7,22 +7,13 @@
       "versions": [
         {
           "path": "revision-v12/index.html",
-          "createdAt": "2026-09-22T10:59:00.368Z",
+          "createdAt": "2026-09-25T02:30:00.000Z",
           "status": "approved",
           "viewport": {
             "width": 1326,
             "height": 831
-          }
-        },
-        {
-          "path": "revision-v12/index.html",
-          "createdAt": "2026-09-25T00:00:00.000Z",
-          "status": "needs-review",
-          "viewport": {
-            "width": 1326,
-            "height": 831
           },
-          "summary": "Adds the node visibility control to the edit dialog and a current-password field to the account form."
+          "summary": "v12 plus the node visibility control in the edit dialog and the current-password field in the account form."
         }
       ]
     },
@@ -30,27 +21,18 @@
       "versions": [
         {
           "path": "revision-v12/public.html",
-          "createdAt": "2026-09-22T10:59:00.436Z",
+          "createdAt": "2026-09-25T02:30:00.000Z",
           "status": "approved",
           "viewport": {
             "width": 1326,
             "height": 831
-          }
-        },
-        {
-          "path": "revision-v12/public.html",
-          "createdAt": "2026-09-25T00:00:00.000Z",
-          "status": "needs-review",
-          "viewport": {
-            "width": 1326,
-            "height": 831
           },
-          "summary": "The status page now lists only published nodes, which is what the new visibility control selects."
+          "summary": "v12 plus listing only published nodes, which is what the new visibility control selects."
         }
       ]
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T00:00:00.000Z",
+  "updatedAt": "2026-09-25T02:30:00.000Z",
   "title": "romi 下一版界面原型"
 }
