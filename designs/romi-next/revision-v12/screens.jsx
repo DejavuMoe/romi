@@ -97,12 +97,34 @@ function Detail({
         </div>
       </div>
       <div className="row spread wrap history-toolbar">
-        <div className="tabs" role="tablist" aria-label="历史类型">
+        <div
+          className="tabs"
+          role="tablist"
+          aria-label="历史类型"
+          // A tab list is one stop, not three: Tab reaches the selected tab and
+          // the arrows move between them. Without this a keyboard user pays
+          // three stops to pass the control and gets no arrow behaviour, which
+          // is what the role already promised.
+          onKeyDown={(e) => {
+            const order = ["资源", "监测", "流量"];
+            const at = order.indexOf(tab);
+            const to = e.key === "ArrowRight" ? at + 1 : e.key === "ArrowLeft" ? at - 1
+              : e.key === "Home" ? 0 : e.key === "End" ? order.length - 1 : null;
+            if (to === null) return;
+            e.preventDefault();
+            const next = order[(to + order.length) % order.length];
+            setTab(next);
+            e.currentTarget.querySelector(`#tab-${next}`)?.focus();
+          }}
+        >
           {["资源", "监测", "流量"].map((v) => (
             <button
               key={v}
+              id={`tab-${v}`}
               role="tab"
               aria-selected={tab === v}
+              aria-controls={`tabpanel-${v}`}
+              tabIndex={tab === v ? 0 : -1}
               onClick={() => setTab(v)}
             >
               {v}
@@ -142,7 +164,9 @@ function Detail({
           detail="收到采样后，历史记录会显示在这里。"
         />
       ) : (
-        <div role="tabpanel" aria-label={tab} className="charts resource-charts">{romiView.plots(node,tab).map(plot=><ResourceChart key={plot.name} plot={plot} node={node} hours={hours}/>)}</div>
+        // Named by its tab rather than repeating the label, so the two are one
+        // control rather than two strings that can drift apart.
+        <div id={`tabpanel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} className="charts resource-charts">{romiView.plots(node,tab).map(plot=><ResourceChart key={plot.name} plot={plot} node={node} hours={hours}/>)}</div>
       )}
 
     </section>
@@ -615,7 +639,11 @@ function PublicFleet({ nodes, state, onRetry, onlineGrace=5, view, setView }) {
     <div className="public-toolbar"><ViewSwitch view={view} onChange={setView}/></div>
     <div className="public-results" data-view={view}>
     {state==="error"?<Empty error title="暂时无法加载" action="重试" onAction={onRetry}/>:!nodes.length?<Empty title="还没有公开节点" detail="管理员公开节点后会显示在这里。"/>:view==="list"?<PublicNodeList nodes={nodes} onlineGrace={onlineGrace}/>:<div className="public-grid">
-      {nodes.map(n=><a className="node-card" key={n.id} href={"#node-"+n.id} aria-label={`查看 ${n.name}`}>
+      {/* No aria-label: one on the card replaces everything inside it, so a
+          screen reader hears "查看 <名称>" and never the status, billing or
+          resources the card exists to show. The list view already names its
+          link from its own text. */}
+      {nodes.map(n=><a className="node-card" key={n.id} href={"#node-"+n.id}>
         <div className="row spread"><h2>{n.name}</h2><Status node={n} grace={onlineGrace}/></div>
         <div className="card-billing"><strong>{n.price?`${n.currency} ${Number(n.price).toFixed(2)} / ${n.cycle}`:"免费"}</strong><span>{romiView.remaining(n.expires)}</span></div>
         <div className="system-facts"><div className="system-line"><span>{n.os==="—"?"等待首次上报":n.os}</span><span>内核 {n.kernel}</span></div><span>{n.cpuName?`${n.cpuName} · ${n.cores} vCPU · ${n.arch}`:"CPU 待上报"}</span></div>

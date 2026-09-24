@@ -7,13 +7,13 @@
       "versions": [
         {
           "path": "revision-v12/index.html",
-          "createdAt": "2026-09-25T02:30:00.000Z",
-          "status": "approved",
+          "createdAt": "2026-09-25T03:50:00.000Z",
+          "status": "needs-review",
           "viewport": {
             "width": 1326,
             "height": 831
           },
-          "summary": "v12 plus the node visibility control in the edit dialog and the current-password field in the account form."
+          "summary": "Keyboard-navigable history tabs wired to their panel, and public cards whose own content is their accessible name."
         }
       ]
     },
@@ -21,18 +21,18 @@
       "versions": [
         {
           "path": "revision-v12/public.html",
-          "createdAt": "2026-09-25T02:30:00.000Z",
-          "status": "approved",
+          "createdAt": "2026-09-25T03:50:00.000Z",
+          "status": "needs-review",
           "viewport": {
             "width": 1326,
             "height": 831
           },
-          "summary": "v12 plus listing only published nodes, which is what the new visibility control selects."
+          "summary": "Public cards whose own content is their accessible name, rather than a label that replaces it."
         }
       ]
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T02:30:00.000Z",
+  "updatedAt": "2026-09-25T03:50:00.000Z",
   "title": "romi 下一版界面原型"
 }
