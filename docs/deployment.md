@@ -48,13 +48,20 @@ Hub 安装成功并配置了内置 Agent 分发后：
 
 ```text
 /opt/romi/
-    releases/
-        <version>/
-            romi-hub
-            romi-agent
-            VERSION
-            release.json
-    current -> releases/<version>/
+    hub/                        # Hub 安装器拥有
+        releases/
+            <version>/
+                romi-hub
+                romi-agent
+                VERSION
+                release.json
+        current -> releases/<version>/
+    agent/                      # Agent 安装器拥有
+        releases/
+            <version>/
+                romi-agent
+                release.json
+        current -> releases/<version>/
 /var/lib/romi/
     romi.duckdb
     GeoLite2-Country.mmdb      # 可选，由后台下载
@@ -70,7 +77,8 @@ Hub 安装成功并配置了内置 Agent 分发后：
 
 关键不变量：
 
-- 二进制和版本元数据在 `/opt/romi/releases/<version>/`，只读、root 控制；
+- 二进制和版本元数据在 `/opt/romi/<组件>/releases/<version>/`，只读、root 控制；
+- Hub 和 Agent 各有独立的 `releases/` 与 `current`，因此同一台机器可以同时装两者，各自升级互不影响；
 - DuckDB、可选 Country 数据库、临时目录和分发缓存位于 `/var/lib/romi/`，**绝不在 `/opt` 或版本目录内**；
 - 升级只切换 `current` 符号链接，不移动、不覆盖数据库；
 - 旧版本目录保留，便于人工检查和显式回退；
@@ -194,8 +202,8 @@ tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT \
 安装完成后：
 
 - `/etc/romi/agent.env` 为 `0600`；
-- `/opt/romi/releases/<version>/romi-agent` 为 root 控制的版本化二进制；
-- `/opt/romi/current` 原子切换到新版本；
+- `/opt/romi/agent/releases/<version>/romi-agent` 为 root 控制的版本化二进制；
+- `/opt/romi/agent/current` 原子切换到新版本，与 Hub 的 `current` 相互独立；
 - service 通过 `EnvironmentFile` 注入令牌；
 - 旧版本目录保留。
 
@@ -224,7 +232,7 @@ Hub 触发的远程更新或任意远程命令执行。
 4. 原子切换 `current`；
 5. 启动并通过 `/healthz` 验证。
 
-新版本启动失败时，安装器不会自动回退。旧二进制仍在 `/opt/romi/releases/`，但数据库应用
+新版本启动失败时，安装器不会自动回退。旧二进制仍在 `/opt/romi/hub/releases/`，但数据库应用
 schema 可能已经被新版本迁移；**不要在没有兼容备份的情况下盲目切回旧二进制**。
 
 备份必须使用 romi 的一致性备份接口（面板「数据」页或 API），

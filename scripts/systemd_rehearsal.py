@@ -685,7 +685,7 @@ class Rehearsal:
 
     def verify_hub_filesystem(self) -> None:
         self.refresh_hub_service_ids()
-        opt = Path("/opt/romi")
+        opt = Path("/opt/romi/hub")
         releases = opt / "releases"
         release = releases / self.version
         state = Path("/var/lib/romi")
@@ -712,7 +712,7 @@ class Rehearsal:
         unit = Path("/etc/systemd/system/romi-hub.service")
         expect_mode(unit, 0o644, 0, 0)
         for name in ("romi-hub", "romi-agent"):
-            if sha256_file(Path("/opt/romi/releases") / self.version / name) != sha256_bytes(
+            if sha256_file(Path("/opt/romi/hub/releases") / self.version / name) != sha256_bytes(
                 (self.hub_release / "bin" / name).read_bytes()
             ):
                 fail(f"installed {name} differs from the verified Hub archive")
@@ -728,8 +728,8 @@ class Rehearsal:
         unit = Path("/etc/systemd/system/romi-agent.service")
         expect_contract_file(env_path, 0o600, 0, 0)
         expect_mode(unit, 0o644, 0, 0)
-        expect_symlink(Path("/opt/romi/current"), f"releases/{self.version}")
-        installed_agent = Path("/opt/romi/releases") / self.version / "romi-agent"
+        expect_symlink(Path("/opt/romi/agent/current"), f"releases/{self.version}")
+        installed_agent = Path("/opt/romi/agent/releases") / self.version / "romi-agent"
         expect_mode(installed_agent, 0o755, 0, 0)
         if sha256_file(installed_agent) != sha256_bytes((self.hub_release / "bin" / "romi-agent").read_bytes()):
             fail("installed Agent binary differs from the verified Hub archive")
@@ -1146,8 +1146,8 @@ server {{
     def idempotent_hub_reinstall(self) -> None:
         if self.hub_installer is None:
             fail("Hub installer path is not set")
-        current = Path("/opt/romi/current")
-        release = Path("/opt/romi/releases") / self.version
+        current = Path("/opt/romi/hub/current")
+        release = Path("/opt/romi/hub/releases") / self.version
         before_link = os.readlink(current)
         before_hub = sha256_file(release / "romi-hub")
         before_agent = sha256_file(release / "romi-agent")
@@ -1171,8 +1171,8 @@ server {{
     def idempotent_agent_reinstall(self) -> None:
         if self.agent_install_script is None:
             fail("Agent installer path is not set")
-        current = Path("/opt/romi/current")
-        release = Path("/opt/romi/releases") / self.version
+        current = Path("/opt/romi/agent/current")
+        release = Path("/opt/romi/agent/releases") / self.version
         before_link = os.readlink(current)
         before_agent = sha256_file(release / "romi-agent")
         before_env = Path("/etc/romi/agent.env").read_text(encoding="utf-8")
@@ -1209,7 +1209,7 @@ server {{
         systemctl("stop", "romi-hub.service")
         wait_until(lambda: not systemctl_is_active("romi-hub.service"), 15.0, "Hub service stopped")
         stale = run(
-            ["pgrep", "-af", "/opt/romi/current/romi-hub"],
+            ["pgrep", "-af", "/opt/romi/hub/current/romi-hub"],
             capture=True,
             check=False,
         )
@@ -1223,7 +1223,7 @@ server {{
             port = probe.getsockname()[1]
         lock_check = subprocess.Popen(
             [
-                "/opt/romi/current/romi-hub",
+                "/opt/romi/hub/current/romi-hub",
                 "--listen",
                 f"127.0.0.1:{port}",
                 "--db",

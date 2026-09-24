@@ -353,7 +353,11 @@ validate_server "$SERVER"
 
 # Paths are all under ROOT_PREFIX in test mode, so a CI run cannot touch the
 # real host. Production leaves ROOT_PREFIX empty.
-OPT_ROOT="$ROOT_PREFIX/opt/romi"
+#
+# Under /opt/romi/agent rather than /opt/romi: the hub installs its own release
+# beside this one whenever the hub's host is also monitored, and one shared
+# `current` symlink cannot point at both.
+OPT_ROOT="$ROOT_PREFIX/opt/romi/agent"
 OPT_RELEASES="$OPT_ROOT/releases"
 OPT_CURRENT="$OPT_ROOT/current"
 ETC_DIR="$ROOT_PREFIX/etc/romi"
@@ -481,7 +485,10 @@ else
     mv "$stage" "$OPT_VERSION" || { rm -rf "$stage"; die "cannot install $OPT_VERSION"; }
 fi
 
-install -d -m 0755 "$ETC_DIR"
+# Created only when absent, so installing an agent beside a hub does not relax
+# the 0750 root:romi the hub installer chose for this shared directory. The env
+# file below carries its own 0600 either way; systemd reads it as root.
+[ -d "$ETC_DIR" ] || install -d -m 0750 "$ETC_DIR"
 env_tmp="$ETC_DIR/.agent.env.$$"
 umask 077
 {

@@ -118,7 +118,18 @@ jobs:
         run: |
           set -euo pipefail
           notes="$RUNNER_TEMP/romi-release-notes.md"
-          cat "docs/release-$RELEASE_TAG.md" > "$notes"
+          # Per-tag notes are optional. Requiring them made publishing
+          # impossible: the file has to name a tag that does not exist until the
+          # commit is tagged, and adding it changes the commit the whole gate
+          # chain was run against. Write them at docs/release-<tag>.md before
+          # tagging when a release needs prose; otherwise the generated body
+          # carries the identity that actually matters.
+          if [ -f "docs/release-$RELEASE_TAG.md" ]; then
+            cat "docs/release-$RELEASE_TAG.md" > "$notes"
+          else
+            printf 'romi %s\n\nSee docs/release.md for the artifact layout and the verification entry points.\n' \
+              "$RELEASE_TAG" > "$notes"
+          fi
           printf '\nSource commit: `%s`\n\n<!-- romi-source:%s -->\n' "$GITHUB_SHA" "$GITHUB_SHA" >> "$notes"
           if gh release view "$RELEASE_TAG" --json isDraft,body > "$RUNNER_TEMP/romi-existing-release.json" 2>/dev/null; then
             python3 -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"romi-existing-release.json").read_text()); assert r["isDraft"] and "<!-- romi-source:"+os.environ["GITHUB_SHA"]+" -->" in r["body"], "refusing to overwrite a published or unrelated release"'

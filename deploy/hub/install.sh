@@ -252,7 +252,14 @@ trap 'rm -rf "$WORK"' EXIT HUP INT TERM
 
 # Layout: immutable releases under /opt, mutable state under /var/lib, config
 # under /etc. ROOT_PREFIX is empty in production.
-OPT_ROOT="$ROOT_PREFIX/opt/romi"
+#
+# The component name is part of the path because a hub and an agent are
+# routinely installed on the same machine -- the hub's own host is monitored
+# like any other. Sharing /opt/romi/current made the second installer point that
+# one symlink at its own release, so installing or upgrading the agent broke the
+# hub at its next restart, and the hub installer refused outright when the agent
+# had already claimed the version directory.
+OPT_ROOT="$ROOT_PREFIX/opt/romi/hub"
 OPT_RELEASES="$OPT_ROOT/releases"
 OPT_VERSION="$OPT_RELEASES/$version"
 OPT_CURRENT="$OPT_ROOT/current"

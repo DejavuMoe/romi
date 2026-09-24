@@ -207,10 +207,10 @@ class InstallerTests(unittest.TestCase):
 
         run_checked('sh', str(release.install), '--root-prefix', str(self.prefix),
                     '--site', 'https://hub.example.com', '--no-start')
-        current = self.prefix / 'opt/romi/current'
+        current = self.prefix / 'opt/romi/hub/current'
         self.assertTrue(current.is_symlink())
         self.assertEqual(os.readlink(current), 'releases/0.1.0')
-        release_dir = self.prefix / 'opt/romi/releases/0.1.0'
+        release_dir = self.prefix / 'opt/romi/hub/releases/0.1.0'
         self.assertTrue((release_dir / 'romi-hub').is_file())
         self.assertTrue((release_dir / 'romi-agent').is_file())
         self.assertEqual(oct(release_dir.stat().st_mode & 0o777), '0o755')
@@ -244,7 +244,7 @@ class InstallerTests(unittest.TestCase):
         run_checked('sh', str(upgraded.install), '--root-prefix', str(self.prefix),
                     '--site', 'https://hub.example.com', '--no-start')
         self.assertEqual(os.readlink(current), 'releases/0.2.0')
-        self.assertTrue((self.prefix / 'opt/romi/releases/0.1.0/romi-hub').is_file())
+        self.assertTrue((self.prefix / 'opt/romi/hub/releases/0.1.0/romi-hub').is_file())
         self.assertEqual(state_marker.read_text(), 'existing state')
         self.assertEqual(spill.stat().st_mode & 0o777, 0o700)
 
@@ -289,7 +289,7 @@ class InstallerTests(unittest.TestCase):
         state_marker.write_text('existing state')
         run_checked('sh', str(release.install), '--root-prefix', str(self.prefix),
                     '--site', 'https://hub.example.com', '--no-start')
-        current = self.prefix / 'opt/romi/current'
+        current = self.prefix / 'opt/romi/hub/current'
         self.assertEqual(os.readlink(current), 'releases/0.1.0')
 
         # A new release whose Hub identity check fails must not create a version
@@ -302,7 +302,7 @@ class InstallerTests(unittest.TestCase):
                      '--site', 'https://hub.example.com', '--no-start')
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(os.readlink(current), 'releases/0.1.0')
-        self.assertFalse((self.prefix / 'opt/romi/releases/0.2.0').exists())
+        self.assertFalse((self.prefix / 'opt/romi/hub/releases/0.2.0').exists())
         self.assertEqual(state_marker.read_text(), 'existing state')
 
         # A release-candidate archive is intentionally refused by the native
@@ -316,7 +316,7 @@ class InstallerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('candidate', result.stderr.lower())
         self.assertEqual(os.readlink(current), 'releases/0.1.0')
-        self.assertFalse((self.prefix / 'opt/romi/releases/0.3.0').exists())
+        self.assertFalse((self.prefix / 'opt/romi/hub/releases/0.3.0').exists())
 
     def test_agent_installer_installs_serves_and_upgrades(self):
         binary = b'#!/bin/sh\n[ "${1:-}" = "--version" ] && echo "romi-agent %s"\n' % b'0.1.0'
@@ -333,11 +333,11 @@ class InstallerTests(unittest.TestCase):
         unit = (self.prefix / 'etc/systemd/system/romi-agent.service').read_text()
         self.assertNotIn('permanent-token', unit)
         self.assertNotIn('--token', unit)
-        current = self.prefix / 'opt/romi/current'
+        current = self.prefix / 'opt/romi/agent/current'
         self.assertEqual(os.readlink(current), 'releases/0.1.0')
-        metadata = json.loads((self.prefix / 'opt/romi/releases/0.1.0/release.json').read_text())
+        metadata = json.loads((self.prefix / 'opt/romi/agent/releases/0.1.0/release.json').read_text())
         self.assertEqual(metadata['version'], '0.1.0')
-        self.assertEqual(metadata['sha256'], sha256((self.prefix / 'opt/romi/releases/0.1.0/romi-agent').read_bytes()))
+        self.assertEqual(metadata['sha256'], sha256((self.prefix / 'opt/romi/agent/releases/0.1.0/romi-agent').read_bytes()))
 
         # A newer release replaces the current symlink but leaves the old one.
         binary2 = b'#!/bin/sh\n[ "${1:-}" = "--version" ] && echo "romi-agent %s"\n' % b'0.2.0'
@@ -345,7 +345,7 @@ class InstallerTests(unittest.TestCase):
             run_checked('sh', str(AGENT_INSTALL), '--root-prefix', str(self.prefix),
                         '--server', hub2.url, '--token-stdin', input='second-token\n')
         self.assertEqual(os.readlink(current), 'releases/0.2.0')
-        self.assertTrue((self.prefix / 'opt/romi/releases/0.1.0/romi-agent').is_file())
+        self.assertTrue((self.prefix / 'opt/romi/agent/releases/0.1.0/romi-agent').is_file())
         upgraded_env = (self.prefix / 'etc/romi/agent.env').read_text()
         self.assertIn('ROMI_TOKEN=second-token', upgraded_env)
         self.assertIn('ROMI_IFACE=eth1,-eth0', upgraded_env)
@@ -358,6 +358,46 @@ class InstallerTests(unittest.TestCase):
                         input='third-token\n')
         cleared_env = (self.prefix / 'etc/romi/agent.env').read_text()
         self.assertIn('ROMI_IFACE=\n', cleared_env)
+
+    def test_hub_and_agent_coexist_on_one_host(self):
+        # The Hub's own machine is monitored like any other, so both installers
+        # run against the same root. They shared /opt/romi/current until each was
+        # given its own subtree: installing the Agent pointed that one symlink at
+        # the Agent release, and the Hub ran whatever it found there at its next
+        # restart. A differing version made it worse -- the Hub installer refused
+        # outright, because the Agent already owned the version directory.
+        release = FixtureRelease(self.base, 'hub')
+        run_checked('sh', str(release.install), '--root-prefix', str(self.prefix),
+                    '--site', 'https://hub.example.com', '--no-start')
+        hub_current = self.prefix / 'opt/romi/hub/current'
+        hub_binary = (hub_current / 'romi-hub').resolve()
+        self.assertTrue(hub_binary.is_file())
+
+        agent_binary = b'#!/bin/sh\n[ "${1:-}" = "--version" ] && echo "romi-agent %s"\n' % b'0.9.9'
+        with LocalHub('0.9.9', agent_binary) as hub:
+            run_checked('sh', str(AGENT_INSTALL), '--root-prefix', str(self.prefix),
+                        '--server', hub.url, '--token-stdin', input='coexisting-token\n')
+
+        # Each component resolves through its own symlink, at its own version.
+        self.assertEqual(os.readlink(hub_current), f'releases/{VERSION}')
+        self.assertTrue((hub_current / 'romi-hub').is_file())
+        agent_current = self.prefix / 'opt/romi/agent/current'
+        self.assertEqual(os.readlink(agent_current), 'releases/0.9.9')
+        self.assertTrue((agent_current / 'romi-agent').is_file())
+
+        # The shared configuration directory keeps the stricter mode, and each
+        # environment file keeps its own.
+        etc = self.prefix / 'etc/romi'
+        self.assertEqual(oct(etc.stat().st_mode & 0o777), '0o750')
+        self.assertEqual(oct((etc / 'hub.env').stat().st_mode & 0o777), '0o640')
+        self.assertEqual(oct((etc / 'agent.env').stat().st_mode & 0o777), '0o600')
+
+        # Reinstalling the Hub afterwards still succeeds and leaves the Agent
+        # pointing where it was.
+        run_checked('sh', str(release.install), '--root-prefix', str(self.prefix),
+                    '--site', 'https://hub.example.com', '--no-start')
+        self.assertEqual(os.readlink(agent_current), 'releases/0.9.9')
+        self.assertEqual(os.readlink(hub_current), f'releases/{VERSION}')
 
     def test_agent_registration_window_and_rejections(self):
         binary = b'#!/bin/sh\n[ "${1:-}" = "--version" ] && echo "romi-agent %s"\n' % b'0.1.0'
@@ -392,8 +432,8 @@ class InstallerTests(unittest.TestCase):
             result = run('sh', str(AGENT_INSTALL), '--root-prefix', str(rejection_prefix),
                          '--server', hub.url, '--token-stdin', input='token\n')
             self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((rejection_prefix / 'opt/romi/releases/0.1.0').exists())
-        self.assertFalse((rejection_prefix / 'opt/romi/current').exists())
+        self.assertFalse((rejection_prefix / 'opt/romi/agent/releases/0.1.0').exists())
+        self.assertFalse((rejection_prefix / 'opt/romi/agent/current').exists())
 
         # Truncated binary: metadata promises more bytes than the server sends.
         metadata = {
@@ -422,8 +462,8 @@ class InstallerTests(unittest.TestCase):
             result = run('sh', str(AGENT_INSTALL), '--root-prefix', str(rejection_prefix),
                          '--server', hub.url, '--token-stdin', input='token\n')
             self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((rejection_prefix / 'opt/romi/releases/0.1.0').exists())
-        self.assertFalse((rejection_prefix / 'opt/romi/current').exists())
+        self.assertFalse((rejection_prefix / 'opt/romi/agent/releases/0.1.0').exists())
+        self.assertFalse((rejection_prefix / 'opt/romi/agent/current').exists())
 
         # Unsupported architecture.
         metadata = {
