@@ -7,8 +7,8 @@
       "versions": [
         {
           "path": "revision-v12/index.html",
-          "createdAt": "2026-09-25T03:50:00.000Z",
-          "status": "needs-review",
+          "createdAt": "2026-09-25T04:10:00.000Z",
+          "status": "approved",
           "viewport": {
             "width": 1326,
             "height": 831
@@ -21,8 +21,8 @@
       "versions": [
         {
           "path": "revision-v12/public.html",
-          "createdAt": "2026-09-25T03:50:00.000Z",
-          "status": "needs-review",
+          "createdAt": "2026-09-25T04:10:00.000Z",
+          "status": "approved",
           "viewport": {
             "width": 1326,
             "height": 831
@@ -33,6 +33,6 @@
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T03:50:00.000Z",
+  "updatedAt": "2026-09-25T04:10:00.000Z",
   "title": "romi 下一版界面原型"
 }
