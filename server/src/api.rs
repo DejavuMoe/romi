@@ -1490,9 +1490,7 @@ fn setting_error(_app: &App, key: &str, value: &Value) -> Option<String> {
         "public_default_view" if !matches!(value, "cards" | "list") => {
             Some("public default view must be cards or list".into())
         }
-        "public_page" | "country_lookup" if !matches!(value, "on" | "off") => {
-            Some(format!("{key} must be on or off"))
-        }
+        "public_page" if !matches!(value, "on" | "off") => Some(format!("{key} must be on or off")),
 
         // Housekeeping clamps whatever it reads, so an unparsable value would be
         // stored, echoed back, and silently mean 7 days indefinitely.

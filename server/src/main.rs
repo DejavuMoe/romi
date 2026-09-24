@@ -278,6 +278,10 @@ fn parse_args() -> Result<Args> {
     if let Some(value) = &db_memory {
         anyhow::ensure!(valid_size(value), "--db-memory {value} is not a size such as 512MB");
     }
+    // `--db` last on the command line consumes nothing and leaves this empty,
+    // which the storage layer reads as an in-memory database: the hub would come
+    // up, serve, and lose every row at the next restart without ever saying so.
+    anyhow::ensure!(!database.is_empty(), "--db needs a file path");
     if let Some(value) = &db_temp {
         anyhow::ensure!(!value.is_empty(), "--db-temp needs a directory");
     }
@@ -344,6 +348,16 @@ async fn main() -> Result<()> {
     let app = Arc::new(app);
     let url = advertised_url(&args.site, args.listen);
     first_run(&app, &url)?;
+    // Spelled out because it cannot be discovered later: an in-memory database
+    // serves normally and keeps nothing, so the first restart is when an
+    // operator would otherwise learn what they chose. `docs/storage.md` records
+    // this as a test-only mode.
+    if args.database == ":memory:" {
+        warn!(
+            "--db :memory: keeps nothing: every node, credential and history row is discarded when \
+             this process exits. Pass a file path for anything but a throwaway run"
+        );
+    }
     if exposed_over_plain_http(&url) {
         warn!(
             "this hub answers plain HTTP at {url}; sessions and agent tokens travel in the clear. \

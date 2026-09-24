@@ -83,10 +83,12 @@ def check(binaries, target):
             wait(lambda: request('/healthz').status == 200)
             bootstrap = Path('/var/lib/romi/bootstrap-password')
             assert bootstrap.stat().st_mode & 0o777 == 0o600
-            with request('/api/auth/login', {'username': 'admin', 'password': bootstrap.read_text().strip()}) as response:
+            generated = bootstrap.read_text().strip()
+            with request('/api/auth/login', {'username': 'admin', 'password': generated}) as response:
                 cookie = response.headers['Set-Cookie'].split(';', 1)[0]
             password = secrets.token_urlsafe(24)
-            with request('/api/settings', {'admin_password': password}):
+            # Replacing a credential is proven with the one being replaced.
+            with request('/api/settings', {'admin_password': password, 'current_password': generated}):
                 pass
             assert not bootstrap.exists()
             with request('/api/auth/login', {'username': 'admin', 'password': password}) as response:

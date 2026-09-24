@@ -133,6 +133,17 @@ pub struct BackupReport {
     pub created_at: i64,
     pub bytes: u64,
     pub rows: BTreeMap<String, i64>,
+    /// Whether this build would accept the archive back. An export has no
+    /// ceiling, a restore does; see [`write_archive`].
+    #[serde(default = "restorable_by_default")]
+    pub restorable: bool,
+}
+
+/// A manifest written before this field existed describes an archive that was
+/// within the limits of its own build, and `inspect` re-derives the answer from
+/// the file it is looking at.
+fn restorable_by_default() -> bool {
+    true
 }
 
 impl BackupReport {
@@ -248,6 +259,8 @@ fn write_archive_inner(conn: &Connection, dest: &str, work: &str) -> Result<Back
         created_at: chrono::Utc::now().timestamp(),
         bytes: 0,
         rows,
+        // Set once the archive exists and its size is known.
+        restorable: true,
     };
     let manifest = Manifest {
         format: report.format,
@@ -290,6 +303,19 @@ fn write_archive_inner(conn: &Connection, dest: &str, work: &str) -> Result<Back
     own_only(dest);
     let mut report = report;
     report.bytes = std::fs::metadata(dest)?.len();
+    // An archive this hub cannot read back is worth knowing about now rather
+    // than during a restore. The export has no size ceiling of its own -- a
+    // refusal here would leave the operator with no backup at all, which is
+    // worse than a large one -- so this reports rather than fails.
+    report.restorable = report.bytes <= super::MAX_ARCHIVE;
+    if !report.restorable {
+        warn!(
+            "this backup is {} bytes, past the {} this build will accept on restore: keep it, but \
+             shorten the retention window or run maintenance before relying on it",
+            report.bytes,
+            super::MAX_ARCHIVE
+        );
+    }
     Ok(report)
 }
 
@@ -407,6 +433,8 @@ pub(super) fn extract_and_validate_with(
             created_at: manifest.created_at,
             bytes: std::fs::metadata(src).map(|m| m.len()).unwrap_or(0),
             rows,
+            // Reaching here means the file already passed the restore limits.
+            restorable: true,
         },
         expanded_total,
     ))

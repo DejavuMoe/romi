@@ -279,7 +279,11 @@ class BootstrapTLSTests(unittest.TestCase):
             component.bootstrap_lifecycle()
         client.request.assert_any_call("POST", "/api/auth/login", json_body={"username": "admin", "password": secret})
         client.request.assert_any_call("GET", "/api/db")
-        client.request.assert_any_call("PUT", "/api/settings", json_body={"admin_password": component.new_password})
+        client.request.assert_any_call(
+            "PUT",
+            "/api/settings",
+            json_body={"admin_password": component.new_password, "current_password": secret},
+        )
         self.assertEqual(sessions.call_args_list, [mock.call(rehearsal.DEFAULT_SITE, cafile=component.nginx_ca)] * 2)
 
     def test_direct_provisioning_checks_an_authenticated_caller_without_relaxing_cookie_policy(self):

@@ -545,9 +545,7 @@ fn insert_nodes_and_metadata(conn: &Connection, args: &SeedArgs) -> Result<()> {
         tx.execute_batch(
             "INSERT INTO setting (key, value) VALUES
                ('retention_days', '3650'),
-               ('public_page', 'off'),
-               ('theme', 'default'),
-               ('country_lookup', 'off')
+               ('public_page', 'off')
              ON CONFLICT (key) DO UPDATE SET value = excluded.value",
         )?;
         // A deterministic, benchmark-only administrator credential. Hashing

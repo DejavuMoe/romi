@@ -140,6 +140,16 @@ def main():
                     assert database.read(12)[8:12] == b'DUCK', 'the hub must write a DuckDB database'
                 assert (work / 'romi.db.lock').exists(), 'the lock file is what refuses a second hub'
 
+                # `--db` last on the command line consumes nothing. That used to
+                # read as an in-memory database: the hub came up, served, and
+                # discarded everything at the next restart without saying so.
+                bare = subprocess.run(
+                    [str(binaries / 'romi-hub'), '--listen', '127.0.0.1:0', '--db'],
+                    cwd=work, capture_output=True, text=True, timeout=30,
+                )
+                assert bare.returncode != 0, '--db without a path must not start a hub'
+                assert '--db' in bare.stderr, bare.stderr
+
                 # One hub per database file, enforced across processes: DuckDB
                 # itself refuses a second read-write process, and the hub refuses
                 # it with an explanation rather than a raw engine error.

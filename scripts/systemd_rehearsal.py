@@ -765,8 +765,12 @@ class Rehearsal:
             fail("authenticated HTTPS admin request failed after bootstrap login")
 
         self.new_password = secrets.token_hex(24)
+        # Replacing a credential is proven with the one being replaced, which
+        # here is the credential this Hub generated on first start.
         changed = client.request(
-            "PUT", "/api/settings", json_body={"admin_password": self.new_password}
+            "PUT",
+            "/api/settings",
+            json_body={"admin_password": self.new_password, "current_password": secret},
         )
         if changed.status != 200:
             fail(f"password change returned {changed.status}: {changed.body[:200]!r}")

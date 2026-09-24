@@ -324,7 +324,14 @@ async fn serve(app: Shared, node_id: i64, token: String, ip: String, mut socket:
                     .await
                     .unwrap_or_else(|e| Err(anyhow::anyhow!("report worker failed: {e}")));
                     match outcome {
-                        Ok(true) => locate(app.clone(), node_id, ip.clone()),
+                        // Off the runtime, like the frame handling above: the
+                        // lookup reads the country database and then waits on
+                        // the writer queue.
+                        Ok(true) => {
+                            let (geo_app, geo_ip) = (app.clone(), ip.clone());
+                            let _ = tokio::task::spawn_blocking(move || locate(geo_app, node_id, geo_ip))
+                                .await;
+                        }
                         Ok(false) => {}
                         Err(e) => warn!("node {node_id} sent an unusable message: {e:#}"),
                     }
@@ -403,8 +410,8 @@ pub(crate) fn retire_all_then<T>(app: &App, f: impl FnOnce() -> Result<T>) -> Re
 }
 
 /// Handles one inbound frame and reports whether the node is now owed a country
-/// lookup. The lookup itself is an outbound request and happens off this path;
-/// see `locate`.
+/// lookup. Only `hello` carries an address worth resolving, and the lookup runs
+/// after the per-session state lock is released; see `locate`.
 fn dispatch(app: &App, node_id: i64, session: u64, ip: &str, text: &str) -> Result<bool> {
     let rpc: Rpc = serde_json::from_str(text)?;
     // The global map lock protects only membership/lookup. Clone the stable
@@ -447,6 +454,9 @@ fn dispatch(app: &App, node_id: i64, session: u64, ip: &str, text: &str) -> Resu
     Ok(false)
 }
 
+/// Resolves one address against the local country database and stores the
+/// result. Blocking: the lookup reads a memory-mapped file and the write goes
+/// through the writer queue, so callers run this off the async runtime.
 fn locate(app: Shared, node_id: i64, ip: String) {
     if let Some(cc) = app.geo.country(&ip) {
         if let Err(e) = app.db.set_country(node_id, &cc, &ip) {
@@ -745,14 +755,16 @@ mod tests {
         assert_eq!(app.agents.read().unwrap()[&id].session, 2);
     }
 
+    /// Without a country database there is nothing to resolve, and an address
+    /// that resolves to nothing must not write a row or fail the report that
+    /// carried it. A loopback address has no country even when one is loaded.
     #[test]
-    fn country_lookup_is_not_scheduled_without_opt_in() {
+    fn an_address_with_no_country_stores_nothing() {
         let app = std::sync::Arc::new(app());
-        // No Tokio runtime: a spawn here would fail, proving the default gate is before spawning.
-        locate(app.clone(), i64::MAX, "127.0.0.1".into());
-        app.db.set("country_lookup", "off").unwrap();
-        locate(app.clone(), i64::MAX, "127.0.0.1".into());
+        let id = app.db.create_node(&crate::db::Node::default(), "located-token").unwrap();
+        locate(app.clone(), id, "127.0.0.1".into());
         assert!(app.geo.country("127.0.0.1").is_none());
+        assert_eq!(app.db.node(id).unwrap().unwrap().country, "");
     }
 
     #[test]
