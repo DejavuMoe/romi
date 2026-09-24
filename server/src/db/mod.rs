@@ -952,7 +952,9 @@ impl Db {
         })
     }
 
-    pub fn update_node(&self, id: i64, n: &NodePatch) -> Result<()> {
+    /// Whether a node with this id existed. The row count is the answer rather
+    /// than a lookup beforehand, which a concurrent delete could overtake.
+    pub fn update_node(&self, id: i64, n: &NodePatch) -> Result<bool> {
         // `expires_at` is a triple, not an option: omitted leaves the column
         // alone, an explicit null clears it. The flag is what carries the
         // difference into SQL.
@@ -965,7 +967,7 @@ impl Db {
         let (limit, mode, day, notify) =
             (n.traffic_limit, n.traffic_mode.clone(), n.traffic_reset_day, n.notify);
         self.write(Kind::Solo, move |conn| {
-            conn.prepare(
+            let changed = conn.prepare(
                 "UPDATE node SET name=COALESCE(?2,name), sort=COALESCE(?3,sort), public=COALESCE(?4,public),
                                  price=COALESCE(?5,price), currency=COALESCE(?6,currency),
                                  billing_cycle=COALESCE(?7,billing_cycle),
@@ -992,7 +994,7 @@ impl Db {
                 day.map(|d| d as i64),
                 notify, priority, up, down, ipv4, ipv6, traffic_unit
             ])?;
-            Ok(())
+            Ok(changed == 1)
         })
     }
 
@@ -1249,11 +1251,15 @@ impl Db {
     /// they would belong to whichever period the row still held, `all_traffic`
     /// would read them back as zero, and the node's next report would restart the
     /// counter and discard the correction.
-    pub fn set_traffic(&self, node_id: i64, p: &TrafficPatch) -> Result<()> {
+    /// Whether a node with this id existed; a missing one is an answer, not a
+    /// storage failure.
+    pub fn set_traffic(&self, node_id: i64, p: &TrafficPatch) -> Result<bool> {
         let (total_rx, total_tx, month_rx, month_tx) = (p.total_rx, p.total_tx, p.month_rx, p.month_tx);
         self.write(Kind::Solo, move |conn| {
-            let reset_day: i64 =
-                conn.query_row("SELECT traffic_reset_day FROM node WHERE id=?1", [node_id], |r| r.get(0))?;
+            let reset_day: Option<i64> = conn
+                .query_row("SELECT traffic_reset_day FROM node WHERE id=?1", [node_id], |r| r.get(0))
+                .optional()?;
+            let Some(reset_day) = reset_day else { return Ok(false) };
             let period = period_start(Local::now().date_naive(), reset_day.max(1) as u32).to_string();
             conn.execute(
                 "UPDATE traffic SET total_rx=COALESCE(?2,total_rx), total_tx=COALESCE(?3,total_tx),
@@ -1262,7 +1268,7 @@ impl Db {
                  WHERE node_id=?1",
                 params![node_id, total_rx, total_tx, month_rx, month_tx, period],
             )?;
-            Ok(())
+            Ok(true)
         })
     }
 

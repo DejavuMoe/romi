@@ -121,3 +121,44 @@ test('the public range picker is styled by the stylesheet this app ships', async
   // raises this to 44px on a coarse pointer, which is the layout working.
   expect(style.height).toBeGreaterThanOrEqual(36)
 })
+
+test('one address holds a bounded number of public streams, returned on close', async ({ page, hub }) => {
+  await hub.request('/api/settings', { method: 'PUT', body: { public_page: 'on' } })
+  // A page that opens no stream of its own, so every seat below is the test's.
+  await page.goto('/healthz')
+
+  const outcome = await page.evaluate(async () => {
+    const url = location.origin.replace(/^http/, 'ws') + '/api/ws'
+    // Resolves to the socket once it opens, or to null when the upgrade is
+    // refused -- the browser reports that only as an error followed by close.
+    const open = () =>
+      new Promise((resolve) => {
+        const socket = new WebSocket(url)
+        socket.onopen = () => resolve(socket)
+        socket.onerror = () => resolve(null)
+      })
+    const closed = (socket) =>
+      new Promise((resolve) => {
+        socket.onclose = resolve
+        socket.close()
+      })
+
+    const first = await Promise.all([open(), open(), open(), open()])
+    const fifth = await open()
+    await Promise.all(first.filter(Boolean).map(closed))
+    // Immediately, well inside one push interval: only a server that reads the
+    // close frame has returned these seats by now.
+    const again = await Promise.all([open(), open(), open(), open()])
+    const result = {
+      first: first.filter(Boolean).length,
+      fifth: fifth !== null,
+      again: again.filter(Boolean).length,
+    }
+    for (const socket of [...again, fifth].filter(Boolean)) socket.close()
+    return result
+  })
+
+  expect(outcome.first, 'the allowance opens').toBe(4)
+  expect(outcome.fifth, 'a fifth stream from one address is refused').toBe(false)
+  expect(outcome.again, 'closing returns the seats at once').toBe(4)
+})

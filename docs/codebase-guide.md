@@ -122,7 +122,7 @@ GeoLite Country 下载由管理员指定 HTTPS 直链，限制 32 MiB，并验�
 | 管理员 | `GET /api/db`、`GET /api/db/backup`、`POST /api/db/restore`、`POST /api/db/maintenance` | 数据统计、备份、恢复与维护 |
 | Agent / 安装器 | `WS /api/agent/ws`、`POST /api/agent/register`、`GET /api/agent/distribution`、`GET /install.sh`、`GET /agent/v{version}/{target}` | 节点令牌、短期注册 key 和已验证本地分发；另有 `GET /healthz` 健康检查 |
 
-Hub 通常限制 HTTP 请求体为 64 KiB，恢复分片单独放宽。浏览器实时连接分配 64 个匿名席位和 32 个管理席位，两个 WebSocket 的消息和单帧上限均为 64 KiB。页面响应带 CSP、`X-Frame-Options`、`X-Content-Type-Options` 与 `Referrer-Policy`。路由细节和失败状态以 `server/src/main.rs`、`api.rs` 为准。
+Hub 通常限制 HTTP 请求体为 64 KiB，恢复分片单独放宽。浏览器实时连接分配 64 个匿名席位和 32 个管理席位，单个来源地址最多占 4 个匿名席位（IPv6 按 /64 计），超出返回 429；两个 WebSocket 的消息和单帧上限均为 64 KiB。Hub 同时读取实时连接，浏览器关闭时立即归还席位。页面响应带 CSP、`X-Frame-Options`、`X-Content-Type-Options` 与 `Referrer-Policy`。路由细节和失败状态以 `server/src/main.rs`、`api.rs` 为准。
 
 ## 5. DuckDB 数据库设计
 

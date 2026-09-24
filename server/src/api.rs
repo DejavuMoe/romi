@@ -428,16 +428,86 @@ fn stream_audience(app: &App, session: Option<&str>) -> Option<bool> {
     }
 }
 
+/// Anonymous streams one client may hold at once. Enough for a few tabs, or a
+/// household behind one address; far short of the 64 public seats, so no single
+/// caller can take them all and close the status page to everyone else.
+const VIEWERS_PER_CLIENT: usize = 4;
+
+/// The unit a client is counted in. An IPv6 host is handed a whole /64 and can
+/// open each stream from a fresh address in it, so counting addresses would
+/// count nothing.
+fn viewer_key(ip: std::net::IpAddr) -> std::net::IpAddr {
+    match ip.to_canonical() {
+        std::net::IpAddr::V6(v6) => {
+            let s = v6.segments();
+            std::net::IpAddr::V6(std::net::Ipv6Addr::new(s[0], s[1], s[2], s[3], 0, 0, 0, 0))
+        }
+        v4 => v4,
+    }
+}
+
+/// One anonymous stream's claim on its client's allowance, released on drop --
+/// including when the upgrade never completes and the closure holding it is
+/// discarded.
+pub(crate) struct ViewerSeat {
+    app: Shared,
+    key: std::net::IpAddr,
+}
+
+impl ViewerSeat {
+    fn take(app: &Shared, ip: std::net::IpAddr) -> Option<Self> {
+        let key = viewer_key(ip);
+        let mut held = app.anonymous_viewers.lock().unwrap_or_else(|e| e.into_inner());
+        let count = held.entry(key).or_default();
+        if *count >= VIEWERS_PER_CLIENT {
+            return None;
+        }
+        *count += 1;
+        Some(Self { app: app.clone(), key })
+    }
+}
+
+impl Drop for ViewerSeat {
+    fn drop(&mut self) {
+        let mut held = self.app.anonymous_viewers.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(count) = held.get_mut(&self.key) {
+            *count -= 1;
+            // Emptied entries are removed, or the map would grow by one key for
+            // every address that ever opened the status page.
+            if *count == 0 {
+                held.remove(&self.key);
+            }
+        }
+    }
+}
+
 /// Live stream for the browser. Each connection runs its own timer -- simpler to
 /// reason about than a fan-out channel -- over a shared snapshot, so a timer
 /// costs no more than a send.
-pub async fn live_ws(State(app): State<Shared>, headers: HeaderMap, upgrade: WebSocketUpgrade) -> Response {
+pub async fn live_ws(
+    State(app): State<Shared>,
+    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Response {
     // The digest rather than the result: signing out must reach a stream already
     // running, and only the row it names can report whether it has.
     let session = current_session(&headers).filter(|hash| app.db.session_valid(hash));
     if session.is_none() && !app.public_page() {
         return (StatusCode::UNAUTHORIZED, "sign-in required").into_response();
     }
+    // Only the anonymous side is counted per client: a session is already an
+    // identity, and the operator's own seats are the reserved pool.
+    let seat = match session {
+        Some(_) => None,
+        None => match ViewerSeat::take(&app, crate::auth::client_ip(&headers, peer.ip())) {
+            Some(seat) => Some(seat),
+            None => {
+                return (StatusCode::TOO_MANY_REQUESTS, "too many live views from this address")
+                    .into_response();
+            }
+        },
+    };
     let Ok(permit) = app.viewer_gate[usize::from(session.is_some())].clone().try_acquire_owned() else {
         return (StatusCode::SERVICE_UNAVAILABLE, "live viewer capacity reached").into_response();
     };
@@ -447,7 +517,7 @@ pub async fn live_ws(State(app): State<Shared>, headers: HeaderMap, upgrade: Web
         .max_message_size(MAX_FRAME)
         .max_frame_size(MAX_FRAME)
         .on_upgrade(move |socket| async move {
-            let _permit = permit;
+            let (_permit, _seat) = (permit, seat);
             stream_live(app, socket, session).await;
         })
 }
@@ -456,20 +526,34 @@ async fn stream_live(app: Shared, mut socket: WebSocket, session: Option<String>
     let mut ticker = tokio::time::interval(push_interval());
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        ticker.tick().await;
-        // Closed rather than downgraded to the public frame, which would leave the
-        // panel rendering a list with every admin field missing. The close allows
-        // a client to re-query /api/me and determine its current state.
-        let Some(full) = stream_audience(&app, session.as_deref()) else { break };
-        if !matches!(
-            tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                socket.send(Message::Text(live_snapshot(&app, full)))
-            )
-            .await,
-            Ok(Ok(()))
-        ) {
-            break;
+        tokio::select! {
+            _ = ticker.tick() => {
+                // Closed rather than downgraded to the public frame, which would
+                // leave the panel rendering a list with every admin field
+                // missing. The close allows a client to re-query /api/me and
+                // determine its current state.
+                let Some(full) = stream_audience(&app, session.as_deref()) else { break };
+                if !matches!(
+                    tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        socket.send(Message::Text(live_snapshot(&app, full)))
+                    )
+                    .await,
+                    Ok(Ok(()))
+                ) {
+                    break;
+                }
+            }
+            // Read as well as written. Neither page ever sends on this socket, so
+            // anything but a ping is the end of it: a close frame, a dropped
+            // connection, or a client that has no business talking here. Without
+            // this read a closed tab kept its seat until a later send happened to
+            // fail, and a ping was never answered -- the reply is queued by the
+            // read and flushed by the next send.
+            inbound = socket.recv() => match inbound {
+                Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
+                _ => break,
+            },
         }
     }
 }
@@ -919,10 +1003,13 @@ pub async fn update_node(
         return bad(message);
     }
     match storage(&app, move |db| db.update_node(id, &node)).await {
-        Ok(()) => {
+        Ok(true) => {
             invalidate_snapshot(&app);
             Json(json!({"ok": true})).into_response()
         }
+        // Reported, not swallowed: a panel editing a node another tab deleted
+        // would otherwise say "已保存" for a change that went nowhere.
+        Ok(false) => (StatusCode::NOT_FOUND, "no such node").into_response(),
         Err(e) => fail(e),
     }
 }
@@ -1017,10 +1104,11 @@ pub async fn patch_traffic(
         return bad("traffic must be non-negative");
     }
     match storage(&app, move |db| db.set_traffic(id, &p)).await {
-        Ok(()) => {
+        Ok(true) => {
             invalidate_snapshot(&app);
             Json(json!({"ok": true})).into_response()
         }
+        Ok(false) => (StatusCode::NOT_FOUND, "no such node").into_response(),
         Err(e) => fail(e),
     }
 }
@@ -2683,6 +2771,67 @@ mod tests {
         // returns the week: the extra rows exist, and reading them is the cost.
         let quarter = axum::body::to_bytes(ask(2_160).await.into_body(), usize::MAX).await.unwrap();
         assert_eq!(quarter, week, "an anonymous window past a week is clamped to one");
+    }
+
+    /// One client holds at most `VIEWERS_PER_CLIENT` anonymous streams, an IPv6
+    /// client is one /64, and a seat is returned when its stream ends.
+    #[test]
+    fn anonymous_viewer_seats_are_counted_per_client() {
+        let app = std::sync::Arc::new(app());
+        let ip = |s: &str| s.parse::<std::net::IpAddr>().unwrap();
+
+        let held: Vec<_> =
+            (0..VIEWERS_PER_CLIENT).map(|_| ViewerSeat::take(&app, ip("198.51.100.7")).unwrap()).collect();
+        assert!(ViewerSeat::take(&app, ip("198.51.100.7")).is_none(), "the allowance is spent");
+        // Another client is unaffected, including one reported as an IPv4-mapped
+        // IPv6 address by a dual-stack listener -- it is the same host as its
+        // plain form, so it shares that allowance rather than getting its own.
+        assert!(ViewerSeat::take(&app, ip("198.51.100.8")).is_some());
+        assert!(ViewerSeat::take(&app, ip("::ffff:198.51.100.7")).is_none());
+
+        drop(held);
+        assert!(ViewerSeat::take(&app, ip("198.51.100.7")).is_some(), "a finished stream returns its seat");
+
+        // Fresh addresses from one /64 are still one client; the next /64 is not.
+        let prefix: Vec<_> = (1..=VIEWERS_PER_CLIENT)
+            .map(|n| ViewerSeat::take(&app, ip(&format!("2001:db8:0:1::{n:x}"))).unwrap())
+            .collect();
+        assert!(ViewerSeat::take(&app, ip("2001:db8:0:1::ffff")).is_none());
+        assert!(ViewerSeat::take(&app, ip("2001:db8:0:2::1")).is_some());
+        drop(prefix);
+
+        // Nothing lingers once every stream has ended.
+        assert!(app.anonymous_viewers.lock().unwrap().is_empty());
+    }
+
+    /// A patch aimed at a node that is gone is refused, not acknowledged: the
+    /// panel would otherwise report a save that changed nothing. The traffic
+    /// route used to fail the other way, as a storage error.
+    #[tokio::test]
+    async fn patching_a_missing_node_is_a_404_not_a_success() {
+        let app = std::sync::Arc::new(app());
+        let id = app.db.create_node(&crate::db::Node::default(), "patched-token").unwrap();
+        let missing = id + 1_000;
+
+        let node = |id: i64| {
+            let app = app.clone();
+            async move {
+                let body = Ok(Json(serde_json::from_value::<NodePatch>(json!({"price": 5})).unwrap()));
+                update_node(Admin, State(app), Path(id), body).await.status()
+            }
+        };
+        assert_eq!(node(missing).await, StatusCode::NOT_FOUND);
+        assert_eq!(node(id).await, StatusCode::OK);
+
+        let traffic = |id: i64| {
+            let app = app.clone();
+            async move {
+                let body = Json(crate::db::TrafficPatch { total_rx: Some(1), ..Default::default() });
+                patch_traffic(Admin, State(app), Path(id), body).await.status()
+            }
+        };
+        assert_eq!(traffic(missing).await, StatusCode::NOT_FOUND);
+        assert_eq!(traffic(id).await, StatusCode::OK);
     }
 
     /// Both halves of the local credential are proven with the password being

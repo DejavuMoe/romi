@@ -67,6 +67,9 @@ pub struct App {
     pub(crate) history_gate: [tokio::sync::Semaphore; 2],
     /// Public viewers cannot consume the operator's reserved stream slots.
     pub(crate) viewer_gate: [Arc<tokio::sync::Semaphore>; 2],
+    /// Anonymous streams held per client, so one caller cannot take every public
+    /// seat and shut the status page to everyone else. See `api::ViewerSeat`.
+    pub(crate) anonymous_viewers: Mutex<std::collections::HashMap<std::net::IpAddr, usize>>,
     pub throttle: auth::Throttle,
     /// Failed agent registrations, counted separately from failed sign-ins: the
     /// two have different threat models, and a batch install run with a stale
@@ -106,6 +109,7 @@ impl App {
                 Arc::new(tokio::sync::Semaphore::new(64)),
                 Arc::new(tokio::sync::Semaphore::new(32)),
             ],
+            anonymous_viewers: Mutex::default(),
             throttle: auth::Throttle::default(),
             registrations: auth::Throttle::default(),
             http: reqwest::Client::builder()
