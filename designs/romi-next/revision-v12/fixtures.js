@@ -43,6 +43,7 @@ window.romiFixtures = {
       os: "Debian 13",
       arch: "x86_64",
       online: true,
+      public: false,
 
       cpu: 13,
       mem: 29,

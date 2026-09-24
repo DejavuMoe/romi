@@ -79,7 +79,9 @@ function App() {
   const selected =
     nodes.find((n) => n.id === Number(route.replace("node-", ""))) ||
     (layout === "workspace" && route === "nodes" ? nodes[0] : null);
-  const shown = nodes;
+  // The status page shows only what the operator published; the management list
+  // shows every node and marks the private ones.
+  const shown = publicView ? nodes.filter((n) => n.public !== false) : nodes;
   const allowedSelected = selected;
   const routeKey = route.startsWith("node-") ? "nodes" : route;
   const label = romiFixtures.nav.find((n) => n[0] === routeKey)?.[1] || "节点";
@@ -534,6 +536,7 @@ function ActionDialog({
                 reset: Number(data.reset),
                 limit: Number(data.limit) * (unit==="TB"?1024:1),
                 priority: Number(data.priority), quotaUnit: unit,
+                public: data.visibility!=="private",
                 hasIPv4: data.ipv4==="yes", hasIPv6: data.ipv6==="yes",
                 downloadMbps:Number(downValue)*(downUnit==="Gbps"?1000:1),
                 uploadMbps:sameBandwidth?Number(downValue)*(downUnit==="Gbps"?1000:1):Number(upValue)*(upUnit==="Gbps"?1000:1),
@@ -706,6 +709,7 @@ function ActionDialog({
                   hint="每月 1–31 日，默认 1 日。"
                 />
                 <Field label="展示优先级" name="priority" type="number" step="1" min="0" max="999999" required defaultValue={n.priority || 0} hint="0–999999 的整数，数值越大越靠前。" />
+                <Field label="公开状态页" hint="私有节点只在管理列表显示。"><Select name="visibility" defaultValue={n.public===false?"private":"public"}><option value="public">显示</option><option value="private">不显示</option></Select></Field>
                 <Field label="IPv4"><Select name="ipv4" defaultValue={n.hasIPv4?"yes":"no"}><option value="no">无</option><option value="yes">有</option></Select></Field>
                 <Field label="IPv6"><Select name="ipv6" defaultValue={n.hasIPv6?"yes":"no"}><option value="no">无</option><option value="yes">有</option></Select></Field>
               </div>

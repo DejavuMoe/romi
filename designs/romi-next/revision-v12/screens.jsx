@@ -11,7 +11,7 @@ function Fleet({onlineGrace=5,nodes,onOpen,onEdit,onCreate,onRegister,onCopy,sta
       <thead><tr><th>ID（优先级）</th><th>名称</th><th>IP</th><th>Agent 版本</th><th>接入标识</th><th>操作</th></tr></thead>
       <tbody>{shown.map(n=><tr key={n.id}>
         <td className="admin-id"><span className="admin-field-label">ID（优先级）</span><span className="admin-primary">{n.id} <span className="muted">({n.priority})</span></span></td>
-        <td className="admin-name"><button className="text-button" onClick={()=>onOpen(n)}>{n.name}</button><Status node={n} grace={onlineGrace}/></td>
+        <td className="admin-name"><button className="text-button" onClick={()=>onOpen(n)}>{n.name}</button><Status node={n} grace={onlineGrace}/>{n.public===false&&<span className="muted small">私有</span>}</td>
         <td className="admin-addresses"><div className="address-line"><span>IPv4</span><CopyValue value={n.ip&&n.ip!=="—"?n.ip:null} label={`${n.name} IPv4`} onCopy={onCopy}/></div><div className="address-line"><span>IPv6</span><CopyValue value={n.ipv6} label={`${n.name} IPv6`} onCopy={onCopy}/></div></td>
         <td className="admin-version"><span className="admin-field-label">Agent 版本</span><span className="admin-primary">{n.agentVersion||"未上报"}</span></td>
         <td className="admin-identity"><span className="admin-field-label">接入标识</span><CopyValue value={`node-${n.id}`} label={`${n.name} 接入标识`} onCopy={onCopy}/></td>
@@ -415,6 +415,9 @@ function Notifications({ onSave, nodes, state, onRetry }) {
   );
 }
 function Security({ onSave, onConfirm, account, setAccount }) {
+  // The hub answers a wrong current password with a refusal, so the form has to
+  // show one. `romi-prototype` is this fixture's stand-in for the stored value.
+  const [currentPasswordError, setCurrentPasswordError] = React.useState("");
   return (
     <section data-screen-id="security" data-screen-label="安全">
       <PageTitle eyebrow="Account / Security" title="安全" />
@@ -449,7 +452,14 @@ function Security({ onSave, onConfirm, account, setAccount }) {
           className="box stack"
           onSubmit={(e) => {
             e.preventDefault();
-            const nextAccount=e.currentTarget.elements.account.value;
+            const form=e.currentTarget;
+            const nextAccount=form.elements.account.value;
+            if (form.elements.current.value!=="romi-prototype") {
+              setCurrentPasswordError("当前密码不正确");
+              form.elements.current.focus();
+              return;
+            }
+            setCurrentPasswordError("");
             onConfirm(
               "修改账号与密码",
               "修改后所有现有会话都会失效，需要重新登录。",
@@ -459,6 +469,16 @@ function Security({ onSave, onConfirm, account, setAccount }) {
         >
           <h2>账号与密码</h2>
           <Field label="账号" name="account" defaultValue={account} required autoComplete="username" />
+          <Field
+            label="当前密码"
+            name="current"
+            type="password"
+            required
+            autoComplete="current-password"
+            hint="修改账号或密码都需要先验证当前密码。"
+            onChange={() => setCurrentPasswordError("")}
+          />
+          <p className="field-error" role={currentPasswordError ? "alert" : undefined}>{currentPasswordError}</p>
           <Field
             label="新密码"
             type="password"
