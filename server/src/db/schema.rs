@@ -399,15 +399,39 @@ ALTER TABLE metric_hour ADD COLUMN IF NOT EXISTS swap_partition_used_sum DECIMAL
 
 /// Moves an identity source past every id a restore brought in.
 ///
-/// Called with the highest id present in `table`; the next allocation is that
-/// plus one. `MAX` over an empty table is NULL, which leaves the counter at 1.
+/// Only ever forward: the counter becomes the highest id present in the table
+/// plus one, unless it is already beyond that. Lowering it to the surviving
+/// maximum would hand a deleted node's or probe's id to the next one created
+/// after a restart. `MAX` over an empty table is NULL, which leaves a fresh
+/// counter at 1.
 pub fn resync_ids(conn: &Connection) -> Result<()> {
     for name in ID_SOURCES {
         conn.execute(
             &format!(
-                "UPDATE romi_id SET next = COALESCE((SELECT MAX(id) FROM {name}), 0) + 1 WHERE name = ?1"
+                "UPDATE romi_id SET next = GREATEST(next, COALESCE((SELECT MAX(id) FROM {name}), 0) + 1) \
+                 WHERE name = ?1"
             ),
             [name],
+        )?;
+    }
+    Ok(())
+}
+
+/// The live identity counters, so a restore can carry them into the database
+/// that replaces this one: the archive does not include `romi_id`, and a node
+/// created after the backup was taken must not see its id issued again.
+pub fn id_counters(conn: &Connection) -> Result<Vec<(String, i64)>> {
+    let mut stmt = conn.prepare("SELECT name, next FROM romi_id ORDER BY name")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+    Ok(rows.collect::<duckdb::Result<Vec<_>>>()?)
+}
+
+/// Raises each identity counter to at least the value `floor` gives it.
+pub fn raise_ids(conn: &Connection, floor: &[(String, i64)]) -> Result<()> {
+    for (name, next) in floor {
+        conn.execute(
+            "UPDATE romi_id SET next = GREATEST(next, ?2) WHERE name = ?1",
+            duckdb::params![name, next],
         )?;
     }
     Ok(())

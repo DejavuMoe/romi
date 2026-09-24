@@ -430,7 +430,13 @@ fn native_column_names(conn: &Connection, table: &str) -> Result<Vec<String>> {
 pub(super) fn restore(ex: &mut Exclusive<'_>, inner: &Arc<Inner>, src: &str) -> Result<BackupReport> {
     let staging = scratch_file(&inner.path, "restoring");
     let outcome = (|| -> Result<BackupReport> {
-        let report = build_staging(inner, src, &staging)?;
+        // The archive has no `romi_id`; the live counters are the only record of
+        // ids issued since it was taken.
+        let floor = match ex.conn.as_ref() {
+            Some(conn) => schema::id_counters(conn)?,
+            None => Vec::new(),
+        };
+        let report = build_staging(inner, src, &staging, &floor)?;
         activate(ex, inner, &staging)?;
         // Everything a restore has to change -- including session invalidation --
         // happened in the staging database. After activation there is nothing
@@ -447,7 +453,7 @@ pub(super) fn restore(ex: &mut Exclusive<'_>, inner: &Arc<Inner>, src: &str) -> 
 ///
 /// Everything that can fail happens here, while the live database is still
 /// untouched.
-fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str) -> Result<BackupReport> {
+fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str, floor: &[(String, i64)]) -> Result<BackupReport> {
     let work = scratch_dir(dest, "staging")?;
     let outcome = (|| -> Result<BackupReport> {
         let (report, expanded) = extract_and_validate_with(src, &work, DEFAULT_ARCHIVE_LIMITS)?;
@@ -554,6 +560,7 @@ fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str) -> Result<BackupRepo
         conn.execute("DELETE FROM session", [])?;
         verify_relationships(&conn)?;
         schema::resync_ids(&conn)?;
+        schema::raise_ids(&conn, floor)?;
         checkpoint(&conn)?;
         drop(conn);
         restrict(dest);
@@ -639,6 +646,10 @@ pub(super) fn verify_relationships(conn: &Connection) -> Result<()> {
 /// transaction instead -- the same validation, a different mechanism, and both are
 /// exercised by the tests.
 fn activate(ex: &mut Exclusive<'_>, inner: &Arc<Inner>, staging: &str) -> Result<()> {
+    // The replacement barrier, held here and nowhere earlier: the caller's
+    // staging build or compaction copy ran while the database stayed readable,
+    // and only the rename-and-reopen below needs every reader out.
+    let _gate = inner.gate.write().unwrap_or_else(|e| e.into_inner());
     if inner.path.is_empty() {
         return replace_contents(ex, staging);
     }

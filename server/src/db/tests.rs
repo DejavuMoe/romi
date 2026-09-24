@@ -359,6 +359,45 @@ fn deleting_a_probe_takes_its_history_with_it_and_frees_no_id_for_reuse() {
     assert_eq!(db.scalar("SELECT COUNT(*) FROM ping_record").unwrap(), 0);
 }
 
+/// The counters live in the database, and reopening only moves them forward: the
+/// highest node and probe ids, once deleted, are not issued again after a restart.
+#[test]
+fn a_deleted_id_stays_retired_across_a_restart() {
+    let scratch = Scratch::new();
+    let (gone_node, gone_task) = {
+        let db = Db::open(&scratch.0).unwrap();
+        let id = node(&db, 1);
+        let task = probe(&db, vec![id]);
+        db.delete_ping_task(task).unwrap();
+        db.delete_node(id).unwrap();
+        db.close().unwrap();
+        (id, task)
+    };
+    let db = Db::open(&scratch.0).unwrap();
+    let fresh = node(&db, 1);
+    assert!(fresh > gone_node, "node id {gone_node} was issued again as {fresh}");
+    let task = probe(&db, vec![fresh]);
+    assert!(task > gone_task, "probe id {gone_task} was issued again as {task}");
+}
+
+/// The archive carries rows, not counters. A node created after the backup was
+/// taken disappears with the restore, and its id stays retired.
+#[test]
+fn a_restore_does_not_reissue_ids_created_after_the_backup() {
+    let scratch = Scratch::new();
+    let copy = scratch.copy(".copy");
+    let db = Db::open(&scratch.0).unwrap();
+    let kept = node(&db, 1);
+    db.backup_into(&copy).unwrap();
+    let later = node(&db, 1);
+    db.restore_from(&copy).unwrap();
+    assert!(db.node(kept).unwrap().is_some());
+    assert!(db.node(later).unwrap().is_none(), "the node made after the backup is gone");
+    let fresh = node(&db, 1);
+    assert!(fresh > later, "node id {later} was issued again as {fresh}");
+    let _ = std::fs::remove_file(&copy);
+}
+
 /// A refusal must leave nothing behind: not the task, and not a partial
 /// assignment. DuckDB has no cascading foreign key, so every one of these is an
 /// application check inside the same transaction as the write.
@@ -721,6 +760,23 @@ fn a_repeated_metric_minute_replaces_rather_than_duplicates() {
     assert_eq!(rows[0]["mem_used"], 90);
 }
 
+/// A hub clock stepped back onto minutes it had already written -- NTP correcting
+/// a fast clock -- replaces those rows instead of failing on the key.
+#[test]
+fn a_clock_stepping_back_replaces_minutes_already_written() {
+    let db = db();
+    let id = node(&db, 1);
+    for ts in [600, 660, 720] {
+        db.insert_metric(id, ts, &serde_json::json!({"cpu": 1.0})).unwrap();
+    }
+    db.insert_metric(id, 660, &serde_json::json!({"cpu": 7.0})).unwrap();
+    assert_eq!(db.scalar(&format!("SELECT COUNT(*) FROM metric WHERE node_id={id}")).unwrap(), 3);
+    assert_eq!(
+        db.scalar(&format!("SELECT CAST(cpu AS BIGINT) FROM metric WHERE node_id={id} AND ts=660")).unwrap(),
+        7
+    );
+}
+
 /// A metric for a node that no longer exists is dropped rather than stored: the
 /// row would outlive every reader that could attribute it, and a report in flight
 /// across a restore would create exactly that.
@@ -943,6 +999,28 @@ fn a_duplicate_probe_stamp_replaces_the_reading() {
     let id = node(&db, 1);
     let task = probe(&db, vec![id]);
     db.insert_ping(id, task, 100, 42).unwrap();
+    db.insert_ping(id, task, 100, 99).unwrap();
+    assert_eq!(db.scalar("SELECT COUNT(*) FROM ping_record").unwrap(), 1);
+    assert_eq!(db.scalar("SELECT latency FROM ping_record").unwrap(), 99);
+}
+
+/// Editing a probe replaces its assignments but not what the writer knows about
+/// the results already filed, so a repeated stamp after the edit still replaces
+/// the reading instead of failing on the key.
+#[test]
+fn a_duplicate_probe_stamp_after_an_edit_still_replaces_the_reading() {
+    let db = db();
+    let id = node(&db, 1);
+    let task = probe(&db, vec![id]);
+    db.insert_ping(id, task, 100, 42).unwrap();
+    db.save_ping_task(&PingTask {
+        id: task,
+        name: "edited".into(),
+        target: "1.1.1.1:443".into(),
+        interval: 30,
+        nodes: vec![id],
+    })
+    .unwrap();
     db.insert_ping(id, task, 100, 99).unwrap();
     assert_eq!(db.scalar("SELECT COUNT(*) FROM ping_record").unwrap(), 1);
     assert_eq!(db.scalar("SELECT latency FROM ping_record").unwrap(), 99);
@@ -1687,6 +1765,41 @@ fn one_batch_counts_every_operation_and_one_transaction() {
     assert!(after["max_batch_size"].as_u64().unwrap() >= 8);
     assert_eq!(after["average_batch_size"].as_f64().unwrap(), 8.0);
     assert!(after["transaction_us_total"].as_u64().unwrap() > 0);
+}
+
+/// One failing job does not take the telemetry sharing its group commit with it:
+/// the batch is rolled back and replayed job by job, and only the job at fault
+/// fails.
+#[test]
+fn one_failing_job_does_not_roll_back_its_batch_neighbours() {
+    let db = db();
+    let id = node(&db, 1);
+    let _reset = ResetTestHooks;
+    let before = db.queue_stats();
+    TEST_BATCH_HOLD_NANOS.store(200_000_000, Ordering::Relaxed);
+
+    let writers: Vec<_> = (0..6)
+        .map(|i| {
+            let db = db.clone();
+            std::thread::spawn(move || db.insert_metric(id, 600 + i * 60, &serde_json::json!({"cpu": 1.0})))
+        })
+        .collect();
+    let failing = {
+        let db = db.clone();
+        std::thread::spawn(move || db.write_batch(|_| -> Result<()> { anyhow::bail!("refused on purpose") }))
+    };
+    for writer in writers {
+        writer.join().unwrap().unwrap();
+    }
+    assert!(failing.join().unwrap().is_err(), "the job at fault still reports its failure");
+    TEST_BATCH_HOLD_NANOS.store(0, Ordering::Relaxed);
+
+    assert_eq!(db.scalar(&format!("SELECT COUNT(*) FROM metric WHERE node_id={id}")).unwrap(), 6);
+    let after = db.queue_stats();
+    let delta = |key: &str| after[key].as_u64().unwrap() - before[key].as_u64().unwrap();
+    assert_eq!(delta("committed_ops_total"), 6);
+    assert_eq!(delta("failed_ops_total"), 1);
+    assert_eq!(after["queued_ops_current"], 0);
 }
 
 /// A queued job whose database generation became stale is refused, never

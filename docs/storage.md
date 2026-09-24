@@ -59,13 +59,21 @@ DuckDB 只允许一个进程读写同一数据库文件。romi 另外持有 `<db
 
 | 类别 | 例子 | 行为 |
 | --- | --- | --- |
-| Batch | Agent 的 metric / last_seen | 与其他 telemetry 共享 group commit |
+| Batch | Agent 的 metric / last_seen | 与其他 telemetry 共享 group commit；单条失败时整批回滚后逐条重放，只有出错的那条失败 |
 | Solo | 设置、节点、会话及保留期清理 | 单独事务，错误不会连累其他写入 |
 | Maintenance | CHECKPOINT、测量可复用空间 | 不推进 generation，不清空/拒绝排队写入 |
-| Replace | 恢复备份、真正值得做的压缩 | 停止 reader、排空并拒绝旧 generation 的排队写入、切换文件、推进 generation |
+| Replace | 恢复备份、真正值得做的压缩 | 排空并拒绝旧 generation 的排队写入、在换文件的瞬间停止 reader、推进 generation |
+
+DuckDB 没有 savepoint，一条语句失败会污染整个事务。因此一批遥测里若有一条失败，
+writer 先回滚该事务，再把这一批逐条放进各自的事务重放：只有出错的那条得到失败答复，
+同批其他节点的分钟行和探测结果照常提交。`COMMIT` 本身失败时无法归咎于某一条，整批都报告失败。
 
 备份快照不是 Replace。它不经过 writer 队列，而是在 reader 连接的事务中读取；
 因此下载备份不会拒绝任何已接受的 telemetry，也不会断开 Agent 或增加 generation。
+
+替换栅栏只覆盖换文件本身。恢复构建 staging 库、压缩复制整个数据库都可能持续数分钟，
+这两段期间数据库保持可读：登录、Agent 握手和页面加载不会排在后面。
+只有重命名加重新打开这一步需要排除 reader。
 
 ## 读取与快照
 
@@ -82,10 +90,11 @@ DuckDB 只允许一个进程读写同一数据库文件。romi 另外持有 `<db
 ## 标识与关系完整性
 
 `node` 与 `ping_task` 的 id 来自 `romi_id` 分配表，在 writer 事务内通过
-`UPDATE ... RETURNING` 原子分配。同一次打开期间，删除后的下一次分配仍继续递增；
-但每次启动及恢复后，`resync_ids` 都把 `next` 重设为**现存**最大 id 加一。
-删除当前最大 id 后重启，可能再次分配该 id。删除事务会清除该对象的历史，
-但当前实现不满足“跨重启永不复用 ID”的保证。
+`UPDATE ... RETURNING` 原子分配。分配器只前进：`resync_ids` 用 `GREATEST` 把 `next`
+抬到现存最大 id 加一，绝不调低，所以删除末尾 id 后重启也不会再次发放它。
+恢复时另把当前库的计数器作为下界写入 staging 库——备份不含 `romi_id`，
+备份之后创建的节点 id 只存在于这份计数器里。删除事务同时清除该对象的历史，
+因此新对象既拿不到旧 id，也继承不到旧历史。
 
 DuckDB 的外键不支持级联删除，且其检查看不到同一事务中先执行的子行删除。
 romi 因此在应用事务内显式维护关系：删除节点时清空该节点的 traffic、metric、metric_hour、

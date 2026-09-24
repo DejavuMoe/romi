@@ -21,23 +21,35 @@
 //!   runs here: [a multi-table read transaction](backup::write_archive) sees one
 //!   committed snapshot without refusing or replacing queued telemetry.
 //! * **A replacement barrier** (`RwLock`) excludes readers while the database
-//!   file is replaced, and the writer thread drains and refuses everything
+//!   file is renamed, and the writer thread drains and refuses everything
 //!   already queued at that point. Only operations that really replace the file
 //!   take this path; a backup snapshot, a checkpoint and retention pruning do
-//!   not.
+//!   not. The barrier covers the swap alone: a restore's staging build and a
+//!   compaction's copy are the long halves, and they run against a database that
+//!   stays readable throughout.
 //!
-//! Nothing here blocks a Tokio core worker: the API layer calls these methods
-//! from `spawn_blocking` (or `block_in_place` on the ingest path), and the
-//! writer's own waiting happens on its own thread.
+//! Scans do not block a Tokio core worker: the API layer calls the history,
+//! backup and maintenance methods from `spawn_blocking` (or `block_in_place` on
+//! the ingest path), and the writer's own waiting happens on its own thread.
+//! Indexed point reads -- [`Db::get`], [`Db::session_valid`], [`Db::node`] --
+//! are called inline from async handlers on purpose: they are a single index
+//! lookup on the prototype connection, and a `spawn_blocking` hop per request
+//! would cost more than the read. They are not free of the barrier, so the swap
+//! above is kept to a rename rather than a rebuild.
 //!
 //! # Durability
 //!
-//! A mutation is acknowledged only after `COMMIT` returns, and a batch whose
-//! commit fails reports the failure to every job it carried. Accepted telemetry
-//! that has not yet committed lives only in this process's queue; the maximum
-//! uncommitted window is [`WRITER_QUEUE`] operations, and those are lost if the
-//! process dies before the commit -- which is the same guarantee the agents'
-//! next report repairs, since every report carries absolute counters.
+//! A mutation is acknowledged only after `COMMIT` returns. Accepted telemetry
+//! that has not yet committed lives only in this process's queue; the
+//! uncommitted window is at most [`WRITER_QUEUE`] queued operations plus the
+//! [`BATCH_OPS`] the writer already took, and those are lost if the process dies
+//! before the commit -- which is the same guarantee the agents' next report
+//! repairs, since every report carries absolute counters.
+//!
+//! One telemetry write's failure costs only that write. DuckDB has no
+//! savepoints, so a failing statement poisons its transaction; rather than fail
+//! every job sharing that group commit, the batch is rolled back and replayed
+//! job by job. See [`run_batch`].
 
 //! # A statement cache is not safe here
 //!
@@ -109,10 +121,22 @@ const DEFAULT_MAX_TEMP: &str = "2GB";
 /// Reason a queued job was refused because the database underneath it changed.
 const SUPERSEDED: &str = "数据库已被恢复或重建，这次写入没有执行；请重试";
 
+/// Reason a registration was refused for exhausting its window's node budget.
+/// Matched by the API so the caller is told 403 rather than 500.
+pub const REGISTRATION_FULL: &str = "this window has registered enough nodes";
+
 // ---- the writer queue ----
 
 type Payload = Box<dyn Any + Send>;
 type Reply = SyncSender<Result<Payload>>;
+/// A telemetry job's body, callable more than once: after another job in its
+/// group commit fails, it is replayed alone rather than rolled back with it.
+type Replay = Arc<dyn Fn(&Connection) -> Result<Payload> + Send + Sync>;
+
+/// One job's place in a batch: when it was submitted, where its answer goes,
+/// how to replay it alone, and what it returned inside the transaction. The
+/// outcome is `None` for a job an earlier failure stopped from running.
+type BatchSlot = (Instant, Reply, Option<Replay>, Option<Result<Payload>>);
 
 /// What a job needs from its execution context.
 enum Target<'a> {
@@ -158,6 +182,8 @@ struct Job {
     /// from submission to final outcome rather than from dequeue.
     enqueued: Instant,
     run: Box<dyn for<'a> FnOnce(Target<'a>) -> Result<Payload> + Send>,
+    /// Set for [`Kind::Batch`] jobs only; see [`run_batch`].
+    replay: Option<Replay>,
     reply: Reply,
 }
 
@@ -531,7 +557,8 @@ impl Db {
         schema::initialize(&mut conn, fresh, env!("CARGO_PKG_VERSION"))?;
         // A restored database is stamped when it is built, so this only repairs
         // a counter that somehow lagged the rows -- cheap, and it removes the one
-        // way a later insert could collide with an existing id.
+        // way a later insert could collide with an existing id. It never lowers
+        // the counter, so an id freed by a deletion stays retired across restarts.
         schema::resync_ids(&conn)?;
         checkpoint(&conn)?;
 
@@ -665,6 +692,33 @@ impl Db {
                 Target::Conn(conn) => Ok(Box::new(f(conn)?) as Payload),
                 Target::Replace(_) => unreachable!("a connection job is never run as a replacement"),
             }),
+            replay: None,
+            reply,
+        };
+        self.submit(job, rx)
+    }
+
+    /// Queues a telemetry write that may share a group commit.
+    ///
+    /// `Fn` rather than `FnOnce`: if another job in the same batch fails, the
+    /// batch is rolled back and this one is run again in its own transaction, so
+    /// one bad row costs only its own write.
+    fn write_batch<T: Send + 'static>(
+        &self,
+        f: impl Fn(&Connection) -> Result<T> + Send + Sync + 'static,
+    ) -> Result<T> {
+        let (reply, rx) = sync_channel(1);
+        let body: Replay = Arc::new(move |conn| Ok(Box::new(f(conn)?) as Payload));
+        let once = body.clone();
+        let job = Job {
+            kind: Kind::Batch,
+            generation: self.0.generation.load(Ordering::SeqCst),
+            enqueued: Instant::now(),
+            run: Box::new(move |target| match target {
+                Target::Conn(conn) => once(conn),
+                Target::Replace(_) => unreachable!("a telemetry job is never run as a replacement"),
+            }),
+            replay: Some(body),
             reply,
         };
         self.submit(job, rx)
@@ -686,6 +740,7 @@ impl Db {
                 Target::Replace(ex) => Ok(Box::new(f(ex)?) as Payload),
                 Target::Conn(_) => unreachable!("a replacement job is never run on a writer connection"),
             }),
+            replay: None,
             reply,
         };
         self.submit(job, rx)
@@ -835,11 +890,28 @@ impl Db {
     /// again; `delete_node` also sweeps the old rows, so a later node cannot
     /// inherit a removed machine's history either way.
     pub fn create_node(&self, n: &Node, token: &str) -> Result<i64> {
+        self.create_node_within(n, token, None)
+    }
+
+    /// Creates a node, refusing once `cap` nodes already exist with a
+    /// `created_at` at or after its timestamp.
+    ///
+    /// The count runs inside the insert's own transaction because that is the
+    /// only place the two are atomic. Checked beforehand on a read connection,
+    /// a hundred scripts starting together each saw a count below the ceiling
+    /// and every one of them inserted.
+    pub fn create_node_within(&self, n: &Node, token: &str, cap: Option<(i64, i64)>) -> Result<i64> {
         let n = n.clone();
         let token = token.to_owned();
         let guard = self.guard();
         self.write(Kind::Solo, move |conn| {
             let tx = conn.unchecked_transaction()?;
+            if let Some((since, limit)) = cap {
+                let made: i64 = tx
+                    .prepare("SELECT COUNT(*) FROM node WHERE created_at >= ?1")?
+                    .query_row([since], |r| r.get(0))?;
+                anyhow::ensure!(made < limit, "{REGISTRATION_FULL}");
+            }
             let id = alloc_id(&tx, "node")?;
             // A new node belongs at the end. The caller sends sort 0, which would
             // tie with whatever the last reorder placed first.
@@ -872,19 +944,9 @@ impl Db {
         })
     }
 
-    /// How many nodes were created at or after `ts`. Bounds what one registration
-    /// window can add; see `api::REGISTER_LIMIT`.
-    pub fn nodes_created_since(&self, ts: i64) -> Result<i64> {
-        self.read_short(|conn| {
-            Ok(conn
-                .prepare("SELECT COUNT(*) FROM node WHERE created_at >= ?1")?
-                .query_row([ts], |r| r.get(0))?)
-        })
-    }
-
     /// Persists every valid report time so reconnect grace retains second precision.
     pub fn touch_seen(&self, id: i64, ts: i64) -> Result<()> {
-        self.write(Kind::Batch, move |conn| {
+        self.write_batch(move |conn| {
             conn.prepare("UPDATE node SET online_since=CASE WHEN online_since=0 OR ?2-last_seen > COALESCE((SELECT TRY_CAST(value AS BIGINT)*60 FROM setting WHERE key='online_grace_minutes'),300) THEN ?2 ELSE online_since END, last_seen=GREATEST(last_seen,?2) WHERE id=?1")?.execute(params![id, ts])?;
             Ok(())
         })
@@ -1168,12 +1230,16 @@ impl Db {
     pub fn accumulate(&self, node_id: i64, boot_id: &str, counters: Option<(i64, i64)>) -> Result<Traffic> {
         let boot_id = boot_id.to_owned();
         let guard = self.guard();
-        self.write(Kind::Batch, move |conn| {
+        // A report racing its node's deletion is refused to the caller, not
+        // inside the transaction: failing there would roll back the unrelated
+        // telemetry sharing its group commit.
+        let folded = self.write_batch(move |conn| {
             if !guard.lock().unwrap_or_else(|e| e.into_inner()).nodes.contains(&node_id) {
-                anyhow::bail!("节点 {node_id} 已不存在，这次上报没有计入");
+                return Ok(None);
             }
-            accumulate_on(conn, node_id, &boot_id, counters)
-        })
+            accumulate_on(conn, node_id, &boot_id, counters).map(Some)
+        })?;
+        folded.ok_or_else(|| anyhow!("节点 {node_id} 已不存在，这次上报没有计入"))
     }
 
     /// Allows the panel to correct a total, for example after moving a node to
@@ -1223,7 +1289,7 @@ impl Db {
             m.get("swap_partition_used").and_then(|v| v.as_i64()).filter(|n| *n >= 0),
         ];
         let guard = self.guard();
-        self.write(Kind::Batch, move |conn| {
+        self.write_batch(move |conn| {
             let mut known = guard.lock().unwrap_or_else(|e| e.into_inner());
             // A report that was in flight when its node was deleted, or when a
             // restore replaced the database, must not create a row for a node
@@ -1232,10 +1298,12 @@ impl Db {
             if !known.nodes.contains(&node_id) {
                 return Ok(());
             }
-            if known.minutes.get(&node_id) == Some(&ts) {
-                // The minute this report describes has already been written --
-                // the agent reconnected inside it -- so the row is replaced. The
-                // primary key makes that the only legal way to write it twice.
+            if known.minutes.get(&node_id).is_some_and(|newest| *newest >= ts) {
+                // This minute may already have a row: the agent reconnected inside
+                // it, or the hub's clock stepped back onto minutes it had already
+                // written. The row is replaced -- the primary key makes that the
+                // only legal way to write it twice. Anything newer than the newest
+                // stamp cannot collide and skips the delete.
                 conn.prepare("DELETE FROM metric WHERE node_id=?1 AND ts=?2")?
                     .execute(params![node_id, ts])?;
             }
@@ -1394,7 +1462,11 @@ impl Db {
             }
             tx.commit()?;
             let mut known = guard.lock().unwrap_or_else(|e| e.into_inner());
-            known.forget_task(id);
+            // Only the assignments are replaced. The newest stamps stay: this
+            // task's results are still in `ping_record`, and a forgotten stamp
+            // would let the next result for the same second skip the delete
+            // before its insert and fail on the key.
+            known.assignments.retain(|(_, task)| *task != id);
             for node in &t.nodes {
                 known.assignments.insert((*node, id));
             }
@@ -1470,7 +1542,7 @@ impl Db {
     /// bounded, while `task_id` is chosen by the reporter.
     pub fn insert_ping(&self, node_id: i64, task_id: i64, ts: i64, latency: i64) -> Result<()> {
         let guard = self.guard();
-        self.write(Kind::Batch, move |conn| {
+        self.write_batch(move |conn| {
             let mut known = guard.lock().unwrap_or_else(|e| e.into_inner());
             // Only under a probe this node is assigned. Tested here rather than in
             // the statement because the assignment table is small and already
@@ -1915,10 +1987,14 @@ fn record_transaction(inner: &Inner, started: Instant) {
 /// One transaction for the whole batch, then one reply per job.
 ///
 /// The replies go out only after `COMMIT` returns: a caller that was told its
-/// write succeeded has a committed row behind it. A batch whose commit fails
-/// reports the failure to every job it carried -- telemetry is re-sent by the
-/// agent on its next report, and the alternative, acknowledging a write that did
-/// not happen, is the one outcome that must not occur.
+/// write succeeded has a committed row behind it.
+///
+/// DuckDB has no savepoints, so one failing job poisons the whole transaction.
+/// Rather than fail every job it carried -- up to [`BATCH_OPS`] writes from other
+/// nodes, whose minute rows and probe results the agents do not re-send -- the
+/// batch is rolled back and each job is replayed in its own transaction; only the
+/// job at fault fails. A failed `COMMIT` is different: nothing singles out one
+/// job, so every job it carried is told so.
 fn run_batch(conn: &mut Option<Connection>, inner: &Inner, jobs: Vec<Job>) {
     let generation = inner.generation.load(Ordering::SeqCst);
     let mut live = Vec::with_capacity(jobs.len());
@@ -1949,35 +2025,38 @@ fn run_batch(conn: &mut Option<Connection>, inner: &Inner, jobs: Vec<Job>) {
             return;
         }
     };
-    // `None` means the job never ran because an earlier job in the batch failed;
-    // those are refused, not failed, so the counters keep their stated meaning.
-    let mut results: Vec<(Instant, Reply, Option<Result<Payload>>)> = Vec::with_capacity(live.len());
+    // `None` means the job never ran because an earlier job in the batch failed.
+    let mut results: Vec<BatchSlot> = Vec::with_capacity(live.len());
     let mut failure: Option<String> = None;
     for job in live {
         if failure.is_some() {
             // The transaction is already poisoned; a statement run after the
             // failure could only produce a misleading second error.
-            results.push((job.enqueued, job.reply, None));
+            results.push((job.enqueued, job.reply, job.replay, None));
             continue;
         }
         match (job.run)(Target::Conn(&tx)) {
-            Ok(payload) => results.push((job.enqueued, job.reply, Some(Ok(payload)))),
+            Ok(payload) => results.push((job.enqueued, job.reply, job.replay, Some(Ok(payload)))),
             Err(e) => {
                 let reason = format!("{e:#}");
                 failure = Some(reason.clone());
-                results.push((job.enqueued, job.reply, Some(Err(anyhow!(reason)))));
+                results.push((job.enqueued, job.reply, job.replay, Some(Err(anyhow!(reason)))));
             }
         }
     }
     if let Some(reason) = failure {
         let _ = tx.rollback();
         inner.reload_guard();
-        let rolled_back = results.len();
-        for (enqueued, reply, outcome) in results {
-            let status = if outcome.is_some() { Status::Failed } else { Status::Refused };
-            resolve(inner, &reply, enqueued, Err(anyhow!("{reason}")), status);
+        warn!(
+            "a telemetry batch rolled back ({reason}); replaying its {} operation(s) one at a time",
+            results.len()
+        );
+        for (enqueued, reply, replay, _) in results {
+            match replay {
+                Some(body) => run_alone(conn, inner, enqueued, &reply, &body),
+                None => resolve(inner, &reply, enqueued, Err(anyhow!("{reason}")), Status::Failed),
+            }
         }
-        error!("a telemetry batch rolled back ({reason}); {rolled_back} operation(s) were not written");
         return;
     }
     match tx.commit() {
@@ -1988,7 +2067,7 @@ fn run_batch(conn: &mut Option<Connection>, inner: &Inner, jobs: Vec<Job>) {
             inner.batch_transactions.fetch_add(1, Ordering::Relaxed);
             inner.batch_ops.fetch_add(count, Ordering::Relaxed);
             inner.max_batch_size.fetch_max(count, Ordering::Relaxed);
-            for (enqueued, reply, outcome) in results {
+            for (enqueued, reply, _, outcome) in results {
                 match outcome {
                     Some(outcome) => resolve(inner, &reply, enqueued, outcome, Status::Committed),
                     // Unreachable while the failure branch above owns every
@@ -2002,9 +2081,31 @@ fn run_batch(conn: &mut Option<Connection>, inner: &Inner, jobs: Vec<Job>) {
             let reason = format!("commit failed: {e:#}");
             error!("{reason}");
             inner.reload_guard();
-            for (enqueued, reply, _) in results {
+            for (enqueued, reply, _, _) in results {
                 resolve(inner, &reply, enqueued, Err(anyhow!("{reason}")), Status::Failed);
             }
+        }
+    }
+}
+
+/// One telemetry job from a rolled-back batch, replayed in its own transaction.
+fn run_alone(conn: &mut Connection, inner: &Inner, enqueued: Instant, reply: &Reply, body: &Replay) {
+    let started = Instant::now();
+    let outcome = conn.transaction().map_err(anyhow::Error::from).and_then(|tx| {
+        let payload = body(&tx)?;
+        tx.commit()?;
+        Ok(payload)
+    });
+    match outcome {
+        Ok(payload) => {
+            record_transaction(inner, started);
+            inner.transactions.fetch_add(1, Ordering::Relaxed);
+            resolve(inner, reply, enqueued, Ok(payload), Status::Committed);
+        }
+        Err(e) => {
+            inner.reload_guard();
+            error!("a telemetry write failed on its own and was not stored: {e:#}");
+            resolve(inner, reply, enqueued, Err(e), Status::Failed);
         }
     }
 }
@@ -2033,21 +2134,28 @@ fn run_one(conn: &Option<Connection>, inner: &Inner, job: Job) {
     }
 }
 
-/// An operation that replaces the database file, with the readers stopped and
-/// everything already queued refused.
+/// An operation that replaces the database file, with everything already queued
+/// refused.
 ///
 /// The drain is what keeps a write that was accepted before the switch from
 /// landing in the database that replaced it. The generation check is the
 /// backstop for the operation itself: a replacement queued behind another one
 /// carries the old generation and is refused rather than replacing the
 /// replacement. Nothing straddles the switch.
+///
+/// The readers are *not* stopped here. Building a restore's staging database or
+/// copying the live one into a compacted file takes as long as the operator's
+/// history is large, and excluding readers for that whole window would stall
+/// every login, agent handshake and page load behind it. Only the file swap
+/// itself needs them out, so [`backup::activate`] takes the barrier around that
+/// alone -- a rename and a reopen -- and the work before it runs against a
+/// database that is still fully readable.
 fn run_replace(conn: &mut Option<Connection>, inner: &Inner, queue: &Receiver<Job>, job: Job) {
     let Job { generation, enqueued, run, reply, .. } = job;
     if generation != inner.generation.load(Ordering::SeqCst) {
         resolve(inner, &reply, enqueued, Err(anyhow!(SUPERSEDED)), Status::Refused);
         return;
     }
-    let _gate = inner.gate.write().unwrap_or_else(|e| e.into_inner());
     let mut refused = 0u64;
     while let Ok(pending) = queue.try_recv() {
         resolve(inner, &pending.reply, pending.enqueued, Err(anyhow!(SUPERSEDED)), Status::Refused);

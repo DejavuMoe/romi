@@ -107,7 +107,7 @@ Hub 验证上报字段后，按单节点会话锁串行处理：在 `traffic` �
 
 GeoLite Country 下载由管理员指定 HTTPS 直链，限制 32 MiB，并验证 MMDB 类型；成功后原子替换数据库同目录的 `GeoLite2-Country.mmdb`，按连接来源 IP 更新国家代码。进度可查询，下载可取消，失败保留旧库。该文件不属于 DuckDB 备份。
 
-备份从一个只读 MVCC 事务导出九张持久业务表为 Parquet，再加入记录 schema/引擎/行数/SHA-256 的 manifest，打包成格式 3 的 tar.gz；`session` 不入备份。恢复上传以 4 MiB 分片顺序发送，Hub 单请求上限 8 MiB、总压缩归档上限 256 MiB，并限制成员数与展开大小。Hub 先校验归档、关系和 staging 库，再在替换栅栏内切换数据库；失败时保留或恢复原文件。恢复成功清除旧会话、给当前操作人新会话，并让 Agent 重新鉴权连接。手动维护清理过期历史、执行 CHECKPOINT，仅可复用空间达到阈值时重写文件并报告实际回收字节；周期维护默认关闭，可选 7/30/90/180 天。普通保留期清理仍按小时执行。
+备份从一个只读 MVCC 事务导出九张持久业务表为 Parquet，再加入记录 schema/引擎/行数/SHA-256 的 manifest，打包成格式 3 的 tar.gz；`session` 不入备份。恢复上传以 4 MiB 分片顺序发送，Hub 单请求上限 8 MiB、总压缩归档上限 256 MiB，并限制成员数与展开大小。Hub 先校验归档、关系和 staging 库——这段期间数据库保持可读——再在替换栅栏内切换数据库；失败时保留或恢复原文件。恢复成功清除旧会话、给当前操作人新会话，并让 Agent 重新鉴权连接。手动维护清理过期历史、执行 CHECKPOINT，仅可复用空间达到阈值时重写文件并报告实际回收字节；周期维护默认关闭，可选 7/30/90/180 天。普通保留期清理仍按小时执行。
 
 ## 4. HTTP / WebSocket 契约索引
 
@@ -122,7 +122,7 @@ GeoLite Country 下载由管理员指定 HTTPS 直链，限制 32 MiB，并验�
 | 管理员 | `GET /api/db`、`GET /api/db/backup`、`POST /api/db/restore`、`POST /api/db/maintenance` | 数据统计、备份、恢复与维护 |
 | Agent / 安装器 | `WS /api/agent/ws`、`POST /api/agent/register`、`GET /api/agent/distribution`、`GET /install.sh`、`GET /agent/v{version}/{target}` | 节点令牌、短期注册 key 和已验证本地分发；另有 `GET /healthz` 健康检查 |
 
-Hub 通常限制 HTTP 请求体为 64 KiB，恢复分片单独放宽。浏览器实时连接分配 64 个匿名席位和 32 个管理席位，Agent/WebSocket 帧上限 64 KiB。路由细节和失败状态以 `server/src/main.rs`、`api.rs` 为准。
+Hub 通常限制 HTTP 请求体为 64 KiB，恢复分片单独放宽。浏览器实时连接分配 64 个匿名席位和 32 个管理席位，两个 WebSocket 的消息和单帧上限均为 64 KiB。页面响应带 CSP、`X-Frame-Options`、`X-Content-Type-Options` 与 `Referrer-Policy`。路由细节和失败状态以 `server/src/main.rs`、`api.rs` 为准。
 
 ## 5. DuckDB 数据库设计
 
@@ -147,11 +147,11 @@ Hub 通常限制 HTTP 请求体为 64 KiB，恢复分片单独放宽。浏览器
 
 DuckDB 没有在这些表上声明外键级联。`Db::create_node` 同事务写 `node` 与 `traffic`；`Db::save_ping_task` 核对节点及指派、一次替换全部关联；删除节点/探测任务时在同一事务显式清除其历史与关联。恢复在切换前校验孤儿关系。`metric` 与 `ping_record` 的复合主键负责去重；配置的“未传字段”与“显式清空”由补丁语义区分，例如 `expires_at: null` 才清除到期日。
 
-**ID 边界：**同一次数据库打开期间，分配器不会立即复用删除的 ID。但启动和恢复会执行 `resync_ids`，将 `next` 设为当前最大 ID 加一；若删除的是最大节点或探测任务，重启后该 ID 可能再次分配。现有删除测试只覆盖同一次打开期间，不能证明跨重启不复用。这是当前代码与旧文档承诺不一致的地方。
+**ID 边界：**分配器只前进。启动和恢复执行的 `resync_ids` 用 `GREATEST` 把 `next` 抬到现存最大 ID 加一，不会调低，因此删除末尾节点或探测任务后重启也不会再次发放该 ID。备份不含 `romi_id`，所以恢复会把当前库的计数器作为下界写进 staging 库，备份之后创建又被恢复抹掉的 ID 同样不再发放。`a_deleted_id_stays_retired_across_a_restart` 与 `a_restore_does_not_reissue_ids_created_after_the_backup` 覆盖这两条路径。
 
 ### 5.2 读写、保留和文件生命周期
 
-所有变更经容量 512 的单 writer 队列；同类遥测最多 256 个操作合入一个事务，提交成功才答复调用者，失败则整批回滚。短元数据读使用独立连接，历史/备份使用 3 个分析 reader，历史查询有 30 秒中断上限。备份只占读取快照；恢复或真正重写文件才取得替换栅栏、推进数据库 generation，并拒绝已过期的排队写入。实时节点列表来自 Agent 的最近发布副本和已提交配置，避免慢查询堵住页面。
+所有变更经容量 512 的单 writer 队列；同类遥测最多 256 个操作合入一个事务，提交成功才答复调用者。批内单条失败时整批回滚后逐条重放，只有出错的那条得到失败答复；`COMMIT` 本身失败才整批报告失败。短元数据读使用独立连接，历史/备份使用 3 个分析 reader，历史查询有 30 秒中断上限，匿名与管理各有独立准入配额。备份只占读取快照；恢复或真正重写文件才推进数据库 generation 并拒绝已过期的排队写入，替换栅栏只在换文件的瞬间排除 reader。实时节点列表来自 Agent 的最近发布副本和已提交配置，避免慢查询堵住页面。
 
 启动会拒绝非 romi 数据库和不匹配的引擎；schema 迁移在事务中执行。文件数据库另持有 `<db>.lock` 排他锁，并限制主文件、WAL、临时目录与锁文件的权限。内存数据库仅用于测试。正常关闭会停止接收新作业，排空 writer、CHECKPOINT、等待 reader 结束后释放连接与文件锁。备份格式 3 可恢复已知的 schema 2/3 数据；较新的 schema 不能被旧 Hub 直接打开。更细的备份校验与回滚步骤见[存储架构](storage.md)。
 
