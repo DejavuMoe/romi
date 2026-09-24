@@ -311,6 +311,29 @@ fn urlencode(value: &str) -> String {
         .collect()
 }
 
+/// Whether the allow list admits this account.
+///
+/// An entry made only of digits names GitHub's account id; anything else names
+/// the login. Both forms may appear in one list, so an operator can pin the
+/// accounts that matter without rewriting the rest, and `id:12345` is accepted
+/// for readability as the same thing as `12345`.
+///
+/// The distinction matters because a login is not an identity: GitHub lets an
+/// account be renamed, and the name it frees can then be registered by anyone.
+/// A list written in logins alone therefore admits whoever holds the name at
+/// sign-in time, which is why every acceptance logs the id.
+///
+/// `allowed` is already trimmed and lowercased by the caller.
+fn allows(allowed: &[String], login: &str, id: i64) -> bool {
+    let login = login.to_lowercase();
+    allowed.iter().any(|entry| match entry.strip_prefix("id:").unwrap_or(entry) {
+        digits if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) => {
+            digits.parse::<i64>().is_ok_and(|wanted| wanted == id)
+        }
+        name => name == login,
+    })
+}
+
 /// Exchanges the code for a token and checks the login against the allow list,
 /// returning the accepted login.
 async fn github_login(app: &App, code: &str) -> Result<String> {
@@ -349,6 +372,10 @@ async fn github_login(app: &App, code: &str) -> Result<String> {
     #[derive(Deserialize)]
     struct GithubUser {
         login: String,
+        /// GitHub's immutable account identifier. A login can be changed, and
+        /// the name it frees can then be registered by anyone, so an allow list
+        /// written in logins alone accepts whoever holds the name today.
+        id: i64,
     }
     let response = app
         .http
@@ -366,14 +393,16 @@ async fn github_login(app: &App, code: &str) -> Result<String> {
         format!("user response ({status}): {}", body.chars().take(200).collect::<String>())
     })?;
 
-    if !allowed.contains(&user.login.to_lowercase()) {
+    if !allows(&allowed, &user.login, user.id) {
         // The list stays in the log and out of the reason, which travels back in
         // a query string: any GitHub account can reach that page, and a reason
         // carrying the allow list would disclose the accounts worth phishing.
-        warn!("GitHub user {} is not on the allowed list {allowed:?}", user.login);
+        warn!("GitHub user {} (id {}) is not on the allowed list {allowed:?}", user.login, user.id);
         bail!("GitHub user {} is not on the allowed list", user.login);
     }
-    info!("GitHub sign-in accepted for {}", user.login);
+    // The id is logged on every acceptance so an operator can replace a login
+    // entry with the identifier that cannot be transferred.
+    info!("GitHub sign-in accepted for {} (id {})", user.login, user.id);
     Ok(user.login)
 }
 
@@ -491,6 +520,41 @@ mod tests {
         );
         drop(held);
         assert!(app.password_gate.try_acquire().is_ok(), "permits come back when the checks finish");
+    }
+
+    /// A login is a name its owner can give up; the id is the account. The list
+    /// takes either, so an operator can pin the accounts that matter without
+    /// rewriting entries that are fine as names.
+    #[test]
+    fn the_allow_list_takes_logins_and_the_ids_a_rename_cannot_move() {
+        let list = |entries: &str| -> Vec<String> {
+            entries.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect()
+        };
+
+        // A login entry matches by name, case-insensitively.
+        assert!(allows(&list("dejavumoe"), "DejavuMoe", 1));
+        assert!(!allows(&list("dejavumoe"), "someone-else", 1));
+        // And it matches whoever holds that name, which is the weakness the id
+        // form exists to close.
+        assert!(allows(&list("dejavumoe"), "dejavumoe", 999));
+
+        // An id entry matches the account, whatever it is currently called.
+        assert!(allows(&list("4242"), "renamed-since", 4242));
+        assert!(!allows(&list("4242"), "dejavumoe", 1));
+        assert!(allows(&list("id:4242"), "renamed-since", 4242));
+
+        // Mixed lists, and an id that is not this account.
+        assert!(allows(&list("dejavumoe, id:4242"), "other", 4242));
+        assert!(allows(&list("dejavumoe, id:4242"), "DejavuMoe", 7));
+        assert!(!allows(&list("dejavumoe, id:4242"), "other", 7));
+
+        // An empty list admits nobody; that is checked before this runs, but the
+        // matcher must not disagree with it.
+        assert!(!allows(&list(""), "dejavumoe", 1));
+        // A login that looks like a number is still compared as an id, so a
+        // numeric GitHub login cannot be admitted by an id entry that happens to
+        // read the same.
+        assert!(!allows(&list("4242"), "4242", 7));
     }
 
     /// Both ends of the same redirect: every form GitHub can send must parse,
