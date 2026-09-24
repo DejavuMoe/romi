@@ -17,9 +17,9 @@ features:
   - title: 安装 Hub 与 Agent
     details: 选择 GNU 或 musl 工件，验证归档，再安装原生服务。
     link: /deployment
-  - title: 了解监测范围
-    details: 资源、流量、历史、TCP 监测、通知和公开状态页。
-    link: /requirements
+  - title: 阅读代码导览
+    details: 现有功能、页面交互、业务数据流和 DuckDB 结构。
+    link: /codebase-guide
   - title: 备份与恢复
     details: 了解数据库文件、备份验证、恢复与回退边界。
     link: /storage

@@ -7,7 +7,7 @@ GNU 工件在 Debian 12 基线构建，glibc 要求不高于 2.36；musl 工件�
 
 Hub/Agent 都以独立非 root 账号运行。Hub 仅监听回环，外部 HTTPS 由反向代理终止。
 原生安装需要 shell、curl、sha256sum 和系统账号管理工具；GNU Hub 需要系统 libstdc++。
-Agent Docker 使用 Release 镜像归档，见本文末尾；Hub Docker 不在 0.0.1 支持范围。
+Agent Docker 使用 Release 镜像归档，见本文末尾；不提供 Hub Docker 交付。
 不提供从可变 master 源码执行 `curl | sh` 的安装路径。
 
 ## 信任边界
@@ -39,7 +39,7 @@ Hub 安装成功并配置了内置 Agent 分发后：
 2. 节点从**受信任的 Hub HTTPS 域名**下载 `/install.sh`；
 3. 安装器从同一个 Hub 获取精确版本的 Agent；
 4. 本地校验大小、SHA-256 与 `romi-agent --version`；
-5. 安装 systemd 服务，Agent 连接同一个 Hub。
+5. 按目标系统安装 systemd 或 OpenRC 服务，Agent 连接同一个 Hub。
 
 这一步的真实性边界是 **Hub 的 HTTPS 证书和域名**。Hub 返回的 SHA-256 能证明传输和安装
 物一致，但它和二进制来自同一个 Hub，不是独立的第三方签名。
@@ -149,7 +149,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/hub.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/hub.example.com/privkey.pem;
 
-    # 现有备份按 8 MiB 分块上传；这里留出余量给请求头。
+    # 浏览器每片上传 4 MiB；Hub 单请求上限为 8 MiB，这里留出余量。
     client_max_body_size 16m;
 
     location / {
@@ -208,7 +208,7 @@ tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT \
        --register-key '<short-lived-key>'
 ```
 
-注册密钥短期有效、单次换取节点令牌，但会出现在自动化命令和 shell 历史中；永久令牌只写入
+注册密钥在一小时窗口内可供最多 100 台节点使用，每次注册换取各自的长期令牌；短期 key 会出现在自动化命令和 shell 历史中，长期令牌只写入
 受保护 env 文件，不打印。
 
 更新是显式的 operator 操作：重新运行安装器即可。romi 不实现静默自更新、后台 updater、
@@ -240,7 +240,7 @@ release 目录的版本化与数据库安全无关。
 - `GET /agent/vX.Y.Z/<target>`
 
 未配置时这些路由返回 503。启动时会校验本地分发的版本、目标、架构、文件名、大小、
-SHA-256 和 x86-64 ELF 头；任何一项不符都会让 Hub 拒绝启动，而不是提供未经验证的文件。
+SHA-256 和目标 CPU 对应的 ELF 架构（x86-64/aarch64）；任何一项不符都会让 Hub 拒绝启动，而不是提供未经验证的文件。
 Hub 从不访问 GitHub 获取 Agent，也不提供可变的 `/agent/x86_64` 别名。
 
 

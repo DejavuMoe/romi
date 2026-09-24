@@ -9,7 +9,7 @@ romi 由 Dejavu Moe 独立维护。需求、版本和发布节奏由本仓库定
 ## 使用
 
 - [部署](docs/deployment.md)：systemd/OpenRC、HTTPS、Agent 安装、升级和备份。
-- [文档](docs/README.md)：需求、架构、领域规则和验证入口。
+- [代码导览](docs/codebase-guide.md)：现有功能、界面交互、业务数据流和数据库；其余入口见[文档导航](docs/README.md)。
 - [开发流程](docs/engineering.md)：工作阶段、检查与提交约定。
 - [发布流程](docs/release.md)：平台矩阵、候选工件与发布门禁。
 

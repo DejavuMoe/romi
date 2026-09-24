@@ -11,7 +11,7 @@
 | public | `/` | 查看汇总、卡片/列表切换、站点默认视图、明暗切换、进入详情/登录 | `web/src/App.tsx`、`Summary.tsx`、`NodeCard.tsx`、`NodeList.tsx` |
 | node-detail | `/node/{id}`、`/admin/node/{id}` | CPU、RAM/ZRAM/Swap、磁盘、进程、网络与 TCP/UDP 历史、时间窗、返回/深链 | `web/src/components/NodeDetail.tsx` |
 | login | `/admin/` 未登录态 | 账号密码、可选 GitHub 登录、错误提示 | `admin/src/components/Login.tsx`、`auth.rs` |
-| nodes | `/admin/` | 名称/IP/标识搜索、状态筛选、管理列表、双栈 IP 复制、Agent 版本、优先级、新建/编辑/删除、带宽/协议可用性、安装、轮换、流量修正、账单 | `Admin.tsx` 的 Nodes/CreateNode/NodeForm/BillingForm/InstallDialog |
+| nodes | `/admin/nodes` | 名称/IP/标识搜索、状态筛选、管理列表、双栈 IP 复制、Agent 版本、优先级、新建/编辑/删除、带宽/协议可用性、安装、轮换、流量修正、账单 | `Admin.tsx` 的 Nodes/CreateNode/NodeForm/BillingForm/InstallDialog |
 | registration | 节点页弹窗 | 开启/关闭注册窗口、复制短期命令、有效期 | `useRegisterWindow`、`RegisterDialog` |
 | probes | `/admin/ping` | 新增/编辑/删除 host:port、间隔、节点指派 | `Admin.tsx` 的 Ping；`api::save_ping_task` |
 | notifications | `/admin/notify` | Telegram/Webhook、模板预览、按渠道测试、未保存禁用测试、阈值、节点离线开关 | `Admin.tsx` 的 Notify/OfflineNodes；`notify.rs` |
@@ -22,6 +22,7 @@
 ## 领域对象与权限
 
 节点包含身份、排序、公开性、静态硬件事实、在线态、最新指标、累计流量、账单与到期信息。
+节点的 `public` 字段可通过管理 API 修改；当前后台编辑弹窗没有公开/私有切换控件，只显示私有标记。
 IP/主机名/备注和凭据相关管理字段不向匿名快照公开。公开历史最多七天，管理员可查询一年。
 探测对象包含名称、目标、间隔和节点集合；公开历史只给名称和结果，不公开探测目标/指派管理接口。
 通知设置的凭据只返回已配置标记；未输入表示保持，清除是明确动作。
@@ -36,7 +37,7 @@ IP/主机名/备注和凭据相关管理字段不向匿名快照公开。公开�
 | 节点创建/安装 | 创建、一次性令牌、安装命令 | 保存/复制错误 | 非 HTTPS 域名或分发缺失时禁止 provisioning | 弹窗取消；令牌轮换确认 |
 | 探测 | 加载、任务、无任务 | 失败不可伪装成空表；重试 | 管理员权限；节点可选 | 保存忙态、删除确认 |
 | 通知/设置/安全 | 加载与已配置值 | 加载重试、保存/测试错误 | 秘密脱敏、允许用户空则拒绝 | 保存/发送中 |
-| 数据 | 统计、无明细 | 备份/恢复/维护失败 | 管理员与数据库维护门限 | 分片进度、AbortController 取消、恢复确认 |
+| 数据 | 统计、无明细 | 备份/恢复/维护失败 | 管理员权限；归档和分片有大小限制 | 分片进度、AbortController 取消、恢复确认 |
 
 ## 接口映射
 
@@ -57,7 +58,7 @@ IP/主机名/备注和凭据相关管理字段不向匿名快照公开。公开�
 ## 交互、可访问性与限制
 
 当前使用 React、原生表单与 Radix 弹窗；有可见焦点、明暗主题、减少动画样式。
-节点排序保留拖动/方向键；移动端可以编辑非负整数优先级。列表/卡片选择在详情往返时保留。
+节点顺序由后台编辑弹窗中的 0–999999 整数优先级调整，数值越大越靠前。公开页的列表/卡片选择在详情往返时保留。
 已存在桌面/移动 Chromium E2E；不代表真实 iOS、Safari 或屏幕阅读器已验证。
 生产界面按桌面/移动布局、明暗主题、键盘焦点与取消进行验证；具体矩阵以对应运行记录为准。
 未知：长期移动网络断续、真实 iOS/Safari 和读屏器表现。外部主题入口已移除。

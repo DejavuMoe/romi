@@ -46,6 +46,7 @@ export default defineConfig({
         { text: '开发流程', link: '/engineering' },
         { text: '测试', link: '/testing' },
         { text: '架构', link: '/architecture' },
+        { text: '代码导览', link: '/codebase-guide' },
         { text: '界面能力', link: '/ui/capabilities' },
         { text: '发布流程', link: '/release' }
       ] },

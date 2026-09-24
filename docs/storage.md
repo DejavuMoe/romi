@@ -60,8 +60,8 @@ DuckDB 只允许一个进程读写同一数据库文件。romi 另外持有 `<db
 | 类别 | 例子 | 行为 |
 | --- | --- | --- |
 | Batch | Agent 的 metric / last_seen | 与其他 telemetry 共享 group commit |
-| Solo | 设置、节点、会话等配置写入 | 单独事务，错误不会连累其他写入 |
-| Maintenance | 保留期清理、CHECKPOINT、测量可复用空间 | 不推进 generation，不清空/拒绝排队写入 |
+| Solo | 设置、节点、会话及保留期清理 | 单独事务，错误不会连累其他写入 |
+| Maintenance | CHECKPOINT、测量可复用空间 | 不推进 generation，不清空/拒绝排队写入 |
 | Replace | 恢复备份、真正值得做的压缩 | 停止 reader、排空并拒绝旧 generation 的排队写入、切换文件、推进 generation |
 
 备份快照不是 Replace。它不经过 writer 队列，而是在 reader 连接的事务中读取；
@@ -81,13 +81,16 @@ DuckDB 只允许一个进程读写同一数据库文件。romi 另外持有 `<db
 
 ## 标识与关系完整性
 
-`node` 与 `ping_task` 的 id 来自 `romi_id` 单调分配表，在 writer 事务内通过
-`UPDATE ... RETURNING` 原子分配。删除过的 id 不会被重新发放，因此删除节点后再新建
-节点不会继承旧节点的历史。恢复/重建后 `resync_ids` 会把分配器推到已有最大 id 之后。
+`node` 与 `ping_task` 的 id 来自 `romi_id` 分配表，在 writer 事务内通过
+`UPDATE ... RETURNING` 原子分配。同一次打开期间，删除后的下一次分配仍继续递增；
+但每次启动及恢复后，`resync_ids` 都把 `next` 重设为**现存**最大 id 加一。
+删除当前最大 id 后重启，可能再次分配该 id。删除事务会清除该对象的历史，
+但当前实现不满足“跨重启永不复用 ID”的保证。
 
 DuckDB 的外键不支持级联删除，且其检查看不到同一事务中先执行的子行删除。
-romi 因此在应用事务内显式维护关系：删除节点时同时清空 traffic、metric、ping_node、
-ping_record、ping_task 的关联，恢复时 `verify_relationships` 会在切换前拒绝任何孤儿。
+romi 因此在应用事务内显式维护关系：删除节点时清空该节点的 traffic、metric、metric_hour、
+ping_node、ping_record 和 ping_hour 记录，保留探测任务本身；删除探测任务时清空其指派及历史。
+恢复时 `verify_relationships` 会在切换前拒绝任何孤儿。
 
 ## 备份格式与限制
 
