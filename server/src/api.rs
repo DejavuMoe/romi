@@ -239,6 +239,11 @@ fn default_hours() -> i64 {
 /// actual blocking work rather than the number of runtime workers.
 pub(crate) const HISTORY_SLOTS: usize = 4;
 
+/// Slots reserved for the signed-in operator, on top of the anonymous ceiling
+/// above. Without them a busy status page answers the operator's own history
+/// request with "try again", which is exactly when the charts are wanted.
+pub(crate) const ADMIN_HISTORY_SLOTS: usize = 2;
+
 pub async fn metrics(
     State(app): State<Shared>,
     headers: HeaderMap,
@@ -251,7 +256,7 @@ pub async fn metrics(
     }
     // After the two point lookups above, so an unauthorised caller is told so
     // rather than asked to retry later.
-    let Ok(_permit) = app.history_gate.try_acquire() else {
+    let Ok(_permit) = app.history_gate[usize::from(full)].try_acquire() else {
         return (StatusCode::SERVICE_UNAVAILABLE, "too many history queries in flight, try again")
             .into_response();
     };
@@ -349,6 +354,12 @@ pub const SOCKET_BUFFER: usize = 4 * 1024;
 /// body. That limit is a tower layer and never applies here, where the default
 /// ceiling is 64 MiB -- reachable with a node's own token, for content that is
 /// stored and then served to every viewer of the public page.
+///
+/// Both halves are set wherever this is used. `max_message_size` alone bounds
+/// the assembled message, but tungstenite buffers each *frame* whole before the
+/// message length is known, and its own frame default is 16 MiB; a sender that
+/// never sets FIN could therefore hold that much per connection against a limit
+/// that reads as 64 KiB.
 pub const MAX_FRAME: usize = 64 * 1024;
 
 /// How long one rendered snapshot is reused. Just under the push interval, so
@@ -434,6 +445,7 @@ pub async fn live_ws(State(app): State<Shared>, headers: HeaderMap, upgrade: Web
         .read_buffer_size(SOCKET_BUFFER)
         .write_buffer_size(SOCKET_BUFFER)
         .max_message_size(MAX_FRAME)
+        .max_frame_size(MAX_FRAME)
         .on_upgrade(move |socket| async move {
             let _permit = permit;
             stream_live(app, socket, session).await;
@@ -818,14 +830,6 @@ pub async fn agent_register(
         app.registrations.record_failure(ip);
         return closed();
     }
-    match storage(&app, move |db| db.nodes_created_since(until - REGISTER_WINDOW)).await {
-        Ok(n) if n >= REGISTER_LIMIT => {
-            return (StatusCode::FORBIDDEN, "this window has registered enough nodes").into_response();
-        }
-        Err(e) => return fail(e),
-        Ok(_) => {}
-    }
-
     // The name comes from a machine not yet vouched for: control characters would
     // break the panel's rows, and the length must be bounded. `chars()` rather
     // than bytes, so the cut falls on a character boundary.
@@ -840,11 +844,17 @@ pub async fn agent_register(
     };
     let token = random_token();
     let issued = token.clone();
-    match storage(&app, move |db| db.create_node(&node, &issued)).await {
+    // The window's node budget is enforced inside the insert's transaction: a
+    // batch of scripts starting together would each pass a separate count.
+    let cap = Some((until - REGISTER_WINDOW, REGISTER_LIMIT));
+    match storage(&app, move |db| db.create_node_within(&node, &issued, cap)).await {
         Ok(_) => {
             app.registrations.clear(ip);
             invalidate_snapshot(&app);
             ([(axum::http::header::CACHE_CONTROL, "no-store")], token).into_response()
+        }
+        Err(e) if e.to_string().contains(crate::db::REGISTRATION_FULL) => {
+            (StatusCode::FORBIDDEN, crate::db::REGISTRATION_FULL).into_response()
         }
         Err(e) => fail(e),
     }
@@ -959,7 +969,21 @@ pub async fn delete_node(_: Admin, State(app): State<Shared>, Path(id): Path<i64
 ///
 /// Always an explicit action: rotate a token believed to have leaked, then
 /// reinstall the agent. Reading the install command does not pass through here.
-pub async fn reset_token(_: Admin, State(app): State<Shared>, Path(id): Path<i64>) -> Response {
+///
+/// Behind the same https-domain entry check as creating a node, and for the same
+/// reason: this hands back a long-lived node credential in the response body, so
+/// an operator who reached the panel over plain http would put it on the wire in
+/// clear. Creating a node was gated from the start; this route returns the same
+/// kind of secret and was not.
+pub async fn reset_token(
+    _: Admin,
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Response {
+    if !provisioning_allowed(&app, &headers) {
+        return (StatusCode::FORBIDDEN, PROVISIONING_DENIED).into_response();
+    }
     let token = random_token();
     let issued = token.clone();
     let exists = storage(&app, move |db| Ok(db.node(id)?.is_some())).await.unwrap_or(false);
@@ -2111,7 +2135,8 @@ mod tests {
         let id = node(&app, "n", true);
         let mut rx = connect(&app, id, Value::Null);
 
-        let response = reset_token(Admin, axum::extract::State(app.clone()), Path(id)).await;
+        let response =
+            reset_token(Admin, axum::extract::State(app.clone()), domain_headers(), Path(id)).await;
         assert_eq!(response.status(), StatusCode::OK);
         // The agent loop selects on this receiver, so a closed channel is how it
         // learns to stop. `try_recv`, because `recv().await` on a channel
@@ -2121,6 +2146,24 @@ mod tests {
             "the old agent's channel must be closed"
         );
         assert!(app.agents.read().unwrap().is_empty(), "the node must read as offline at once");
+    }
+
+    /// Rotation hands back a long-lived node credential, so it is gated exactly
+    /// like creating a node: an operator on a plain-http entry point would put
+    /// the new token on the wire in clear.
+    #[tokio::test]
+    async fn rotating_a_token_requires_the_https_domain_entry() {
+        let app = std::sync::Arc::new(app());
+        let id = node(&app, "n", true);
+        let plain = HeaderMap::from_iter([(header::HOST, "198.51.100.7:28080".parse().unwrap())]);
+
+        let response = reset_token(Admin, axum::extract::State(app.clone()), plain, Path(id)).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            app.db.node_by_token("token-of-n").unwrap(),
+            Some(id),
+            "a refused rotation must leave the existing token working"
+        );
     }
 
     /// Deleting a node must reach the connection it opened, for the same reason
@@ -2426,8 +2469,10 @@ mod tests {
             )
         };
 
-        let held: Vec<_> =
-            (0..HISTORY_SLOTS).map(|_| app.history_gate.try_acquire().expect("up to the limit")).collect();
+        let fill = || -> Vec<_> {
+            (0..HISTORY_SLOTS).map(|_| app.history_gate[0].try_acquire().expect("up to the limit")).collect()
+        };
+        let held = fill();
         assert_eq!(ask().await.status(), StatusCode::SERVICE_UNAVAILABLE);
         drop(held);
         assert_eq!(ask().await.status(), StatusCode::OK, "a finished query gives its slot back");
@@ -2435,9 +2480,41 @@ mod tests {
         // An unauthorised caller is told so rather than asked to retry later: the
         // gate sits behind the visibility check deliberately.
         app.db.set("public_page", "off").unwrap();
-        let held: Vec<_> =
-            (0..HISTORY_SLOTS).map(|_| app.history_gate.try_acquire().expect("up to the limit")).collect();
+        let held = fill();
         assert_eq!(ask().await.status(), StatusCode::UNAUTHORIZED);
+        drop(held);
+    }
+
+    /// The anonymous status page cannot spend the operator's history budget: the
+    /// two audiences draw on separate pools, as they already do for live stream
+    /// seats.
+    #[tokio::test]
+    async fn a_saturated_public_page_still_leaves_the_operator_a_history_slot() {
+        let app = std::sync::Arc::new(app());
+        app.db.set("public_page", "on").unwrap();
+        let id = node(&app, "n", true);
+        let token = random_token();
+        app.db.create_session(&sha256(&token), Utc::now().timestamp() + 3_600).unwrap();
+        let signed_in =
+            HeaderMap::from_iter([(header::COOKIE, format!("monitor_session={token}").parse().unwrap())]);
+
+        let held: Vec<_> =
+            (0..HISTORY_SLOTS).map(|_| app.history_gate[0].try_acquire().expect("up to the limit")).collect();
+        let anonymous = metrics(
+            State(app.clone()),
+            HeaderMap::new(),
+            Path(id),
+            Query(Window { hours: 1, points: None, series: None }),
+        );
+        assert_eq!(anonymous.await.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let operator = metrics(
+            State(app.clone()),
+            signed_in,
+            Path(id),
+            Query(Window { hours: 1, points: None, series: None }),
+        );
+        assert_eq!(operator.await.status(), StatusCode::OK, "the operator keeps their own slots");
         drop(held);
     }
 

@@ -61,8 +61,10 @@ pub struct App {
     pub(crate) password_gate: tokio::sync::Semaphore,
     /// History-query backpressure is likewise per Hub instance. The DuckDB
     /// reader pool is owned by this App, so its admission control belongs to the
-    /// same lifetime.
-    pub(crate) history_gate: tokio::sync::Semaphore,
+    /// same lifetime. Split `[public, admin]` for the reason the viewer seats
+    /// are: sharing one pool let anonymous traffic on the status page refuse the
+    /// operator's own charts.
+    pub(crate) history_gate: [tokio::sync::Semaphore; 2],
     /// Public viewers cannot consume the operator's reserved stream slots.
     pub(crate) viewer_gate: [Arc<tokio::sync::Semaphore>; 2],
     pub throttle: auth::Throttle,
@@ -96,7 +98,10 @@ impl App {
             agents_admin: Mutex::new(()),
             snapshot: Mutex::new([(0, Default::default()), (0, Default::default())]),
             password_gate: tokio::sync::Semaphore::new(auth::PASSWORD_CHECKS),
-            history_gate: tokio::sync::Semaphore::new(api::HISTORY_SLOTS),
+            history_gate: [
+                tokio::sync::Semaphore::new(api::HISTORY_SLOTS),
+                tokio::sync::Semaphore::new(api::ADMIN_HISTORY_SLOTS),
+            ],
             viewer_gate: [
                 Arc::new(tokio::sync::Semaphore::new(64)),
                 Arc::new(tokio::sync::Semaphore::new(32)),

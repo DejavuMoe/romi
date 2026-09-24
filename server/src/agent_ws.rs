@@ -231,13 +231,15 @@ pub async fn handler(
     let token = token.to_owned();
     let ip = client_ip(&headers, peer.ip()).to_string();
 
-    upgrade.read_buffer_size(crate::api::SOCKET_BUFFER).max_message_size(crate::api::MAX_FRAME).on_upgrade(
-        move |socket| async move {
+    upgrade
+        .read_buffer_size(crate::api::SOCKET_BUFFER)
+        .max_message_size(crate::api::MAX_FRAME)
+        .max_frame_size(crate::api::MAX_FRAME)
+        .on_upgrade(move |socket| async move {
             if let Err(e) = serve(app, node_id, token, ip, socket).await {
                 debug!("node {node_id} disconnected: {e:#}");
             }
-        },
-    )
+        })
 }
 
 /// Extracts the node token from `Authorization: Bearer <token>`.
