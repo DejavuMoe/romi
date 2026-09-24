@@ -43,7 +43,11 @@ function Expiry({ node }: { node: Node }) {
 export function NodeCard({ node, onOpen }: { node: Node; onOpen: () => void }) {
   const m = node.online ? node.metrics : null
   return (
-    <a href={`/node/${node.id}`} aria-label={`查看 ${node.name}`} className="public-node-card" onClick={(event) => {
+    // No aria-label: one on the card replaces everything inside it, so a screen
+    // reader hears "查看 <名称>" and never the status, billing or resources the
+    // card exists to show. The list view already names its link from its own
+    // text.
+    <a href={`/node/${node.id}`} className="public-node-card" onClick={(event) => {
       if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen() }
     }}>
       <div className="card-identity"><h3>{node.name}</h3><Status node={node} /></div>

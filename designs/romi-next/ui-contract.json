@@ -142,7 +142,7 @@
           "interface": "POST /api/auth/login; GET /api/auth/github"
         }
       ],
-      "status": "approved"
+      "status": "implemented"
     },
     {
       "id": "public-status-v12",
@@ -212,7 +212,7 @@
           "interface": "GET /api/nodes/{id}/metrics"
         }
       ],
-      "status": "approved"
+      "status": "implemented"
     }
   ]
 }

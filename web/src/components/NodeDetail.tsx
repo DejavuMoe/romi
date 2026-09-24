@@ -104,12 +104,17 @@ function Panel({ title, children }: { title: React.ReactNode; children: React.Re
   )
 }
 
-function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+function Tab({ id, active, controls, onClick, children }: { id: string; active: boolean; controls: string; onClick: () => void; children: string }) {
   return (
     <button
+      id={id}
       onClick={onClick}
       role="tab"
       aria-selected={active}
+      aria-controls={controls}
+      // A tab list is one stop, not three: Tab reaches the selected tab and the
+      // arrows move between them. See the keydown handler on the list.
+      tabIndex={active ? 0 : -1}
       className={`border-b-2 px-2.5 py-2 text-xs transition-colors ${
         active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:bg-accent"
       }`}
@@ -342,9 +347,36 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
       )}
 
       <div className="history-controls border-t pt-4">
-        <div className="flex gap-1" role="tablist" aria-label="历史类型">
+        <div
+          className="flex gap-1"
+          role="tablist"
+          aria-label="历史类型"
+          // Arrow/Home/End move the selection and carry focus with it, which is
+          // what `role="tab"` already promised. Without it a keyboard user pays
+          // three stops to pass the control and gets no arrow behaviour.
+          onKeyDown={(event) => {
+            const at = TABS.findIndex((t) => t.key === tab)
+            const to =
+              event.key === "ArrowRight" ? at + 1
+              : event.key === "ArrowLeft" ? at - 1
+              : event.key === "Home" ? 0
+              : event.key === "End" ? TABS.length - 1
+              : null
+            if (to === null) return
+            event.preventDefault()
+            const next = TABS[(to + TABS.length) % TABS.length]
+            setTab(next.key)
+            event.currentTarget.querySelector<HTMLElement>(`#tab-${next.key}`)?.focus()
+          }}
+        >
           {TABS.map((t) => (
-            <Tab key={t.key} active={tab === t.key} onClick={() => setTab(t.key)}>
+            <Tab
+              key={t.key}
+              id={`tab-${t.key}`}
+              controls={`tabpanel-${t.key}`}
+              active={tab === t.key}
+              onClick={() => setTab(t.key)}
+            >
               {t.label}
             </Tab>
           ))}
@@ -362,6 +394,9 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
           读取历史数据失败：{failed}{data ? "；当前显示上次成功读取的数据。" : ""}
         </p>
       )}
+      {/* The region the tabs switch. It names itself by the tab that selected
+          it, so the two are one control rather than two strings that drift. */}
+      <div id={`tabpanel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
       {!data ? (
         failed ? null : <Skeleton className="h-40 w-full" />
       ) : tab === "latency" ? (
@@ -532,6 +567,7 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
       </Panel><ul className="chart-series">{plot.series.map((series,i)=><li key={series.key}><span style={{borderTopColor:PALETTE[i].stroke,borderTopStyle:i===1?"dashed":i===2?"dotted":"solid"}} aria-hidden="true"/>{series.label}<b>{series.current==null?"未上报":series.disabled?"未启用":plot.bytes?`${bytes(series.current)}${plot.title==="上传 / 下载"?"/s":""}`:`${series.current}${plot.title==="CPU"?"%":""}`}</b></li>)}</ul>
       {plot.title==="RAM"&&<p className="px-4 pb-4 text-xs text-muted-foreground">Swapfile {m?.swapfile_used==null?"未上报":bytes(m.swapfile_used)} · 分区 {m?.swap_partition_used==null?"未上报":bytes(m.swap_partition_used)}</p>}
       </div>)}</div>}
+      </div>
     </div>
   )
 }

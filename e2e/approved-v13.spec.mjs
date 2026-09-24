@@ -117,3 +117,58 @@ test('changing the password requires the current one', async ({ page, hub }) => 
   })
   expect(stale.status()).toBe(401)
 })
+
+test('history tabs are one stop and move with the arrow keys', async ({ page, hub }) => {
+  const id = await hub.node('键盘导航节点', true)
+  await hub.request('/api/settings', { method: 'PUT', body: { public_page: 'on' } })
+  await page.goto(`/node/${id}`)
+
+  const tabs = page.getByRole('tab')
+  await expect(tabs).toHaveCount(3)
+
+  // One stop, not three: only the selected tab is in the tab order.
+  expect(await tabs.evaluateAll((all) => all.map((t) => t.tabIndex))).toEqual([0, -1, -1])
+
+  // The tab names the panel it controls, and the panel names the tab back.
+  const selected = page.getByRole('tab', { selected: true })
+  const panel = page.locator(`#${await selected.getAttribute('aria-controls')}`)
+  await expect(panel).toHaveAttribute('role', 'tabpanel')
+  expect(await panel.getAttribute('aria-labelledby')).toBe(await selected.getAttribute('id'))
+
+  // Arrows move the selection, carry focus with it, and wrap.
+  await selected.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('tab', { selected: true })).toHaveText('监测')
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe('监测')
+  await page.keyboard.press('End')
+  await expect(page.getByRole('tab', { selected: true })).toHaveText('流量')
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('tab', { selected: true })).toHaveText('资源')
+  await page.keyboard.press('Home')
+  await expect(page.getByRole('tab', { selected: true })).toHaveText('资源')
+
+  // The panel follows the selection rather than keeping the first tab's id.
+  await page.keyboard.press('ArrowLeft')
+  const last = page.getByRole('tab', { selected: true })
+  await expect(page.locator(`#${await last.getAttribute('aria-controls')}`)).toBeVisible()
+})
+
+test('a public card is announced by its own content', async ({ page, hub }) => {
+  await hub.node('自述卡片节点', true)
+  await hub.request('/api/settings', { method: 'PUT', body: { public_page: 'on' } })
+  await page.goto('/')
+
+  const card = page.locator('a.public-node-card').first()
+  await expect(card).toBeVisible()
+  // An aria-label here would replace everything inside, leaving the status,
+  // billing and resource figures unreadable to assistive technology.
+  expect(await card.getAttribute('aria-label')).toBeNull()
+
+  const announced = await card.evaluate((element) => element.innerText.replace(/\s+/g, ' ').trim())
+  for (const expected of ['自述卡片节点', 'CPU', 'RAM']) {
+    expect(announced, 'the card still announces its own content').toContain(expected)
+  }
+  // And it is still the link that opens the node.
+  await card.click()
+  await expect(page).toHaveURL(/\/node\/\d+$/)
+})

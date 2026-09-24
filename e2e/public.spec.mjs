@@ -30,7 +30,8 @@ test('approved public cards keep resource bars and summary separators at respons
     await page.goto('/')
     await page.evaluate(value => localStorage.setItem('theme', value), theme)
     await page.reload()
-    await expect(page.getByRole('link', { name: '查看 Tokyo', exact: true })).toBeVisible()
+    // The card carries no overriding label, so it is named by its own content.
+    await expect(page.getByRole('link', { name: /Tokyo/ }).first()).toBeVisible()
     for (const width of [320, 390, 818, 1601]) {
       await page.setViewportSize({ width, height: 900 })
       const layout = await page.evaluate(() => {
@@ -54,7 +55,7 @@ test('approved public cards keep resource bars and summary separators at respons
       expect(layout.meters).toHaveLength(9)
       expect(layout.meters.every(m => m.tone === 'unknown' && m.width === 0)).toBe(true)
     }
-    await page.getByRole('link', { name: '查看 Tokyo', exact: true }).focus()
+    await page.getByRole('link', { name: /Tokyo/ }).first().focus()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('heading', { name: 'Tokyo', level: 2 })).toBeVisible()
     await page.getByRole('button', { name: '返回', exact: true }).click()
