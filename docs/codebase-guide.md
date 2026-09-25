@@ -59,7 +59,7 @@ Hub 的 `App` 持有数据库、连接中的 Agent、按公开/管理受众分�
 
 | 页面 | 当前操作与行为 | 源码 |
 | --- | --- | --- |
-| 节点 `/admin/nodes` | 名称/IP/标识搜索、全部/在线/离线筛选、复制 IPv4/IPv6 与 `node-{id}`、查看版本；添加、编辑、账单与流量、安装、换发令牌、删除 | `admin/src/components/Admin.tsx` 的 `Nodes`、`NodeForm`、`BillingForm`、`InstallDialog` |
+| 节点 `/admin/nodes` | 名称/IP/标识搜索、全部/在线/离线筛选、复制 IPv4/IPv6 与 `node-{id}`、查看版本；添加、编辑、账单与流量、安装、换发令牌、删除 | `admin/src/components/sections/nodes.tsx` 的 `Nodes`；`admin/src/components/sections/node-forms.tsx` 的 `NodeForm`、`BillingForm`、`InstallDialog` |
 | 批量注册 | 开启一小时窗口、复制含短期 key 的命令、倒计时和提前关闭；每台 Agent 用 key 换自己的长期令牌 | `useRegisterWindow`、`RegisterDialog` |
 | 监测 `/admin/ping` | 创建/编辑/删除 TCP `host:port` 任务、设置 5–3600 秒间隔和执行节点；删除时连历史结果一起清除 | `Ping` |
 | 通知 `/admin/notify` | Telegram/Webhook 凭据与模板、预览、分别测试、显式清除；批量开关节点离线通知；设置离线宽限、流量阈值、到期天数和登录提醒 | `Notify`、`OfflineNodes` |
@@ -159,7 +159,7 @@ DuckDB 没有在这些表上声明外键级联。`Db::create_node` 同事务写 
 
 | 需要核对的事实 | 源码及现有回归入口 |
 | --- | --- |
-| 页面路径、状态与交互 | `web/src/App.tsx`、`web/src/components/NodeDetail.tsx`、`admin/src/App.tsx`、`admin/src/components/Admin.tsx`；`e2e/public.spec.mjs`、`e2e/admin.spec.mjs` |
+| 页面路径、状态与交互 | `web/src/App.tsx`、`web/src/components/NodeDetail.tsx`、`admin/src/App.tsx`、`admin/src/components/Admin.tsx`（后台外壳）与 `admin/src/components/sections/`（各页面）；`e2e/public.spec.mjs`、`e2e/admin.spec.mjs` |
 | Agent 报告与探测 | `agent/src/collect.rs`、`agent/src/main.rs`、`server/src/agent_ws.rs`；各文件内 Rust 单元测试 |
 | API 权限、节点、认证 | `server/src/main.rs`、`server/src/api.rs`、`server/src/auth.rs`；对应模块测试 |
 | 累计、查询、schema、备份 | `server/src/db/mod.rs`、`schema.rs`、`queries.rs`、`backup.rs`；`server/src/db/tests.rs`、`server/tests/duckdb_engine.rs` |

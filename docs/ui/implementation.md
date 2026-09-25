@@ -7,11 +7,11 @@ v13 修订新增两个控件：节点编辑弹窗的「公开状态页」显示/
 
 | 界面 | 生产位置 | 验收重点 |
 | --- | --- | --- |
-| 管理列表 | `admin/src/components/Admin.tsx` | ID/优先级、地址、版本、复制、编辑菜单、首行对齐 |
+| 管理列表 | `admin/src/components/sections/nodes.tsx`、`node-forms.tsx` | ID/优先级、地址、版本、复制、编辑菜单、首行对齐 |
 | 登录/导航 | `Login.tsx`、`Navigation.tsx` | 间距、会话、焦点、滚动锁定不抖动 |
 | 公开卡片/列表 | `web/src/components/NodeCard.tsx`、`NodeList.tsx` | 匿名隔离、资源条、单位和视图上下文 |
 | 默认视图 | `server/src/api.rs`、两端设置/页面 | cards/list 服务端保存，访客切换不写回 |
-| 监测/选择行 | `Admin.tsx`、共享 CSS | 勾选、窄屏列收敛、单一复选标记 |
+| 监测/选择行 | `sections/probes.tsx`、共享 CSS | 勾选、窄屏列收敛、单一复选标记 |
 | 历史详情 | `web/src/components/NodeDetail.tsx` | 六类图表、缺样留空、RAM/ZRAM/Swap、KPI |
 
 生产不引用原型运行库或模拟接口。权限和分发前置条件以 Hub 为准；`node-{id}` 不等于认证令牌。
