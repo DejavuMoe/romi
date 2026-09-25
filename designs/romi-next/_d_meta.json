@@ -14,6 +14,16 @@
             "height": 831
           },
           "summary": "The account password is the only sign-in: no GitHub button on the login screen and no GitHub card on the security page. Also the session list showing its own load failure with a retry."
+        },
+        {
+          "path": "revision-v14/index.html",
+          "createdAt": "2026-09-25T02:43:42.431Z",
+          "status": "needs-review",
+          "subtitle": "v14 visual convergence",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
         }
       ]
     },
@@ -28,11 +38,35 @@
             "height": 831
           },
           "summary": "Public cards whose own content is their accessible name, rather than a label that replaces it."
+        },
+        {
+          "path": "revision-v14/public.html",
+          "createdAt": "2026-09-25T02:43:42.805Z",
+          "status": "needs-review",
+          "subtitle": "v14 visual convergence",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        }
+      ]
+    },
+    "设计规范": {
+      "versions": [
+        {
+          "path": "revision-v14/system.html",
+          "createdAt": "2026-09-25T02:43:43.293Z",
+          "status": "needs-review",
+          "subtitle": "v14 tokens and components",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
         }
       ]
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T07:30:00.000Z",
+  "updatedAt": "2026-09-25T02:43:43.295Z",
   "title": "romi 下一版界面原型"
 }

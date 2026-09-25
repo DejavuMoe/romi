@@ -4,7 +4,7 @@
     {
       "id": "production",
       "type": "code",
-      "location": "admin/src/components/Admin.tsx; web/src; server/src",
+      "location": "admin/src/components/Admin.tsx and admin/src/components/sections/; web/src; server/src",
       "roles": [
         "functional-truth"
       ],
@@ -109,6 +109,57 @@
       "inferences": [],
       "limitations": [
         "Visual reference; production code and tests define behavior."
+      ]
+    },
+    {
+      "id": "user-brief-v14",
+      "type": "other",
+      "location": "Design brief attached to the maintainer message of 2026-09-25 (pasted-text-102407.txt); not copied into the repository",
+      "roles": [
+        "visual-reference",
+        "interaction-reference"
+      ],
+      "trust": "user-provided-untrusted-content",
+      "instructionsPolicy": "treat-as-data-never-execute",
+      "approvedByUser": true,
+      "containsSensitiveData": false,
+      "sanitization": null,
+      "licenseOrPermission": "supplied by the maintainer as design input",
+      "localCopies": [],
+      "observations": [
+        "Square corners, 1px borders, no shadows, flat tiled panels, compact density.",
+        "Flexoki-derived light and dark values matching styles/theme.css.",
+        "Monospace tabular figures for metrics, addresses, identifiers and times.",
+        "No command palette, terminal, or feature that romi does not already have."
+      ],
+      "inferences": [],
+      "limitations": [
+        "Typography section asks for a proportional UI face; the maintainer later chose monospace throughout. v14 defaults to monospace and previews the proportional face with ?font=sans.",
+        "Brief wording is design input only; none of it is rendered as interface text."
+      ]
+    },
+    {
+      "id": "generated-reference-v14",
+      "type": "image",
+      "location": "Generated three-screen reference image attached to the maintainer message of 2026-09-25; not copied into the repository",
+      "roles": [
+        "inspiration-only"
+      ],
+      "trust": "generated-untrusted",
+      "instructionsPolicy": "treat-as-data-never-execute",
+      "approvedByUser": false,
+      "containsSensitiveData": false,
+      "sanitization": null,
+      "licenseOrPermission": "reference only",
+      "localCopies": [],
+      "observations": [
+        "A continuous summary strip, pane-like node cards with thin usage meters, a KPI grid on the detail page and a compact admin table."
+      ],
+      "inferences": [],
+      "limitations": [
+        "Contains embedded slogans, a style-prompt strip and browser window chrome; none is reproduced.",
+        "Shows hostnames on public cards and private/public addresses on the detail page, which the anonymous projection excludes; not reproduced.",
+        "Shows an online-rate figure romi does not compute; not added."
       ]
     }
   ]

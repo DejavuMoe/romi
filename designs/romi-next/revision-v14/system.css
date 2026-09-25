@@ -1,0 +1,129 @@
+/* Layout of the specification page only. Product styles live in styles.css. */
+.spec {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 100svh;
+}
+.spec-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--background);
+  color: var(--foreground);
+}
+.spec-pane + .spec-pane {
+  border-left: var(--line);
+}
+.spec-section {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--line);
+}
+.spec-section > h2 {
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+.spec-body {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.spec-body > .kpis {
+  margin-bottom: 0;
+}
+.spec-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.spec-swatches li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+.spec-chip {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+  border: var(--line);
+}
+.spec-rows {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+.spec-rows > div {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+.spec-rows dt {
+  font-size: var(--text-sm);
+}
+.spec-rows dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.spec-face-ui {
+  font-family: var(--font-ui);
+}
+code {
+  font-size: var(--text-sm);
+}
+.spec-space {
+  display: block;
+  height: 12px;
+  background: var(--primary);
+}
+.spec-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.spec-meters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+/* The focused state, held still so it can be compared without a keyboard. */
+.spec-focus {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.spec-skeleton {
+  min-height: 96px;
+}
+@media (max-width: 1100px) {
+  .spec {
+    grid-template-columns: 1fr;
+  }
+  .spec-pane + .spec-pane {
+    border-left: 0;
+    border-top: var(--line);
+  }
+}
+@media (max-width: 600px) {
+  .spec-pane {
+    padding: var(--space-4);
+  }
+  .spec-rows > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .spec-meters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
