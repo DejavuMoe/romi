@@ -32,12 +32,14 @@ pnpm install --frozen-lockfile
 pnpm exec playwright install --with-deps chromium
 make e2e
 make smoke
+make live-capacity
 ```
 
 `make e2e` 构建 Hub 后启动临时服务；已有精确产物可用 `ROMI_E2E_BIN_DIR=<目录> pnpm test:e2e`。
 WSL 同步可能清除前端 dist，所以直接调用 Cargo 前先运行 `make frontend`。
 每条 E2E 使用独立 Hub、数据库和回环随机端口；不使用现有实例或生产凭据。
 图表故障测试只拦截指定请求，其余请求仍走真实 Hub。Agent 上报与历史计算分别由 smoke 和 Rust 测试覆盖。
+`make live-capacity` 用真实套接字检查实时连接的席位：单个来源地址 4 个、匿名 64 个、管理员预留 32 个，以及关闭后席位回收；CI 对打包产物运行同一脚本，改动这些上限时本地先跑它。
 
 重点包括会话、匿名隔离、保存/刷新、错误恢复、详情导航、资源缺样、复制、默认视图和移动导航。
 桌面/移动 Chromium 模拟不等于真实 iOS/Safari、触摸硬件或读屏器验收。

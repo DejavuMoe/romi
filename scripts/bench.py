@@ -58,17 +58,21 @@ ROOT = Path(__file__).resolve().parents[1]
 class Socket:
     """One agent connection: a masked text frame writer and a reader thread."""
 
-    def __init__(self, host, port, token, path='/api/agent/ws', cookie='', on_text=None):
+    def __init__(self, host, port, token, path='/api/agent/ws', cookie='', on_text=None, forwarded_for=None):
         self.on_text = on_text
         self.reader_error = None
         self.bytes_received = 0
         self.text_frames = 0
         self.sock = socket.create_connection((host, port), timeout=10)
         key = base64.b64encode(os.urandom(16)).decode()
+        # A loopback caller stands where the reverse proxy would, so the hub
+        # takes the client address from this header -- which is how a check can
+        # present many clients from one machine.
+        forwarded = f'X-Forwarded-For: {forwarded_for}\r\n' if forwarded_for else ''
         request = (
             f'GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n'
             f'Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n'
-            f'Authorization: Bearer {token}\r\nCookie: {cookie}\r\n\r\n'
+            f'Authorization: Bearer {token}\r\nCookie: {cookie}\r\n{forwarded}\r\n'
         )
         self.sock.sendall(request.encode())
         head = b''

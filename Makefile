@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export CARGO_TARGET_DIR := $(CURDIR)/target
-.PHONY: help setup frontend build release release-candidate release-package release-rehearsal systemd-rehearsal package check check-linux smoke e2e bench bench-fixture dev-server dev-admin dev-web
+.PHONY: help setup frontend build release release-candidate release-package release-rehearsal systemd-rehearsal package check check-linux smoke e2e live-capacity bench bench-fixture dev-server dev-admin dev-web
 .PHONY: check-scripts check-frontends check-docs check-format check-clippy check-rust-tests check-release-scripts
 
 help:
@@ -11,6 +11,7 @@ help:
 	@echo 'make check-docs  Build and exercise the VitePress documentation site'
 	@echo 'make smoke       Build and verify server + agent over loopback'
 	@echo 'make e2e         Build and run desktop/mobile browser tests against a temporary Hub'
+	@echo 'make live-capacity  Build and check the live viewer limits over real sockets'
 	@echo 'make bench       Run the storage benchmark against target/release (see scripts/bench.py)'
 	@echo 'make bench-fixture  Build the benchmark-only large-history fixture/profiler'
 	@echo 'make dev-server  Run server on 127.0.0.1:9911, data under .local/'
@@ -135,6 +136,11 @@ smoke: build
 
 e2e: build
 	pnpm test:e2e
+
+# The viewer limits CI checks against its packaged binaries; run here against
+# the debug build so a change to them is caught before a push.
+live-capacity: build
+	python3 scripts/check_live_capacity.py --bin-dir target/debug
 
 # Release binaries, because an unoptimized DuckDB is roughly twenty times slower
 # per row and the numbers would say nothing about a deployed hub.
