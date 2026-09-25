@@ -16,7 +16,7 @@
 | probes | `/admin/ping` | 新增/编辑/删除 host:port、间隔、节点指派 | `sections/probes.tsx`；`api::save_ping_task` |
 | notifications | `/admin/notify` | Telegram/Webhook、模板预览、按渠道测试、未保存禁用测试、阈值、节点离线开关 | `sections/notify.tsx`；`notify.rs` |
 | data | `/admin/data` | 数据统计、下载备份、上传恢复、取消、维护确认与周期配置 | `sections/data.tsx`；`api::db_*` |
-| security | `/admin/security` | 修改账号/密码（需当前密码）、会话撤销；会话列表读取失败在卡片内提示并可重试 | `sections/security.tsx`；`auth.rs` |
+| security | `/admin/security` | 修改账号/密码（需当前密码；目前改名也须同时设置至少 12 位的新密码）、会话撤销；会话列表读取失败在卡片内提示并可重试 | `sections/security.tsx`；`auth.rs` |
 | settings | `/admin/settings` | 站点名、分钟保留期、公开页及默认视图、连续在线阈值、本地 GeoLite Country 更新 | `sections/settings.tsx`；`api::save_settings`、`geo.rs` |
 
 ## 领域对象与权限
@@ -36,7 +36,7 @@ IP/主机名/备注和凭据相关管理字段不向匿名快照公开。公开�
 | 登录/会话 | 登录中、已登录 | 密码/网络错误 | 会话撤销退出 | 提交按钮忙态 |
 | 节点创建/安装 | 创建、一次性令牌、安装命令 | 保存/复制错误 | 非 HTTPS 域名或分发缺失时禁止 provisioning | 弹窗取消；令牌轮换确认 |
 | 探测 | 加载、任务、无任务 | 失败不可伪装成空表；重试 | 管理员权限；节点可选 | 保存忙态、删除确认 |
-| 通知/设置/安全 | 加载与已配置值 | 加载重试、保存/测试错误 | 秘密脱敏、允许用户空则拒绝 | 保存/发送中 |
+| 通知/设置/安全 | 加载与已配置值 | 加载重试、保存/测试错误 | 秘密脱敏；有未保存修改时禁用测试；修改账号/密码须填写当前密码，错误就地提示 | 保存/发送中 |
 | 数据 | 统计、无明细 | 备份/恢复/维护失败 | 管理员权限；归档和分片有大小限制 | 分片进度、AbortController 取消、恢复确认 |
 
 ## 接口映射
@@ -50,7 +50,7 @@ IP/主机名/备注和凭据相关管理字段不向匿名快照公开。公开�
 | 令牌/流量 | POST `/api/nodes/{id}/token`、PUT `/api/nodes/{id}/traffic` | 单次展示；空输入不得清零累计量 |
 | 注册窗口 | POST/DELETE `/api/register-window` | 短期 key，关闭后交换失败 |
 | 探测 | GET/POST `/api/ping-tasks`、DELETE `/api/ping-tasks/{id}` | 目标/间隔/节点验证 |
-| 通知/设置 | GET/PUT `/api/settings`、POST `/api/notify/test?channel=telegram` | 整份 patch 先验证；敏感值不回显 |
+| 通知/设置 | GET/PUT `/api/settings`、POST `/api/notify/test`（`channel` 为 `telegram` 或 `webhook`，不带时测试全部已配置渠道） | 整份 patch 先验证；敏感值不回显 |
 | 会话 | GET `/api/sessions`、DELETE `/api/sessions/{id}` | 当前会话撤销后的页面恢复 |
 | 数据 | GET `/api/db`、GET `/api/db/backup`、POST `/api/db/restore`、POST `/api/db/maintenance` | 有界上传、并发门限、恢复回滚 |
 | GeoLite | GET/POST/DELETE `/api/geolite` | 管理权限、单任务、进度、取消、失败保留旧库 |

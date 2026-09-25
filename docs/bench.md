@@ -6,12 +6,13 @@
 | 工具 | 用途 |
 | --- | --- |
 | `scripts/bench.py` | 实时上报、group commit、CPU/RSS 和 API 时延 |
-| `scripts/bench_analytics.py` | 确定性历史、真实 HTTP 查询、读写并发和维护 |
+| `scripts/bench_analytics.py` | 确定性历史、真实 HTTP 查询、读写并发、备份/恢复与维护 |
 | `server/src/bin/romi-bench.rs` | bench feature 下的数据生成与 SQL profile，不进入发行二进制 |
-| `scripts/documentation_audit.py` | 文档规模、链接、源码一致性；不测运行性能 |
+| `scripts/documentation_audit.py` | 文档规模与重复度、本地链接；文档消融时确认生产源码未变。不测运行性能，也不校验文档与源码的语义一致 |
 
 ```sh
 make release
+make bench            # scripts/bench.py 针对 target/release
 make bench-fixture
 python3 scripts/bench.py --help
 python3 scripts/bench_analytics.py --help

@@ -5,6 +5,7 @@
 
 | 要解决的问题 | 推荐入口 |
 | --- | --- |
+| 第一次安装与接入 | [快速开始](quick-start.md) |
 | 产品包含什么，什么不做 | [需求](requirements.md) |
 | 一篇读懂现有功能、界面、业务流和数据库 | [代码导览](codebase-guide.md) |
 | 并发和资源边界 | [架构](architecture.md) |
@@ -15,7 +16,8 @@
 | 改动后跑什么检查 | [测试](testing.md) |
 | 如何安装、升级和恢复 | [部署](deployment.md) |
 | 如何交付同一份已验收工件 | [发布](release.md)、[本地快照](local-release.md) |
-| 安全机制与边界 | [安全](security-baseline.md) |
+| 安全机制与边界、报告漏洞 | [安全](security-baseline.md)、[SECURITY.md](https://github.com/DejavuMoe/romi/blob/master/SECURITY.md) |
+| 第三方许可 | [许可](legal.md)、[THIRD_PARTY_LICENSES.txt](https://github.com/DejavuMoe/romi/blob/master/THIRD_PARTY_LICENSES.txt) |
 | 如何做容量实验 | [基准方法](bench.md) |
 | 验证记录与适用范围 | [验收状态](readiness.md) |
 | 文档与历史结构实验 | [文档消融](experiments/documentation.md) |

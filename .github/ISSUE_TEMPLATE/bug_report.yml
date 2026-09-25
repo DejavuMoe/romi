@@ -1,0 +1,90 @@
+name: 问题报告
+description: romi 的行为与文档或预期不符
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先搜索已有 Issue。安全漏洞请走私密报告，不要在这里提交。
+        日志和截图中请去掉密码、会话 Cookie、节点令牌、注册 key、IP 与主机名等不想公开的信息。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: "`romi-hub --version`，涉及 Agent 时同时给出 `romi-agent --version`"
+      placeholder: romi-hub 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: 涉及部分
+      multiple: true
+      options:
+        - 管理后台
+        - 公开状态页
+        - Hub 服务与 API
+        - Agent 采集与上报
+        - TCP 监测
+        - 通知
+        - 安装、升级与服务管理
+        - 备份、恢复与数据库维护
+        - 文档
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: 运行平台
+      multiple: true
+      options:
+        - x86_64-unknown-linux-gnu
+        - x86_64-unknown-linux-musl
+        - aarch64-unknown-linux-gnu
+        - aarch64-unknown-linux-musl
+        - Agent Docker
+        - 不涉及 / 不确定
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 部署环境
+      description: 发行版与版本、systemd 或 OpenRC、反向代理（如 Nginx）；界面问题请写浏览器与设备
+      placeholder: Debian 12，systemd，Nginx 1.22；Chrome 128 桌面
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象与预期
+      description: 实际发生了什么，你期望发生什么
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 在后台打开……
+        2. 点击……
+        3. 看到……
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: |
+        systemd：`journalctl -u romi-hub` 或 `journalctl -u romi-agent`；
+        OpenRC：`/var/log/romi-hub.log` 或 `/var/log/romi-agent.log`。只贴相关的几十行。
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我已搜索过已有 Issue，没有重复
+          required: true
+        - label: 我已从日志与截图中去掉凭据和不想公开的信息
+          required: true

@@ -17,7 +17,7 @@ Agent Docker 使用 Release 镜像归档，见本文末尾；不提供 Hub Docke
 ### 1. 更安全的发行安装
 
 1. 从 GitHub Release 下载不可变的 release 资产；
-2. 用绑定 `DejavuMoe/romi` 的 GitHub attestation 验证来源；
+2. 用绑定 `DejavuMoe/romi` 的 GitHub attestation 验证来源：`gh attestation verify <文件> --repo DejavuMoe/romi`；
 3. 用 `SHA256SUMS-<target>` 或全量 `SHA256SUMS` 验证完整性；
 4. 解压 `romi-hub-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`；
 5. 在解压目录运行 romi 自带的 Hub 安装器。
@@ -30,6 +30,7 @@ sudo sh romi-hub/deploy/hub/install.sh --site https://hub.example.com
 ```
 
 安装器不会下载源码或二进制；它只消费已经验证过的 release 归档。
+Hub 默认监听 `127.0.0.1:28080`，可用 `--port` 修改（Nginx 的 `proxy_pass` 需同步）；`--no-start` 只安装不启动。
 
 ### 2. Hub 到节点的 Agent provisioning
 
@@ -60,6 +61,7 @@ Hub 安装成功并配置了内置 Agent 分发后：
         releases/
             <version>/
                 romi-agent
+                VERSION
                 release.json
         current -> releases/<version>/
 /var/lib/romi/
@@ -69,8 +71,11 @@ Hub 安装成功并配置了内置 Agent 分发后：
     bootstrap-password          # 首次启动生成，0600；修改密码后自动删除
     distribution/
         <version>/
-            romi-agent          # 0640 root:romi
+            romi-agent          # 本机目标，0640 root:romi
             distribution.json   # 0640 root:romi
+            <target>/           # 其余目标各一个目录，同样 0640 root:romi
+                romi-agent
+                distribution.json
 /etc/romi/
     hub.env                     # ROMI_SITE，0640 root:romi
 ```
@@ -124,6 +129,9 @@ Agent unit 使用 `EnvironmentFile=/etc/romi/agent.env`，`ExecStart` 中**不�
 - 日志只说明凭证写到了哪里；
 - 已存在的凭证文件不会被覆盖；
 - 管理员在面板成功修改密码后，Hub 进程会立即删除该文件（不是安装器删除，也不需要重装）。
+
+首次登录的账号为 `admin`，密码用 `sudo cat /var/lib/romi/bootstrap-password` 读取（文件属 `romi`，权限 0600）。
+数据库是全新的而旧的凭证文件仍在时，Hub 拒绝启动；重建数据库前先删除残留的该文件。
 
 在没有该选项的交互式开发场景中，仍会像原行为一样在终端打印一次性密码；原生安装器不会
 使用这条路径。
@@ -181,7 +189,7 @@ server {
 - WebSocket 必须支持升级，并设置足够长的空闲超时（`proxy_read_timeout 300s` 是保守起点）；
 - 上传备份需要允许至少 8 MiB 的单次请求体；
 - 覆盖 `/api/`、`/install.sh`、`/agent/`、WebSocket 和普通页面，无需额外 location 白名单；
-- Agent 首次连接使用 `wss://`，证书必须被节点信任；任何安装路径都不使用 `curl -k`。
+- Agent 使用 `wss://` 连接，只信任二进制内置的公共 Web PKI 根证书，不读取系统信任库：Hub 域名必须使用公共 CA 签发的证书，私有 CA 或自签名证书即使加入系统信任库也无法连接；任何安装路径都不使用 `curl -k`。
 
 如果使用 Cloudflare 或其他 CDN，保持 TLS 校验和 Host 语义不变；Cloudflare 不是必需项。
 
@@ -219,8 +227,9 @@ tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT \
 注册密钥在一小时窗口内可供最多 100 台节点使用，每次注册换取各自的长期令牌；短期 key 会出现在自动化命令和 shell 历史中，长期令牌只写入
 受保护 env 文件，不打印。
 
-更新是显式的 operator 操作：重新运行安装器即可。romi 不实现静默自更新、后台 updater、
-Hub 触发的远程更新或任意远程命令执行。
+更新是显式的运维操作：重新运行安装器，并再次提供该节点的永久令牌（交互输入或 `--token-stdin`）；安装器不复用
+`agent.env` 中的旧令牌。令牌遗失时在面板轮换令牌，旧连接随之断开。未传 `--interval` 时上报间隔恢复为 3 秒，`--iface` 则会保留。
+romi 不实现静默自更新、后台 updater、Hub 触发的远程更新或任意远程命令执行。
 
 ## 升级与备份/回滚
 
@@ -273,11 +282,11 @@ OpenRC 服务由 supervise-daemon 管理，以 romi / romi-agent 账号运行，
 下载并验证与你的 CPU 对应的镜像归档，随后：
 
 ```sh
-docker load --input romi-agent-v0.0.1-docker-x86_64.tar.gz
-# ARM64 对应 romi-agent-v0.0.1-docker-aarch64.tar.gz
+docker load --input romi-agent-vX.Y.Z-docker-x86_64.tar.gz
+# ARM64 对应 romi-agent-vX.Y.Z-docker-aarch64.tar.gz
 ```
 
-将 `deploy/agent/compose.yml` 放在一个专用目录，在同目录创建 `agent.env`（权限 0600）：
+`compose.yml` 不在发布资产中，取自与发布标签对应的源码 `deploy/agent/compose.yml`。将它放在一个专用目录，在同目录创建 `agent.env`（权限 0600）：
 
 ```dotenv
 ROMI_SERVER=https://hub.example.com
@@ -285,7 +294,7 @@ ROMI_TOKEN=<node-token>
 ROMI_INTERVAL=3
 ```
 
-执行 `docker compose up -d`。配置使用已导入的 `romi-agent:0.0.1`，不自动拉取或替换镜像。
+执行 `docker compose up -d`。`image:` 必须与导入的 `romi-agent:X.Y.Z` 一致；配置设置了 `pull_policy: never`，不自动拉取或替换镜像。
 升级时显式下载、校验、导入新版本并重建容器。
 
 host network/PID/UTS 与 `/:/host:ro` 用于读取宿主机真实指标。容器为 UID 65534，根文件系统只读，
