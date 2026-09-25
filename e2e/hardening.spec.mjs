@@ -29,16 +29,21 @@ test('both shells carry the framing and content policy headers', async ({ page }
 })
 
 test('the hashed bundle is cacheable and not policed as a document', async ({ page }) => {
-  await page.goto('/')
-  const source = await page.locator('script[type="module"]').first().getAttribute('src')
-  expect(source).toMatch(/^\/assets\//)
+  // Read from the served HTML rather than a loaded page: with the status page
+  // off, the public shell sends a signed-out visitor on to /admin/ as soon as it
+  // runs, so the live DOM may already belong to the other shell.
+  for (const [shell, prefix] of [['/', /^\/assets\//], ['/admin/', /^\/admin\/assets\//]]) {
+    const html = await (await page.request.get(shell)).text()
+    const source = html.match(/<script type="module"[^>]*\ssrc="([^"]+)"/)?.[1]
+    expect(source, shell).toMatch(prefix)
 
-  const response = await page.request.get(source)
-  expect(response.status()).toBe(200)
-  const headers = response.headers()
-  expect(headers['cache-control']).toBe('public, max-age=31536000, immutable')
-  expect(headers['x-content-type-options']).toBe('nosniff')
-  expect(headers['content-security-policy']).toBeUndefined()
+    const response = await page.request.get(source)
+    expect(response.status(), source).toBe(200)
+    const headers = response.headers()
+    expect(headers['cache-control'], source).toBe('public, max-age=31536000, immutable')
+    expect(headers['x-content-type-options'], source).toBe('nosniff')
+    expect(headers['content-security-policy'], source).toBeUndefined()
+  }
 })
 
 test('the policy still admits the theme script that runs before the bundle', async ({ page }) => {
