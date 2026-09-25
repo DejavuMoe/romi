@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { addresses, agentCommand, api, ApiError, changes, GIB, registrationCommand, trafficCorrection, upload, type Node, type PingTask } from "@/lib/api"
 import { connectionLabel } from "../../../shared/nodes"
+import { numericError } from "../../../shared/validate"
 import { bytes, CYCLES, FOREVER, money, uptime } from "@/lib/format"
 
 // Counters the panel can correct after migration or an accounting error.
@@ -681,7 +682,13 @@ function Ping({ nodes }: { nodes: Node[] }) {
   const [tasks, setTasks] = useState<PingTask[] | null>(null)
   const [error, setError] = useState("")
   const [reload, setReload] = useState(0)
-  const [editing, setEditing] = useState<Partial<PingTask> | null>(null)
+  // `intervalText` is what is typed in the interval box. The number alone cannot
+  // tell an emptied box from 0, and the two read differently: "请填写此项" and
+  // "不能小于 5".
+  const [editing, setEditing] = useState<(Partial<PingTask> & { intervalText?: string }) | null>(null)
+  const [intervalError, setIntervalError] = useState("")
+  const intervalText = editing?.intervalText ?? String(editing?.interval ?? 60)
+  const checkInterval = (raw: string) => numericError(raw, { min: 5, max: 3600, required: true })
   const [deleting, setDeleting] = useState<PingTask | null>(null)
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(false)
@@ -702,9 +709,15 @@ function Ping({ nodes }: { nodes: Node[] }) {
   async function save() {
     if (!editing) return
     if (!editing.name?.trim() || !editing.target?.trim()) return toast.error("请填写名称和目标")
+    // Checked here, on the field, before the round trip: the hub refuses the
+    // same values, but in English and after the dialog has already been sent.
+    const refused = checkInterval(intervalText)
+    setIntervalError(refused)
+    if (refused) return
+    const { intervalText: _typed, ...task } = editing
     setSaving(true)
     try {
-      await api("/ping-tasks", { method: "POST", body: JSON.stringify(editing) })
+      await api("/ping-tasks", { method: "POST", body: JSON.stringify({ ...task, interval: Number(intervalText) }) })
       toast.success("已保存，正在下发")
       setEditing(null)
       load()
@@ -740,7 +753,7 @@ function Ping({ nodes }: { nodes: Node[] }) {
   return (
     <div className="space-y-4">
       <div className="page-heading"><h1>监测</h1>
-        <Button onClick={() => setEditing({ name: "", target: "", interval: 60, nodes: [] })}>
+        <Button onClick={() => { setIntervalError(""); setEditing({ name: "", target: "", interval: 60, nodes: [] }) }}>
           添加监测
         </Button>
       </div>
@@ -764,7 +777,7 @@ function Ping({ nodes }: { nodes: Node[] }) {
                 <TableCell className="tnum text-sm">{t.interval}s</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{t.nodes.length} 个</TableCell>
                 <TableCell><div className="monitoring-actions">
-                  <Button variant="outline" onClick={() => setEditing(t)} aria-label="编辑监测">编辑</Button>
+                  <Button variant="outline" onClick={() => { setIntervalError(""); setEditing(t) }} aria-label="编辑监测">编辑</Button>
                   <Button variant="ghost" onClick={() => setDeleting(t)} aria-label="删除监测">
                     删除
                   </Button></div>
@@ -795,13 +808,20 @@ function Ping({ nodes }: { nodes: Node[] }) {
                       editing an existing one starts with nothing selected. */}
                   <Input autoFocus={!editing.id} value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Cloudflare" />
                 </Field>
-                <Field label="间隔（秒）" hint="5–3600">
-                  {/* `|| 60`, as the three other number boxes on this page do:
-                      an emptied `type="number"` reads back as "", and Number("")
-                      is 0 -- which the hub used to clamp into a 5-second probe on
-                      every assigned node. It refuses that now, so this keeps a
-                      cleared box from being a round trip to an error. */}
-                  <Input type="number" min="5" max="3600" value={editing.interval ?? 60} onChange={(e) => setEditing({ ...editing, interval: Number(e.target.value) })} />
+                <Field label="间隔（秒）" hint="5–3600" error={intervalError}>
+                  {/* The typed text is kept as typed and checked by the rule the
+                      approved prototype's numeric fields use: shown once the box
+                      is left or the dialog submitted, then kept current while it
+                      is corrected. */}
+                  <Input
+                    inputMode="numeric"
+                    value={intervalText}
+                    onChange={(e) => {
+                      setEditing({ ...editing, intervalText: e.target.value })
+                      if (intervalError) setIntervalError(checkInterval(e.target.value))
+                    }}
+                    onBlur={(e) => setIntervalError(checkInterval(e.target.value))}
+                  />
                 </Field>
               </div>
               <Field label="目标地址" hint="host:port">

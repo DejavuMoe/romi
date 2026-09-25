@@ -35,3 +35,14 @@ assert.equal(connectionLabel({online:false,last_seen:0},1301),"未连接")
 assert.equal(continuousUptime({online:false,last_seen:1000,online_since:900},1300),"等待恢复")
 assert.equal(continuousUptime({online:false,last_seen:1000,online_since:900},1301),"已中断")
 assert.equal(continuousUptime({online:true,last_seen:1000,online_since:1100},1000),"—")
+
+// The probe interval's wording, as the approved prototype states it.
+{
+  const { numericError } = await import("./validate.ts")
+  const interval = (raw: string) => numericError(raw, { min: 5, max: 3600, required: true })
+  assert.deepEqual(["", "0", "4", "5", "3600", "3601", "5.5", "-5", "1e3"].map(interval), [
+    "请填写此项", "不能小于 5", "不能小于 5", "", "", "不能大于 3600", "请输入非负整数", "请输入非负整数", "请输入非负整数",
+  ])
+  assert.equal(numericError("", { required: false }), "")
+  assert.equal(numericError("0.25", { step: 0.5 }), "请按 0.5 的步长填写")
+}

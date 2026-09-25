@@ -184,3 +184,34 @@ test('GeoLite polling does not erase a rejected update error',async({page})=>{
   await expect.poll(()=>reads).toBeGreaterThan(before)
   await expect(page.getByRole('alert')).toContainText('HTTPS')
 })
+
+test('a probe interval is refused on its field, in the approved wording', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '监测')
+  await page.getByRole('button', { name: '添加监测', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('名称', { exact: true }).fill('间隔校验')
+  await dialog.getByLabel('目标地址', { exact: true }).fill('192.0.2.1:443')
+  const interval = dialog.getByLabel('间隔（秒）', { exact: true })
+
+  // None of these reaches the hub: each is answered on the field itself.
+  let posted = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/api/ping-tasks')) posted += 1
+  })
+  for (const [typed, message] of [['', '请填写此项'], ['4', '不能小于 5'], ['3601', '不能大于 3600'], ['5.5', '请输入非负整数']]) {
+    await interval.fill(typed)
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(dialog.getByRole('alert')).toHaveText(message)
+    await expect(interval).toHaveAttribute('aria-invalid', 'true')
+  }
+  expect(posted, 'no refused interval was sent').toBe(0)
+
+  // Correcting it clears the message while typing, and the probe saves.
+  await interval.fill('30')
+  await expect(dialog.getByRole('alert')).toHaveCount(0)
+  await dialog.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole('cell', { name: '间隔校验' })).toBeVisible()
+  expect(posted).toBe(1)
+})
