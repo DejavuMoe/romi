@@ -450,32 +450,6 @@ function Security({ onSave, onConfirm, account, setAccount, state, onRetry }) {
           className="box stack"
           onSubmit={(e) => {
             e.preventDefault();
-            onSave("GitHub 登录设置已保存");
-          }}
-        >
-          <h2>GitHub 登录</h2>
-          <div className="form-grid">
-            <Field label="Client ID" defaultValue="" />
-            <Field
-              label="Client Secret"
-              type="password"
-              placeholder="留空保持不变"
-              autoComplete="off"
-            />
-          </div>
-          <Field
-            label="允许登录的用户名"
-            placeholder="多个用户名用逗号分隔"
-            hint="留空会拒绝所有 GitHub 用户登录。"
-          />
-          <div className="form-actions">
-            <Button type="submit">保存 GitHub 设置</Button>
-          </div>
-        </Form>
-        <Form
-          className="box stack"
-          onSubmit={(e) => {
-            e.preventDefault();
             const form=e.currentTarget;
             const nextAccount=form.elements.account.value;
             if (form.elements.current.value!=="romi-prototype") {

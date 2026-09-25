@@ -1,210 +1,206 @@
 {
-  "capturedAt": "2026-09-22T11:07:23.092Z",
+  "schemaVersion": 1,
   "generator": "prototype-first-ui/collect_dom_content.js",
+  "capturedAt": "2026-09-25T00:47:14.004Z",
+  "page": {
+    "url": "http://127.0.0.1:4399/romi-next/revision-v12/index.html",
+    "title": "romi",
+    "language": "zh-CN",
+    "viewport": {
+      "width": 1326,
+      "height": 831,
+      "devicePixelRatio": 1
+    }
+  },
+  "options": {
+    "includeComments": true,
+    "includeDataAttributes": true,
+    "includePseudoContent": true,
+    "includeClientJson": true,
+    "includeMetaContent": true,
+    "includeSameOriginFrames": true,
+    "redactPatterns": 0
+  },
   "items": [
     {
-      "attribute": "data-layout",
-      "channel": "data-*",
       "id": "dom-5d476035",
-      "jsonPath": null,
-      "kind": "data-attribute",
-      "location": "html",
-      "redacted": false,
-      "reference": null,
       "text": "sidebar",
-      "visibility": "visible"
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "html",
+      "visibility": "visible",
+      "attribute": "data-layout",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
     },
     {
-      "attribute": "data-audience",
-      "channel": "data-*",
       "id": "dom-db7331ca",
-      "jsonPath": null,
-      "kind": "data-attribute",
-      "location": "html",
-      "redacted": false,
-      "reference": null,
       "text": "admin",
-      "visibility": "visible"
-    },
-    {
-      "attribute": "data-theme",
-      "channel": "data-*",
-      "id": "dom-963d1965",
-      "jsonPath": null,
       "kind": "data-attribute",
+      "channel": "data-*",
       "location": "html",
-      "redacted": false,
+      "visibility": "visible",
+      "attribute": "data-audience",
       "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-963d1965",
       "text": "light",
-      "visibility": "visible"
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "html",
+      "visibility": "visible",
+      "attribute": "data-theme",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
     },
     {
-      "attribute": null,
-      "channel": "text",
       "id": "dom-027d8264",
-      "jsonPath": null,
-      "kind": "text",
-      "location": "html > head > title",
-      "redacted": false,
-      "reference": null,
       "text": "romi",
-      "visibility": "hidden"
+      "kind": "text",
+      "channel": "text",
+      "location": "html > head > title",
+      "visibility": "hidden",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
     },
     {
-      "attribute": "data-screen-id",
-      "channel": "data-*",
       "id": "dom-56b90b67",
-      "jsonPath": null,
-      "kind": "data-attribute",
-      "location": "div#root > div[data-screen-id=\"login\"]",
-      "redacted": false,
-      "reference": null,
       "text": "login",
-      "visibility": "visible"
-    },
-    {
-      "attribute": "data-screen-label",
-      "channel": "data-*",
-      "id": "dom-c6d41f4a",
-      "jsonPath": null,
       "kind": "data-attribute",
+      "channel": "data-*",
       "location": "div#root > div[data-screen-id=\"login\"]",
-      "redacted": false,
+      "visibility": "visible",
+      "attribute": "data-screen-id",
       "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-c6d41f4a",
       "text": "登录",
-      "visibility": "visible"
-    },
-    {
-      "attribute": null,
-      "channel": "text",
-      "id": "dom-ca4777a9",
-      "jsonPath": null,
-      "kind": "text",
-      "location": "div#root > div[data-screen-id=\"login\"] > h1",
-      "redacted": false,
-      "reference": null,
-      "text": "登录",
-      "visibility": "visible"
-    },
-    {
-      "attribute": null,
-      "channel": "text",
-      "id": "dom-a09f7b9c",
-      "jsonPath": null,
-      "kind": "text",
-      "location": "div#root > div[data-screen-id=\"login\"] > form.box > label.field:nth-of-type(1) > span:nth-of-type(1)",
-      "redacted": false,
-      "reference": null,
-      "text": "账号",
-      "visibility": "visible"
-    },
-    {
-      "attribute": "aria-label",
-      "channel": "aria-label",
-      "id": "dom-f644d1e6",
-      "jsonPath": null,
-      "kind": "attribute",
-      "location": "input#\\:r0\\:",
-      "redacted": false,
-      "reference": null,
-      "text": "账号",
-      "visibility": "visible"
-    },
-    {
-      "attribute": "placeholder",
-      "channel": "placeholder",
-      "id": "dom-795689d1",
-      "jsonPath": null,
-      "kind": "attribute",
-      "location": "input#\\:r0\\:",
-      "redacted": false,
-      "reference": null,
-      "text": "输入账号",
-      "visibility": "visible"
-    },
-    {
-      "attribute": null,
-      "channel": "text",
-      "id": "dom-189a3087",
-      "jsonPath": null,
-      "kind": "text",
-      "location": "div#root > div[data-screen-id=\"login\"] > form.box > label.field:nth-of-type(2) > span:nth-of-type(1)",
-      "redacted": false,
-      "reference": null,
-      "text": "密码",
-      "visibility": "visible"
-    },
-    {
-      "attribute": "aria-label",
-      "channel": "aria-label",
-      "id": "dom-c4e6c181",
-      "jsonPath": null,
-      "kind": "attribute",
-      "location": "input#\\:r1\\:",
-      "redacted": false,
-      "reference": null,
-      "text": "密码",
-      "visibility": "visible"
-    },
-    {
-      "attribute": "placeholder",
-      "channel": "placeholder",
-      "id": "dom-62cf6a9e",
-      "jsonPath": null,
-      "kind": "attribute",
-      "location": "input#\\:r1\\:",
-      "redacted": false,
-      "reference": null,
-      "text": "输入密码",
-      "visibility": "visible"
-    },
-    {
-      "attribute": null,
-      "channel": "text",
-      "id": "dom-5f749087",
-      "jsonPath": null,
-      "kind": "text",
-      "location": "div#root > div[data-screen-id=\"login\"] > form.box > button.btn.primary",
-      "redacted": false,
-      "reference": null,
-      "text": "登录",
-      "visibility": "visible"
-    },
-    {
-      "attribute": null,
-      "channel": "text",
-      "id": "dom-c3a3ff08",
-      "jsonPath": null,
-      "kind": "text",
-      "location": "div#root > div[data-screen-id=\"login\"] > button.btn",
-      "redacted": false,
-      "reference": null,
-      "text": "使用 GitHub 登录",
-      "visibility": "visible"
-    },
-    {
-      "attribute": null,
-      "channel": "text",
-      "id": "dom-f7757f7e",
-      "jsonPath": null,
-      "kind": "text",
-      "location": "div#root > div[data-screen-id=\"login\"] > small > a",
-      "redacted": false,
-      "reference": null,
-      "text": "返回公开状态页",
-      "visibility": "visible"
-    },
-    {
-      "attribute": "data-browser-comment-root",
-      "channel": "data-*",
-      "id": "dom-ec2cb19d",
-      "jsonPath": null,
       "kind": "data-attribute",
-      "location": "div#codex-browser-sidebar-comments-root ::shadow >> div > div",
-      "redacted": false,
+      "channel": "data-*",
+      "location": "div#root > div[data-screen-id=\"login\"]",
+      "visibility": "visible",
+      "attribute": "data-screen-label",
       "reference": null,
-      "text": "true",
-      "visibility": "visible"
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-ca4777a9",
+      "text": "登录",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div[data-screen-id=\"login\"] > h1",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-a09f7b9c",
+      "text": "账号",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div[data-screen-id=\"login\"] > form.box > label.field:nth-of-type(1) > span:nth-of-type(1)",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-f644d1e6",
+      "text": "账号",
+      "kind": "attribute",
+      "channel": "aria-label",
+      "location": "input#\\:r0\\:",
+      "visibility": "visible",
+      "attribute": "aria-label",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-795689d1",
+      "text": "输入账号",
+      "kind": "attribute",
+      "channel": "placeholder",
+      "location": "input#\\:r0\\:",
+      "visibility": "visible",
+      "attribute": "placeholder",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-189a3087",
+      "text": "密码",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div[data-screen-id=\"login\"] > form.box > label.field:nth-of-type(2) > span:nth-of-type(1)",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-c4e6c181",
+      "text": "密码",
+      "kind": "attribute",
+      "channel": "aria-label",
+      "location": "input#\\:r1\\:",
+      "visibility": "visible",
+      "attribute": "aria-label",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-62cf6a9e",
+      "text": "输入密码",
+      "kind": "attribute",
+      "channel": "placeholder",
+      "location": "input#\\:r1\\:",
+      "visibility": "visible",
+      "attribute": "placeholder",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-5f749087",
+      "text": "登录",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div[data-screen-id=\"login\"] > form.box > button.btn.primary",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-f7757f7e",
+      "text": "返回公开状态页",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div[data-screen-id=\"login\"] > small > a",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
     }
   ],
   "limitations": [
@@ -213,25 +209,5 @@
     "Ordinary input values and sensitive-looking attributes/JSON keys are deliberately omitted.",
     "Only the currently rendered state is captured; exercise other states separately.",
     "Use sanitized test data: arbitrary text nodes or data attributes can still contain private product data."
-  ],
-  "options": {
-    "includeClientJson": true,
-    "includeComments": true,
-    "includeDataAttributes": true,
-    "includeMetaContent": true,
-    "includePseudoContent": true,
-    "includeSameOriginFrames": true,
-    "redactPatterns": 0
-  },
-  "page": {
-    "language": "zh-CN",
-    "title": "romi",
-    "url": "http://localhost:4311/romi-next/revision-v12/index.html",
-    "viewport": {
-      "devicePixelRatio": 2,
-      "height": 720,
-      "width": 1280
-    }
-  },
-  "schemaVersion": 1
+  ]
 }

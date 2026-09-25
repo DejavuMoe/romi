@@ -312,15 +312,6 @@ function App() {
               登录
             </Button>
           </Form>
-          <Button
-            onClick={() => {
-              setLogged(true);
-              go("nodes");
-              setToast("已登录");
-            }}
-          >
-            使用 GitHub 登录
-          </Button>
           <small>
             <a href="public.html">返回公开状态页</a>
           </small>

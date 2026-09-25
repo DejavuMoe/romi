@@ -7,13 +7,13 @@
       "versions": [
         {
           "path": "revision-v12/index.html",
-          "createdAt": "2026-09-25T06:30:00.000Z",
+          "createdAt": "2026-09-25T07:00:00.000Z",
           "status": "needs-review",
           "viewport": {
             "width": 1326,
             "height": 831
           },
-          "summary": "The session list shows its own load failure with a retry, instead of the card disappearing."
+          "summary": "The account password is the only sign-in: no GitHub button on the login screen and no GitHub card on the security page. Also the session list showing its own load failure with a retry."
         }
       ]
     },
@@ -33,6 +33,6 @@
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T06:30:00.000Z",
+  "updatedAt": "2026-09-25T07:00:00.000Z",
   "title": "romi 下一版界面原型"
 }

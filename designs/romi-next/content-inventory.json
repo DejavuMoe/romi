@@ -18,7 +18,7 @@
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
     ],
-    "capturedAt": "2026-09-25T00:36:06Z",
+    "capturedAt": "2026-09-25T00:47:53Z",
     "surfaces": [
       {
         "source": "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/admin-nodes.json",
@@ -32,12 +32,12 @@
       },
       {
         "source": "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-login.json",
-        "url": "http://localhost:4311/romi-next/revision-v12/index.html",
+        "url": "http://127.0.0.1:4399/romi-next/revision-v12/index.html",
         "title": "romi",
         "viewport": {
-          "devicePixelRatio": 2,
-          "height": 720,
-          "width": 1280
+          "width": 1326,
+          "height": 831,
+          "devicePixelRatio": 1
         }
       },
       {
@@ -122,7 +122,7 @@
       },
       {
         "source": "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
-        "url": "http://127.0.0.1:41276/romi-next/revision-v12/index.html",
+        "url": "http://127.0.0.1:4399/romi-next/revision-v12/index.html",
         "title": "romi",
         "viewport": {
           "width": 1326,
@@ -3141,58 +3141,6 @@
       "notes": null
     },
     {
-      "id": "content-8726db013948f070",
-      "text": "Client ID",
-      "channels": [
-        "aria-label",
-        "text"
-      ],
-      "locations": [
-        "input#\\:r0\\:",
-        "input#\\:r1g\\:",
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > div.form-grid:nth-of-type(1) > label.field:nth-of-type(1) > span:nth-of-type(1)"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
-      ],
-      "purpose": "domain-field",
-      "origin": "agent-generated-task-copy",
-      "decision": "allow",
-      "evidence": "Field label in the v13 prototype; the corresponding stored field exists in server/src/db (node columns, setting keys).",
-      "flags": [],
-      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
-    },
-    {
-      "id": "content-ae21cf6d24b8ca46",
-      "text": "Client Secret",
-      "channels": [
-        "aria-label",
-        "text"
-      ],
-      "locations": [
-        "input#\\:r1\\:",
-        "input#\\:r1h\\:",
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > div.form-grid:nth-of-type(1) > label.field:nth-of-type(2) > span:nth-of-type(1)"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
-      ],
-      "purpose": "domain-field",
-      "origin": "agent-generated-task-copy",
-      "decision": "allow",
-      "evidence": "Field label in the v13 prototype; the corresponding stored field exists in server/src/db (node columns, setting keys).",
-      "flags": [],
-      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
-    },
-    {
       "id": "content-db9a4c7d4c195ebf",
       "text": "CPU",
       "channels": [
@@ -3447,29 +3395,6 @@
       "evidence": "revision-v3/app.jsx, screens.jsx and components.jsx: user-requested fields/actions or synthetic display data; GeoLite state is simulated",
       "flags": [],
       "notes": null
-    },
-    {
-      "id": "content-5b1886225bb04460",
-      "text": "GitHub 登录",
-      "channels": [
-        "text"
-      ],
-      "locations": [
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > h2"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
-      ],
-      "purpose": "domain-object",
-      "origin": "agent-generated-task-copy",
-      "decision": "allow",
-      "evidence": "Section heading naming a configurable object on the security screen.",
-      "flags": [],
-      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
     },
     {
       "id": "content-9ab959cbac178b40",
@@ -4462,7 +4387,6 @@
       ],
       "captures": [
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/admin-nodes.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-login.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-nodes.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-notifications.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-probes.json",
@@ -5497,28 +5421,6 @@
       "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
     },
     {
-      "id": "content-9498a94fd1ea0b26",
-      "text": "使用 GitHub 登录",
-      "channels": [
-        "text"
-      ],
-      "locations": [
-        "div#root > div[data-screen-id=\"login\"] > button.btn"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-login.json"
-      ],
-      "purpose": "user-action",
-      "origin": "existing-approved-ui-copy",
-      "decision": "allow",
-      "evidence": "revision-v7/app.jsx Login and components.jsx Field; retained without copy changes in revision-v8",
-      "flags": [],
-      "notes": "Reviewed product label or stable screen identifier; no instructions or design rationale."
-    },
-    {
       "id": "content-f32647c7f9e516d4",
       "text": "使用已保存的配置测试",
       "channels": [
@@ -5576,29 +5478,6 @@
       ],
       "captures": [
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
-      ],
-      "purpose": "user-action",
-      "origin": "agent-generated-task-copy",
-      "decision": "allow",
-      "evidence": "Control label in the v13 prototype; the action it names maps to an existing route in docs/ui/capabilities.md.",
-      "flags": [],
-      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
-    },
-    {
-      "id": "content-9cabe3f0164058aa",
-      "text": "保存 GitHub 设置",
-      "channels": [
-        "text"
-      ],
-      "locations": [
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > div.form-actions:nth-of-type(2) > button.btn"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "user-action",
       "origin": "agent-generated-task-copy",
@@ -5702,7 +5581,7 @@
         "text"
       ],
       "locations": [
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > div.form-actions > button.btn"
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack > div.form-actions > button.btn"
       ],
       "visibility": [
         "visible"
@@ -5726,10 +5605,8 @@
         "text"
       ],
       "locations": [
-        "input#\\:r1k\\:",
-        "input#\\:r4\\:",
-        "span#\\:r1k\\:-hint",
-        "span#\\:r4\\:-hint"
+        "input#\\:r1\\:",
+        "span#\\:r1\\:-hint"
       ],
       "visibility": [
         "visible"
@@ -5742,32 +5619,6 @@
       "origin": "agent-generated-task-copy",
       "decision": "allow",
       "evidence": "Help text stating an input bound or a consequence enforced by the hub; bounds cross-checked against docs/domain.md.",
-      "flags": [],
-      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
-    },
-    {
-      "id": "content-34106180fbb9a870",
-      "text": "允许登录的用户名",
-      "channels": [
-        "aria-label",
-        "text"
-      ],
-      "locations": [
-        "input#\\:r1i\\:",
-        "input#\\:r2\\:",
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > label.field > span:nth-of-type(1)"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
-      ],
-      "purpose": "domain-field",
-      "origin": "agent-generated-task-copy",
-      "decision": "allow",
-      "evidence": "Field label in the v13 prototype; the corresponding stored field exists in server/src/db (node columns, setting keys).",
       "flags": [],
       "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
     },
@@ -7052,30 +6903,6 @@
       "notes": null
     },
     {
-      "id": "content-5aad98e3269d313d",
-      "text": "多个用户名用逗号分隔",
-      "channels": [
-        "placeholder"
-      ],
-      "locations": [
-        "input#\\:r1i\\:",
-        "input#\\:r2\\:"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
-      ],
-      "purpose": "task-help",
-      "origin": "agent-generated-task-copy",
-      "decision": "allow",
-      "evidence": "Help text stating an input bound or a consequence enforced by the hub; bounds cross-checked against docs/domain.md.",
-      "flags": [],
-      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
-    },
-    {
       "id": "content-afb63a620bdcff15",
       "text": "安全",
       "channels": [
@@ -7088,7 +6915,6 @@
         "div#root > div.shell > div.main-shell > header.topbar > span.crumb:nth-of-type(1) > span:nth-of-type(2)",
         "div#root > div.shell:nth-of-type(1) > aside.sidebar > nav.side-nav > a:nth-of-type(5) > span:nth-of-type(2)",
         "div#root > div.shell:nth-of-type(1) > div.main-shell > div.workspace-nav > nav > a:nth-of-type(5)",
-        "div#root > div.shell:nth-of-type(1) > div.main-shell > header.topbar > span.crumb:nth-of-type(1) > span:nth-of-type(2)",
         "main#main > section[data-screen-id=\"security\"]",
         "main#main > section[data-screen-id=\"security\"] > div.page-head:nth-of-type(1) > div > h1"
       ],
@@ -7434,9 +7260,8 @@
         "text"
       ],
       "locations": [
-        "input#\\:r1k\\:",
-        "input#\\:r4\\:",
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > label.field:nth-of-type(2) > span:nth-of-type(1)"
+        "input#\\:r1\\:",
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack > label.field:nth-of-type(2) > span:nth-of-type(1)"
       ],
       "visibility": [
         "visible"
@@ -7869,9 +7694,8 @@
         "text"
       ],
       "locations": [
-        "input#\\:r1l\\:",
-        "input#\\:r5\\:",
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > label.field:nth-of-type(3) > span:nth-of-type(1)"
+        "input#\\:r2\\:",
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack > label.field:nth-of-type(3) > span:nth-of-type(1)"
       ],
       "visibility": [
         "visible"
@@ -8611,50 +8435,19 @@
       "notes": null
     },
     {
-      "id": "content-f2216ca0ffb3d773",
-      "text": "留空会拒绝所有 GitHub 用户登录。",
-      "channels": [
-        "aria-describedby",
-        "text"
-      ],
-      "locations": [
-        "input#\\:r1i\\:",
-        "input#\\:r2\\:",
-        "span#\\:r1i\\:-hint",
-        "span#\\:r2\\:-hint"
-      ],
-      "visibility": [
-        "visible"
-      ],
-      "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
-      ],
-      "purpose": "task-help",
-      "origin": "agent-generated-task-copy",
-      "decision": "allow",
-      "evidence": "Help text stating an input bound or a consequence enforced by the hub; bounds cross-checked against docs/domain.md.",
-      "flags": [],
-      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
-    },
-    {
       "id": "content-3260348163d03b8e",
       "text": "留空保持不变",
       "channels": [
         "placeholder"
       ],
       "locations": [
-        "input#\\:r1\\:",
-        "input#\\:r1h\\:",
         "input#\\:r6\\:"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-notifications.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-notifications.json"
       ],
       "purpose": "domain-field",
       "origin": "production-domain",
@@ -9410,10 +9203,8 @@
         "text"
       ],
       "locations": [
-        "input#\\:r1l\\:",
-        "input#\\:r5\\:",
-        "span#\\:r1l\\:-hint",
-        "span#\\:r5\\:-hint"
+        "input#\\:r2\\:",
+        "span#\\:r2\\:-hint"
       ],
       "visibility": [
         "visible"
@@ -9694,9 +9485,7 @@
       "locations": [
         "div#root > div[data-screen-id=\"login\"] > form.box > label.field:nth-of-type(1) > span:nth-of-type(1)",
         "input#\\:r0\\:",
-        "input#\\:r1j\\:",
-        "input#\\:r3\\:",
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > label.field:nth-of-type(1) > span:nth-of-type(1)"
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack > label.field:nth-of-type(1) > span:nth-of-type(1)"
       ],
       "visibility": [
         "visible"
@@ -9720,7 +9509,7 @@
         "text"
       ],
       "locations": [
-        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > h2"
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack > h2"
       ],
       "visibility": [
         "visible"
@@ -9749,7 +9538,6 @@
         "visible"
       ],
       "captures": [
-        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
       "purpose": "completion",

@@ -84,7 +84,7 @@
           "GET /api/db; GET /api/db/backup; POST /api/db/restore; POST /api/db/maintenance",
           "GET/PUT /api/settings; GET/DELETE /api/sessions",
           "GET/PUT /api/settings",
-          "POST /api/auth/login; GET /api/auth/github",
+          "POST /api/auth/login",
           "GET/POST/DELETE /api/geolite"
         ],
         "tests": [
@@ -139,7 +139,7 @@
         {
           "id": "login",
           "route": "/admin/",
-          "interface": "POST /api/auth/login; GET /api/auth/github"
+          "interface": "POST /api/auth/login"
         }
       ],
       "status": "needs-review"
