@@ -175,7 +175,7 @@ export default function App() {
             <Summary nodes={sorted} />
             <div className="public-view-toolbar"><div className="view-switch" role="group" aria-label="显示方式">{([["list", "列表"], ["cards", "卡片"]] as const).map(([value, label]) => <Button key={value} variant="ghost" aria-pressed={currentView === value} onClick={() => setView(value)}>{label}</Button>)}</div></div>
             <div className="public-results">{sorted.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">还没有节点</p>
+              <div className="load-state" role="status"><span className="load-state-mark is-empty" aria-hidden="true">[ — ]</span><p className="load-state-title">还没有节点</p></div>
             ) : currentView === "list" ? <NodeList nodes={sorted} onOpen={go}/> : (
               <div className="public-node-grid">
                 {sorted.map((n: Node) => (

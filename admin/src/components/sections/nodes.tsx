@@ -4,12 +4,12 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { api, type Node } from "@/lib/api"
+import { addresses, api, type Node } from "@/lib/api"
 import { connectionLabel } from "../../../../shared/nodes"
 
 import { FOREVER, money, uptime } from "@/lib/format"
 
-import { CopyValue, Addresses, ConfirmDialog } from "./common"
+import { CopyValue, Addresses, ConfirmDialog, EmptyState } from "./common"
 import { type IssuedNode, CreateNode, NodeForm, BillingForm, useRegisterWindow, RegisterDialog, InstallDialog } from "./node-forms"
 
 export function Nodes({ nodes, refresh, site, canProvision, distributionAvailable, onOpen }: { onOpen:(id:number)=>void; nodes: Node[]; refresh: () => void; site: string; canProvision: boolean; distributionAvailable: boolean }) {
@@ -72,10 +72,10 @@ export function Nodes({ nodes, refresh, site, canProvision, distributionAvailabl
           <td className="admin-menu"><Button variant="ghost" aria-label={`编辑菜单 ${n.name}`} onClick={event => { actionTrigger.current = event.currentTarget; setManaging(n) }}>编辑</Button></td>
         </tr>)}</tbody>
       </table>
-      {!visible.length && <p className="py-8 text-sm text-muted-foreground">{nodes.length ? "没有匹配的节点" : "还没有节点，请先添加节点。"}</p>}
+      {!visible.length && (nodes.length ? <EmptyState title="没有匹配的节点" /> : <EmptyState title="还没有节点" detail="请先添加节点。" />)}
       {managing && <Dialog open onOpenChange={(open) => !open && setManaging(null)}>
-        <DialogContent onCloseAutoFocus={restoreFocus}><DialogHeader><DialogTitle>{managing.name}</DialogTitle><DialogDescription>{managing.os || "尚未接入"}{managing.arch && ` · ${managing.arch}`}</DialogDescription></DialogHeader>
-          <Addresses node={managing} />
+        <DialogContent onCloseAutoFocus={restoreFocus}><DialogHeader><DialogTitle>{managing.name}</DialogTitle></DialogHeader><DialogDescription>{managing.os || "尚未接入"}{managing.arch && ` · ${managing.arch}`}</DialogDescription>
+          {addresses(managing).length > 0 && <Addresses node={managing} />}
           <p className="text-sm text-muted-foreground">{managing.price > 0 ? money(managing.price, managing.currency) : "免费"} · {managing.expires_at || FOREVER}</p>
           {!managing.online && managing.last_seen > 0 && <p className="text-sm text-muted-foreground">离线 {uptime(Date.now() / 1000 - managing.last_seen)}</p>}
           <div className="node-management-actions">

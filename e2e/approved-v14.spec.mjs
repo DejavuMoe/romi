@@ -118,3 +118,44 @@ test('every control on a phone is at least 44px tall', async ({ page, hub }, tes
     expect(small, entry[0]).toEqual([])
   }
 })
+
+test('a dialog is a title bar over its body, and a bottom sheet on a phone', async ({ page, hub }, testInfo) => {
+  await seed(hub)
+  await signIn(page)
+  await page.goto('/admin/nodes')
+  await page.getByRole('button', { name: /^编辑菜单/ }).first().click()
+  await page.getByRole('button', { name: '编辑节点', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  const measure = () => dialog.evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    const head = el.querySelector('[data-slot="dialog-header"]')
+    const bar = head.getBoundingClientRect()
+    const close = el.querySelector('[data-slot="dialog-close"]').getBoundingClientRect()
+    return {
+      left: box.left, right: box.right, bottom: box.bottom, width: box.width, vw: innerWidth, vh: innerHeight,
+      barOffset: Math.round(bar.top - box.top), barHeight: bar.height, rule: getComputedStyle(head).borderBottomStyle,
+      closeInBar: close.top >= bar.top && close.bottom <= bar.bottom,
+    }
+  })
+  const opened = await measure()
+  expect(opened.rule).toBe('solid')
+  expect(opened.barHeight).toBeGreaterThanOrEqual(48)
+  expect(opened.closeInBar).toBe(true)
+  if (testInfo.project.name === 'mobile') {
+    expect(opened.left).toBe(0)
+    expect(opened.width).toBe(opened.vw)
+    expect(Math.abs(opened.bottom - opened.vh)).toBeLessThanOrEqual(1)
+  } else {
+    expect(opened.width).toBeLessThanOrEqual(560)
+    // A floating box clear of both edges. Not an exact centre: the scroll lock
+    // leaves a scrollbar gutter, so the box centres on the page, not the window.
+    expect(opened.left).toBeGreaterThan(0)
+    expect(opened.right).toBeLessThan(opened.vw)
+  }
+  // The bar and its close button stay put while the long form scrolls.
+  await dialog.evaluate((el) => { el.scrollTop = el.scrollHeight })
+  const scrolled = await measure()
+  expect(scrolled.barOffset).toBe(opened.barOffset)
+  expect(scrolled.closeInBar).toBe(true)
+})

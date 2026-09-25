@@ -37,10 +37,10 @@ export function ConfirmDialog({ title, description, confirmLabel, busy = false, 
       <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="leading-relaxed">{description}</DialogDescription>
         </DialogHeader>
-        <DialogFooter className="border-t pt-4">
-          <Button variant="ghost" onClick={onClose}>取消</Button>
+        <DialogDescription className="leading-relaxed">{description}</DialogDescription>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
           <Button variant="destructive" onClick={onConfirm} disabled={busy}>{confirmLabel}</Button>
         </DialogFooter>
       </DialogContent>
@@ -50,13 +50,24 @@ export function ConfirmDialog({ title, description, confirmLabel, busy = false, 
 
 export function LoadState({ error, retry }: { error: string; retry: () => void }) {
   return error ? (
-    <div className="flex flex-col items-start gap-3">
-      <p className="text-sm text-destructive" role="alert">加载失败：{error}</p>
+    <div className="load-state">
+      <span className="load-state-mark" aria-hidden="true">[ ! ]</span>
+      <div role="alert"><p className="load-state-title">加载失败</p><p>{error}</p></div>
       <Button variant="outline" size="sm" onClick={retry}>重试</Button>
     </div>
   ) : (
     <div role="status" aria-label="加载中">
       <Skeleton className="h-32" />
+    </div>
+  )
+}
+
+export function EmptyState({ title, detail }: { title: string; detail?: string }) {
+  return (
+    <div className="load-state" role="status">
+      <span className="load-state-mark is-empty" aria-hidden="true">[ — ]</span>
+      <p className="load-state-title">{title}</p>
+      {detail && <p>{detail}</p>}
     </div>
   )
 }

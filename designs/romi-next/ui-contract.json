@@ -262,7 +262,9 @@
           "web/src/components/Meter.tsx",
           "admin/src/components/ui/card.tsx",
           "admin/src/components/ui/field.tsx",
-          "admin/src/components/ui/table.tsx"
+          "admin/src/components/ui/table.tsx",
+          "admin/src/components/ui/dialog.tsx",
+          "admin/src/components/ui/textarea.tsx"
         ],
         "interfaces": [],
         "tests": [

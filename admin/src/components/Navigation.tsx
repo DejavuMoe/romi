@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 export const SECTIONS = [
   { path: "/admin/nodes", label: "节点", title: "节点管理" },
@@ -37,7 +37,7 @@ export function MobileNavigation({ path, go }: NavigationProps) {
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger asChild><Button className="mobile-navigation-trigger" variant="ghost" size="icon" aria-label="打开导航"><Menu /></Button></DialogTrigger>
     <DialogContent className="admin-navigation-dialog top-0 left-0 translate-x-0 translate-y-0">
-      <DialogTitle>导航</DialogTitle>
+      <DialogHeader><DialogTitle>导航</DialogTitle></DialogHeader>
       <Links path={path} go={(next) => { go(next); setOpen(false) }} />
       <a href="/">公开状态页</a>
     </DialogContent>

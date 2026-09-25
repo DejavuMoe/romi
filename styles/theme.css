@@ -173,9 +173,6 @@ textarea { resize: vertical; }
 [data-slot="dialog-title"] { line-height: 1.5; overflow-wrap: anywhere; }
 [data-slot="tooltip-content"] { max-width: min(20rem, calc(100vw - 24px)); overflow-wrap: anywhere; }
 [data-slot="table-container"] { overscroll-behavior-x: contain; }
-@media (max-width: 639px) {
-  [data-slot="dialog-content"] { padding: 16px; max-width: calc(100% - 24px); }
-}
 /* Compact 32px controls on a desk, 44px wherever a finger is the pointer. */
 @media (max-width: 767px), (pointer: coarse) {
   [data-slot="input"], [data-slot="select-trigger"], textarea { font-size: 16px; }

@@ -54,7 +54,7 @@ test('solid light/dark surfaces and operational copy hold across navigation', as
       await navigateAdmin(page, section)
       await expect(page.locator('main h1')).toBeVisible()
       if (section === '节点') await expect(page.getByRole('button', { name: '编辑菜单 文案检查节点', exact: true })).toBeVisible()
-      else if (section === '监测') await expect(page.getByText('还没有监测任务。添加目标地址并选择节点。', { exact: true })).toBeVisible()
+      else if (section === '监测') await expect(page.getByRole('status').filter({ hasText: '还没有监测任务' })).toContainText('添加目标地址并选择节点。')
       else if (section === '数据') await expect(page.getByRole('heading', { name: '数据库', exact: true })).toBeVisible()
       else await expect(page.getByRole('button', { name: ({ 通知: '保存事件设置', 安全: '修改密码', 设置: '保存站点设置' })[section], exact: true })).toBeVisible()
       const observed = await page.evaluate(() => {

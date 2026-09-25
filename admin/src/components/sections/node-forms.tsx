@@ -68,8 +68,8 @@ export function CreateNode({ onClose, onSaved, onCloseAutoFocus }: {
           <Field label="名称">
             <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="香港 · 甲商家" />
           </Field>
-          <DialogFooter className="border-t pt-4">
-            <Button type="button" variant="ghost" onClick={onClose}>取消</Button>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>取消</Button>
             <Button type="submit" disabled={saving}>添加</Button>
           </DialogFooter>
         </form>
@@ -164,7 +164,7 @@ export function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
         <DialogHeader>
           <DialogTitle>{node.name}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-5">
+        <div className="space-y-4">
           <Field label="名称">
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
@@ -198,7 +198,7 @@ export function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
           </div>
           <fieldset className="border p-4 space-y-3"><legend className="px-1 text-sm">可用带宽</legend>
             <BandwidthField label="下载带宽" value={form.bandwidth_down ?? 0} onChange={v=>set("bandwidth_down",v)}/>
-            <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={sameBandwidth} onChange={e=>{if(!e.target.checked)set("bandwidth_up",form.bandwidth_down??0);setSameBandwidth(e.target.checked)}}/>上传与下载相同</label>
+            <label className="choice-row"><input type="checkbox" checked={sameBandwidth} onChange={e=>{if(!e.target.checked)set("bandwidth_up",form.bandwidth_down??0);setSameBandwidth(e.target.checked)}}/><span>上传与下载相同</span></label>
             {!sameBandwidth && <BandwidthField label="上传带宽" value={form.bandwidth_up ?? 0} onChange={v=>set("bandwidth_up",v)}/>}
           </fieldset>
           <p role="alert" className="field-error">{formError}</p>
@@ -220,16 +220,16 @@ export function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
               ))}
             </div>
           </details>
-          <label className="flex cursor-pointer items-center justify-between gap-4 border bg-muted/30 px-3 py-2.5 text-sm">
-            <span>
-              <span className="block font-medium">离线通知</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">掉线超过宽限期推送一条，恢复在线时再推一条</span>
-            </span>
+          <label className="choice-row">
             <Switch checked={!!form.notify} onCheckedChange={(v) => set("notify", v)} />
+            <span>
+              <span className="block">离线通知</span>
+              <span className="block text-xs text-muted-foreground">掉线超过宽限期推送一条，恢复在线时再推一条</span>
+            </span>
           </label>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
           <Button onClick={save} disabled={saving}>保存</Button>
         </DialogFooter>
       </DialogContent>
@@ -281,7 +281,7 @@ export function BillingForm({ node, onClose, onSaved, onCloseAutoFocus }: {
         <DialogHeader>
           <DialogTitle>{node.name}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-5">
+        <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="价格" hint="留空或 0 为免费">
               <Input
@@ -322,7 +322,7 @@ export function BillingForm({ node, onClose, onSaved, onCloseAutoFocus }: {
         </div>
         <p role="alert" className="field-error">{error}</p>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
           <Button onClick={save} disabled={saving}>保存</Button>
         </DialogFooter>
       </DialogContent>
@@ -411,7 +411,7 @@ export function RegisterDialog({ site, reg, onClose }: {
           )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>关闭</Button>
+          <Button variant="outline" onClick={onClose}>关闭</Button>
           <Button onClick={() => copy(command)} disabled={!command}>
             复制
           </Button>
@@ -456,9 +456,9 @@ export function InstallDialog({ node, site, onClose, onRotated, onCloseAutoFocus
       <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>安装 Agent</DialogTitle>
-          <DialogDescription>{node.name} · 接入标识 node-{node.id}。在节点运行安装命令并输入原节点令牌；令牌丢失时可换发，新令牌仅本次显示。</DialogDescription>
         </DialogHeader>
-        <div className="space-y-5">
+        <DialogDescription>{node.name} · 接入标识 node-{node.id}。在节点运行安装命令并输入原节点令牌；令牌丢失时可换发，新令牌仅本次显示。</DialogDescription>
+        <div className="space-y-4">
           <Field label="上报间隔（秒）" hint="3–60 秒，整数；默认 3 秒。">
             <Input type="number" min={3} max={60} step={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
             <p className="field-error">{intervalValid ? "" : "请输入 3–60 的整数"}</p>
@@ -483,7 +483,7 @@ export function InstallDialog({ node, site, onClose, onRotated, onCloseAutoFocus
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>关闭</Button>
+          <Button variant="outline" onClick={onClose}>关闭</Button>
           <Button onClick={() => copy(command)} disabled={!command || !intervalValid}>
             复制
           </Button>

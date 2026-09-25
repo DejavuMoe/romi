@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { api, type Node, type PingTask } from "@/lib/api"
 import { numericError } from "../../../../shared/validate"
 
-import { ConfirmDialog, LoadState } from "./common"
+import { ConfirmDialog, EmptyState, LoadState } from "./common"
 
 export function Ping({ nodes }: { nodes: Node[] }) {
   const [tasks, setTasks] = useState<PingTask[] | null>(null)
@@ -93,7 +93,7 @@ export function Ping({ nodes }: { nodes: Node[] }) {
         </Button>
       </div>
 
-      {tasks === null ? <LoadState error={error} retry={load} /> : <Card className="overflow-x-auto p-0">
+      {tasks === null ? <LoadState error={error} retry={load} /> : tasks.length === 0 ? <EmptyState title="还没有监测任务" detail="添加目标地址并选择节点。" /> : <Card className="overflow-x-auto p-0">
         <Table className="monitoring-table">
           <TableHeader>
             <TableRow>
@@ -119,13 +119,6 @@ export function Ping({ nodes }: { nodes: Node[] }) {
                 </TableCell>
               </TableRow>
             ))}
-            {tasks.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm whitespace-normal text-muted-foreground">
-                  还没有监测任务。添加目标地址并选择节点。
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </Card>}
@@ -136,7 +129,7 @@ export function Ping({ nodes }: { nodes: Node[] }) {
             <DialogHeader>
               <DialogTitle>{editing.id ? "编辑监测" : "添加监测"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="名称">
                   {/* A new romi node starts empty, so the cursor belongs here;
@@ -176,7 +169,7 @@ export function Ping({ nodes }: { nodes: Node[] }) {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setEditing(null)}>取消</Button>
+              <Button variant="outline" onClick={() => setEditing(null)}>取消</Button>
               <Button onClick={save} disabled={saving}>保存</Button>
             </DialogFooter>
           </DialogContent>
