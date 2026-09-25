@@ -142,7 +142,7 @@
           "interface": "POST /api/auth/login"
         }
       ],
-      "status": "needs-review"
+      "status": "approved"
     },
     {
       "id": "public-status-v12",
