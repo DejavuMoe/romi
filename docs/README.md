@@ -20,7 +20,5 @@
 | 第三方许可 | [许可](legal.md)、[THIRD_PARTY_LICENSES.txt](https://github.com/DejavuMoe/romi/blob/master/THIRD_PARTY_LICENSES.txt) |
 | 如何做容量实验 | [基准方法](bench.md) |
 | 验证记录与适用范围 | [验收状态](readiness.md) |
-| 文档与历史结构实验 | [文档消融](experiments/documentation.md) |
-| 运行代码、资源和界面保持性 | [清理消融](experiments/runtime-cleanup.md) |
 
 代码和测试是行为依据，当前已批准设计在 `designs/romi-next/`。旧任务过程和淘汰方案不作为开发入口。

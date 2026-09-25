@@ -1,29 +1,10 @@
 import { defineConfig } from 'vitepress'
-import { copyFile, mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const docsRoot = fileURLToPath(new URL('../', import.meta.url))
-const linkedData = [
-  'experiments/documentation.json',
-  'experiments/runtime-cleanup.json',
-  'ui/v12-responsive.json',
-  'ui/v12-navigation.json',
-  'ui/v12-interactions.json'
-]
 
 export default defineConfig({
   lang: 'zh-CN',
   title: 'romi 文档',
   description: 'romi：自托管的 Linux 主机监测。安装、运维与开发文档。',
   head: [['meta', { name: 'theme-color', content: '#205ea6' }]],
-  async buildEnd({ outDir }) {
-    for (const file of linkedData) {
-      const target = join(outDir, file)
-      await mkdir(dirname(target), { recursive: true })
-      await copyFile(join(docsRoot, file), target)
-    }
-  },
   themeConfig: {
     siteTitle: 'romi 文档',
     nav: [
@@ -59,9 +40,7 @@ export default defineConfig({
       ] },
       { text: '项目', items: [
         { text: '验收状态', link: '/readiness' },
-        { text: '许可', link: '/legal' },
-        { text: '文档消融', link: '/experiments/documentation' },
-        { text: '运行代码清理消融', link: '/experiments/runtime-cleanup' }
+        { text: '许可', link: '/legal' }
       ] }
     ],
     search: {

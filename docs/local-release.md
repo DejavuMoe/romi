@@ -6,8 +6,8 @@
 开发快照允许未打标签或未提交的源码，但内容必须与构建记录完全一致。修改任何输入后，旧记录不可用于打包。
 manifest 的 kind 为 local-snapshot、signed 为 false；不会创建标签、发布或签名。
 
-包中包含本地二进制、公开页资源、工具链与依赖锁文件、项目 MIT 和必需组件声明。
-不再携带其他项目的固定提交清单。原生安装介质使用 [发布归档](release.md)，开发快照不是安装包。
+包中包含本地二进制、公开页资源、工具链与依赖锁文件、项目 MIT 和第三方许可。
+原生安装介质使用 [发布归档](release.md)，开发快照不是安装包。
 
 ```sh
 python3 scripts/package.py verify ./romi-snapshot.tar.gz --sha256 '<可信摘要>'

@@ -1,7 +1,7 @@
 # 界面实现契约
 
 当前已批准并实施的界面为 v14。规格在 `designs/romi-next/revision-v14/`：`index.html` 与 `public.html` 是两个应用，`system.html` 是视觉规范。状态和源文件映射由 `designs/romi-next/ui-contract.json` 管理。
-v14 在 v12 与其后修订（节点可见性、当前密码、ARIA 页签、移除 GitHub 登录、会话列表失败状态）的内容上收敛视觉，不增删功能和文案：
+v14 的视觉规则：
 
 - 方正、无阴影：`styles/theme.css` 用不分层的全局规则把圆角和阴影置零，任何工具类都无法重新引入；层次靠 1px 线条与底色；
 - 汇总条、KPI 与信息网格连续平铺，格子共用 1px 分隔线，数字贴底；节点卡片是分区面板，资源三格平铺，用量条 4px；
@@ -23,5 +23,4 @@ v14 在 v12 与其后修订（节点可见性、当前密码、ARIA 页签、移
 
 生产不引用原型运行库或模拟接口。权限和分发前置条件以 Hub 为准；`node-{id}` 不等于认证令牌。
 回归入口为 `e2e/approved-v14.spec.mjs`（公开页、登录与全部后台页面：两种主题下无圆角与阴影、320–1440 不溢出、手机控件 ≥44px；后台列表首行对齐、等宽字体与 2px 焦点；弹窗标题栏与手机贴底面板）、`e2e/approved-v12.spec.mjs`、`e2e/approved-v13.spec.mjs`、`e2e/public.spec.mjs`、`e2e/admin.spec.mjs` 和 `e2e/visual-contract.spec.mjs`。
-v12 时期保留的浏览器观测见 [布局](v12-responsive.json)、[导航](v12-navigation.json)、[复制与选择行](v12-interactions.json)，采集于 v14 之前。
-这些记录不替代修改后的检查。当前验证范围见 [验收状态](../readiness.md)。
+当前验证范围见 [验收状态](../readiness.md)。
