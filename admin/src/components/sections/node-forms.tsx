@@ -387,7 +387,7 @@ export function RegisterDialog({ site, reg, onClose }: {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             在节点上运行以下命令：脚本从本 Hub 下载与你当前发行版精确匹配的 Agent，
-            校验哈希后安装 systemd 服务。注册窗口持续一小时，新节点默认公开；命令包含
+            校验哈希后安装系统服务（systemd 或 OpenRC）。注册窗口持续一小时，新节点默认公开；命令包含
             短期注册密钥，请妥善保管，每台机器会换取自己的长期令牌。
           </p>
           {command ? (

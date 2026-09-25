@@ -53,7 +53,7 @@
 //! The validator enforces all four resource dimensions explicitly: the compressed
 //! upload size, the number of members, the expanded size of each member, and the
 //! total expanded size. Members are streamed through a fixed 64 KiB buffer. An
-//! archive built by this build has seven Parquet members plus the manifest, so
+//! archive built by this build has nine Parquet members plus the manifest, so
 //! conservative limits reject a compression bomb, several individually valid
 //! large members, or an archive with excessive member count before a staging
 //! database is built.

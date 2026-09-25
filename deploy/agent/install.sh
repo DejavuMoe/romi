@@ -279,12 +279,12 @@ done
 
 [ -n "$SERVER" ] || die "--server is required (or set ROMI_SERVER)"
 case "$INTERVAL" in
-    ''|*[!0-9]*) die "--interval must be a number from 1 to 3600" ;;
+    ''|*[!0-9]*) die "--interval must be a whole number from 3 to 60" ;;
 esac
 if [ "$INTERVAL" -ge 3 ] 2>/dev/null && [ "$INTERVAL" -le 60 ]; then
     :
 else
-    die "--interval must be 1-3600"
+    die "--interval must be 3-60"
 fi
 
 case "$ROOT_PREFIX" in

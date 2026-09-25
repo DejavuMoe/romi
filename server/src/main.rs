@@ -592,7 +592,7 @@ fn first_run(app: &App, url: &str) -> Result<()> {
             "\n  romi Hub is ready.\n\n  \
              Sign in at {url}/admin\n  \
              Emergency password: {password}\n\n  \
-             This is shown once. Change it, and set up GitHub sign-in, under Security.\n"
+             This is shown once. Change it under Security.\n"
         );
     }
     Ok(())

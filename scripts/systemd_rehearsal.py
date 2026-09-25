@@ -1095,7 +1095,7 @@ server {{
         # rehearsal CA unless it is a public root, and the documented product
         # behavior is not weakened for a local test.
         environment["ROMI_SERVER"] = HUB_BASE
-        project_agent = fixture / "opt" / "romi" / "current" / "romi-agent"
+        project_agent = fixture / "opt" / "romi" / "agent" / "current" / "romi-agent"
         with log_path.open("w", encoding="utf-8") as log:
             process = subprocess.Popen(
                 [str(project_agent)],

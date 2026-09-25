@@ -285,7 +285,7 @@ pub fn initialize(conn: &mut Connection, fresh: bool, written_by: &str) -> Resul
 }
 
 /// Creates the same schema as [`initialize`], but leaves the primary keys off
-/// `metric` and `ping_record`.
+/// `metric`, `metric_hour`, `ping_record` and `ping_hour`.
 ///
 /// Restore uses this because DuckDB maintains a primary-key ART index
 /// incrementally during `INSERT`; on a medium/large history that index
