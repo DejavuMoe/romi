@@ -148,7 +148,7 @@ test('keyboard focus remains visible when the pointer hovers the focused button'
   const button=page.getByRole('button',{name:'登录',exact:true})
   await expect(button).toBeFocused()
   await button.hover()
-  await expect.poll(()=>button.evaluate(el=>({visible:el.matches(':focus-visible'),outline:getComputedStyle(el).outlineStyle,width:getComputedStyle(el).outlineWidth}))).toEqual({visible:true,outline:'solid',width:'1px'})
+  await expect.poll(()=>button.evaluate(el=>({visible:el.matches(':focus-visible'),outline:getComputedStyle(el).outlineStyle,width:getComputedStyle(el).outlineWidth}))).toEqual({visible:true,outline:'solid',width:'2px'})
 })
 
 

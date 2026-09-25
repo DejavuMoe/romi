@@ -38,7 +38,7 @@ function TemplatePreview({ template, site, json = false }: { template: string; s
       out = JSON.stringify(JSON.parse(out), null, 2)
     } catch {
       return (
-        <p className="rounded-md bg-secondary px-3 py-2 text-xs text-destructive">
+        <p className="bg-secondary px-3 py-2 text-xs text-destructive">
           代入后不是合法 JSON，保存会被拒绝。占位符要写在引号里，例如 "text": "{"{{title}}"}"
         </p>
       )
@@ -47,7 +47,7 @@ function TemplatePreview({ template, site, json = false }: { template: string; s
   return (
     <div className="space-y-1">
       <div className="text-xs text-muted-foreground">预览（以一条离线通知为例）</div>
-      <pre className="overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs whitespace-pre-wrap break-all">{out}</pre>
+      <pre className="overflow-x-auto bg-muted px-3 py-2 font-mono text-xs whitespace-pre-wrap break-all">{out}</pre>
     </div>
   )
 }
@@ -58,7 +58,7 @@ function ChannelCard({ title, configured, children }: { title: string; configure
   return (
     <Card className="p-5">
       <details className="group">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 outline-none [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2 text-sm font-medium">
             <ChevronRight className="size-4 text-muted-foreground transition-transform group-open:rotate-90" />
             {title}

@@ -20,7 +20,7 @@ export function Meter({ label, pct, foot, empty = "—" }: Props) {
           {pct === null ? empty : `${filled.toFixed(0)}%`}
         </span>
       </div>
-      <div className="mt-1 h-[3px] w-full overflow-hidden bg-muted" aria-hidden="true">
+      <div className="mt-1 h-1 w-full overflow-hidden bg-muted" aria-hidden="true">
         <div className="usage-fill h-full" style={{ width: `${filled}%` }} />
       </div>
       <div className="tnum mt-1 break-words text-[11px] leading-4 text-muted-foreground">{foot}</div>

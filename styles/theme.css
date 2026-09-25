@@ -63,6 +63,10 @@
 }
 
 @theme inline {
+  --default-font-family: var(--font-mono);
+  --default-transition-duration: 120ms;
+  --text-sm: 13px;
+  --text-sm--line-height: 1.5;
   --font-sans: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
   --font-mono: "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Sans CJK SC", "Noto Sans SC", ui-monospace, monospace;
   --radius-xs: 0px;
@@ -108,9 +112,9 @@
 }
 
 @layer base {
-  * { @apply border-border outline-ring/50; }
+  * { @apply border-border; }
   html { scrollbar-gutter: stable; }
-  body { @apply bg-background text-foreground; font-size: 14px; line-height: 1.55; }
+  body { @apply bg-background text-foreground; font-size: 13px; line-height: 1.5; }
   ::selection { background: var(--selection); color: var(--foreground); }
   button:not(:disabled), [role="button"], [data-slot="switch"], input[type="checkbox"] { cursor: pointer; }
   input[type="checkbox"] { accent-color: var(--primary); }
@@ -118,7 +122,11 @@
 }
 
 .app-shell { width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: 24px; }
-.tnum { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.tnum { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Square and flat, everywhere. Unlayered, so no utility class can reintroduce a
+   radius or a shadow; depth comes from 1px lines and surfaces instead. */
+*, *::before, *::after { border-radius: 0; box-shadow: none; }
 
 [data-sonner-toast][data-styled="true"] {
   background: var(--popover);
@@ -126,7 +134,7 @@
   border: 1px solid var(--border);
   border-radius: 0;
   box-shadow: none;
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
 }
 
 @media (max-width: 639px) {
@@ -139,22 +147,20 @@
 
 /* Own the browser-drawn surfaces while retaining native input semantics. */
 * { scrollbar-width: thin; scrollbar-color: var(--border) var(--background); }
-:where(button, a, summary, input, textarea, [tabindex]):focus-visible {
-  box-shadow: none;
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+#main:focus-visible { outline: none; }
 input[type="number"] { appearance: textfield; }
 input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px var(--background) inset; -webkit-text-fill-color: var(--foreground); caret-color: var(--foreground); }
 input[type="checkbox"] {
   appearance: none; display: inline-grid; place-content: center; flex-shrink: 0;
-  width: 17px; height: 17px; margin: 0; border: 1px solid var(--input);
+  width: 16px; height: 16px; margin: 0; border: 1px solid var(--input);
   background: var(--background); color: var(--foreground); vertical-align: middle;
 }
-input[type="checkbox"]:checked { background: var(--secondary); border-color: var(--input); }
+input[type="checkbox"]:checked { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
 input[type="checkbox"]:checked::before {
-  content: ""; width: 10px; height: 6px; border: solid currentColor;
+  content: ""; width: 8px; height: 4px; border: solid currentColor;
   border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg);
 }
 input[type="checkbox"]:disabled { opacity: .5; cursor: not-allowed; }
@@ -170,8 +176,13 @@ textarea { resize: vertical; }
 @media (max-width: 639px) {
   [data-slot="dialog-content"] { padding: 16px; max-width: calc(100% - 24px); }
   [data-slot="card"]:not(.p-0) { padding: 16px; }
+}
+/* Compact 32px controls on a desk, 44px wherever a finger is the pointer. */
+@media (max-width: 767px), (pointer: coarse) {
   [data-slot="input"], [data-slot="select-trigger"], textarea { font-size: 16px; }
-  [data-slot="button"]:not([data-size="icon-xs"]):not([data-size="xs"]) { min-height: 44px; }
+  [data-slot="button"]:not([data-size="icon-xs"]):not([data-size="xs"]),
+  [data-slot="input"], [data-slot="select-trigger"] { min-height: 44px; }
+  [data-slot="button"][data-size^="icon"] { min-width: 44px; }
 }
 @media (forced-colors: active) {
   input[type="checkbox"] { appearance: auto; }
@@ -202,18 +213,13 @@ label:has(> input[type="checkbox"]) { min-height: 32px; }
 [data-tone="unknown"] { --usage-color: var(--muted-foreground); }
 .usage-number { color: var(--usage-color); }
 .usage-fill { background: var(--usage-color); }
-:where(input,textarea,[data-slot="select-trigger"]):focus,
-:where(input,textarea,[data-slot="select-trigger"]):focus-visible { outline:none; box-shadow:none; border-color:var(--ring); }
-:where(button,a,[tabindex]):focus-visible { outline-width:1px; box-shadow:none; }
-[data-slot="button"][data-variant="default"] { background:var(--secondary); color:var(--foreground); border-color:var(--input); }
-[data-slot="button"]:hover:not(:focus-visible) { outline:none; }
+/* A checkbox shows focus on the row that contains it. */
+input[type="checkbox"]:focus-visible { outline: none; }
 
-input[type="checkbox"]:focus-visible, [data-slot="switch"]:focus-visible { outline:1px solid var(--ring); outline-offset:3px; box-shadow:none; }
-
-@media(pointer:coarse){
-  [data-slot="input"],[data-slot="select-trigger"],label:has(>input[type="checkbox"]),label:has(>[data-slot="switch"]){min-height:44px;}
-  .node-name-link{display:inline-flex;align-items:center;min-height:44px;}
-  button[draggable]{min-width:44px;min-height:44px;}
+@media (max-width: 767px), (pointer: coarse) {
+  label:has(>input[type="checkbox"]), label:has(>[data-slot="switch"]) { min-height: 44px; }
+  .node-name-link { display: inline-flex; align-items: center; min-height: 44px; }
+  button[draggable] { min-width: 44px; min-height: 44px; }
 }
 
 /* The stable root gutter already reserves the space Radix would add to body. */

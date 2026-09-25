@@ -117,7 +117,7 @@ export default function App() {
   // failure belongs beside the page rather than over it.
   if (!me) return (
     <div className="grid min-h-svh place-items-center p-6 text-sm text-muted-foreground">
-      {meError ? <div className="space-y-3 text-center"><p role="alert">加载失败：{meError}</p><Button onClick={loadMe}>重试</Button></div> : "加载中…"}
+      {meError ? <div className="space-y-3 text-center"><p role="alert">加载失败：{meError}</p><Button variant="outline" onClick={loadMe}>重试</Button></div> : "加载中…"}
     </div>
   )
 
@@ -130,7 +130,7 @@ export default function App() {
         <div className="app-shell flex min-h-14 items-center gap-2 py-2 sm:gap-3">
           {/* The site name is the way back to the list, so a node page needs
               no back button of its own. */}
-          <button className="flex min-w-0 items-baseline gap-3 text-lg font-semibold tracking-tight transition-colors hover:text-primary" onClick={() => go(null)}>
+          <button className="brand-button flex min-w-0 items-center transition-colors hover:text-primary" onClick={() => go(null)}>
             <span className="site-brand truncate">{siteName}</span>
           </button>
           <div className="flex-1" />

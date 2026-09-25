@@ -1,6 +1,6 @@
 # v12 界面契约
 
-状态：v12 已批准并实施，包括其后的 v13 修订（节点可见性、当前密码、无障碍、移除 GitHub 登录与会话列表失败状态）。
+状态：已被 `revision-v14` 取代。v12 连同其后的 v13 修订（节点可见性、当前密码、无障碍、移除 GitHub 登录与会话列表失败状态）曾是生产依据；v14 在其内容上收敛了视觉，现行契约见 `ui-contract.json`。
 
 `node designs/romi-next/revision-v12/exercise-v13.cjs` 在浏览器中实际操作这两个控件，
 并按 collector 格式采集两个界面的 DOM 文案到 `captures/v13-*.json`。

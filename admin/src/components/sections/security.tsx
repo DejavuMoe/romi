@@ -50,7 +50,7 @@ function Sessions() {
         </p>
       </div>
       {!rows ? (
-        <div role="alert" className="flex flex-col items-center gap-2 rounded-md border px-4 py-8 text-center">
+        <div role="alert" className="flex flex-col items-center gap-2 border px-4 py-8 text-center">
           <p className="text-sm font-medium">会话列表加载失败</p>
           <p className="text-xs text-muted-foreground">暂时无法确认其他设备的登录状态。</p>
           <Button variant="outline" size="sm" onClick={load}>重试</Button>

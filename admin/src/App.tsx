@@ -101,7 +101,7 @@ export default function App() {
   // normally.
   if (!me) return (
     <div className="grid min-h-svh place-items-center p-6 text-sm text-muted-foreground">
-      {meError ? <div className="space-y-3 text-center"><p role="alert">加载失败：{meError}</p><Button onClick={loadMe}>重试</Button></div> : "加载中…"}
+      {meError ? <div className="space-y-3 text-center"><p role="alert">加载失败：{meError}</p><Button variant="outline" onClick={loadMe}>重试</Button></div> : "加载中…"}
     </div>
   )
 

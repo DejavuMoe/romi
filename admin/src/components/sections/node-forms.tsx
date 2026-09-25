@@ -202,7 +202,7 @@ export function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
             {!sameBandwidth && <BandwidthField label="上传带宽" value={form.bandwidth_up ?? 0} onChange={v=>set("bandwidth_up",v)}/>}
           </fieldset>
           <p role="alert" className="field-error">{formError}</p>
-          <details className="group rounded-lg border bg-muted/30 px-3 py-2.5">
+          <details className="group border bg-muted/30 px-3 py-2.5">
             <summary className="flex min-h-6 cursor-pointer items-center gap-2 text-sm font-medium"><ChevronRight className="size-4 transition-transform group-open:rotate-90" />流量校正</summary>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
               按 GB 填入需要校正的值，未修改的计数器继续正常累计。
@@ -220,7 +220,7 @@ export function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
               ))}
             </div>
           </details>
-          <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
+          <label className="flex cursor-pointer items-center justify-between gap-4 border bg-muted/30 px-3 py-2.5 text-sm">
             <span>
               <span className="block font-medium">离线通知</span>
               <span className="mt-0.5 block text-xs text-muted-foreground">掉线超过宽限期推送一条，恢复在线时再推一条</span>
@@ -393,10 +393,10 @@ export function RegisterDialog({ site, reg, onClose }: {
           {command ? (
             <div className="space-y-2">
               <Label className="text-sm font-medium">安装命令</Label>
-              <pre className="h-24 overflow-auto whitespace-pre-wrap break-all rounded-lg border bg-muted/40 p-3 text-xs leading-relaxed select-all">
+              <pre className="h-24 overflow-auto whitespace-pre-wrap break-all border bg-muted/40 p-3 text-xs leading-relaxed select-all">
                 {command}
               </pre>
-              <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
+              <div className="flex items-center justify-between gap-4 border bg-muted/30 px-3 py-2.5 text-sm">
                 <span>
                   <span className="block font-medium">窗口 {clock} 后自动关闭</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -465,12 +465,12 @@ export function InstallDialog({ node, site, onClose, onRotated, onCloseAutoFocus
           </Field>
           <div className="space-y-2">
             <Label className="text-sm font-medium">安装命令</Label>
-            <pre className="h-28 overflow-auto whitespace-pre-wrap break-all rounded-lg border bg-muted/40 p-3 text-xs leading-relaxed select-all">
+            <pre className="h-28 overflow-auto whitespace-pre-wrap break-all border bg-muted/40 p-3 text-xs leading-relaxed select-all">
               {command || "请填写有效的上报间隔。"}
             </pre>
           </div>
           {token && <div className="space-y-2"><Label>节点令牌（仅本次显示）</Label><pre className="break-all whitespace-pre-wrap border p-3 text-xs select-all">{token}</pre><Button variant="outline" onClick={() => copy(token)}>复制令牌</Button></div>}
-          <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
+          <div className="flex items-center justify-between gap-4 border bg-muted/30 px-3 py-2.5 text-sm">
             <span>
               <span className="block font-medium">换发凭证</span>
               <span className="mt-0.5 block text-xs text-muted-foreground">

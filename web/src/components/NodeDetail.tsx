@@ -73,7 +73,7 @@ const AXIS = { stroke: "currentColor", fontSize: 11, tickLine: false, axisLine: 
 // chart across seven hundred points per probe.
 const TOOLTIP_STYLE = { maxWidth: "calc(100vw - 32px)", overflowWrap: "anywhere" as const, whiteSpace: "normal" as const, fontSize: 12, background: "var(--popover)", color: "var(--popover-foreground)", border: "1px solid var(--border)", borderRadius: 0, boxShadow: "none" }
 
-const SERIES = { dot: false as const, strokeWidth: 1.5, isAnimationActive: false }
+const SERIES = { dot: false as const, strokeWidth: 1.25, isAnimationActive: false }
 
 // One width for every stacked panel's value axis. Sized to their own labels --
 // 40px under "100%", 68px under "172 MB" -- the four plot areas would be offset by
@@ -115,7 +115,7 @@ function Tab({ id, active, controls, onClick, children }: { id: string; active: 
       // A tab list is one stop, not three: Tab reaches the selected tab and the
       // arrows move between them. See the keydown handler on the list.
       tabIndex={active ? 0 : -1}
-      className={`border-b-2 px-2.5 py-2 text-xs transition-colors ${
+      className={`history-tab border-b-2 transition-colors ${
         active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:bg-accent"
       }`}
     >
@@ -345,20 +345,22 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
 
   return (
     <div className="node-detail space-y-4">
-      <div className="flex flex-wrap items-center gap-2"><h2 className="min-w-0 break-words text-2xl font-semibold">{node.name}</h2><Country node={node}/><span className="ml-auto"><Status node={node}/></span></div>
-      <p className="text-xs text-muted-foreground">{[osName(node.os),node.arch].filter(Boolean).join(" · ")} · 连续在线 {continuousUptime(node)} · 本次启动 {m ? uptime(m.uptime):"—"}</p>
+      <div className="flex flex-wrap items-center gap-2"><h2 className="min-w-0 break-words text-xl font-semibold">{node.name}</h2><Country node={node}/><span className="ml-auto"><Status node={node}/></span></div>
+      {/* One list, one separator: a node that has not reported its system
+          would otherwise open the line with a stray "·". */}
+      <p className="text-xs text-muted-foreground">{[osName(node.os), node.arch, `连续在线 ${continuousUptime(node)}`, `本次启动 ${m ? uptime(m.uptime) : "—"}`].filter(Boolean).join(" · ")}</p>
       <dl className="detail-kpis">{[["CPU",m?.cpu,node.cpu_cores ? `${node.cpu_cores} vCPU`:"待上报"],["RAM",m && m.mem_total>0?percent(m.mem_used,m.mem_total):null,node.mem_total?bytes(node.mem_total):"待上报"],["磁盘",m && m.disk_total>0?percent(m.disk_used,m.disk_total):null,node.disk_total?bytes(node.disk_total):"待上报"]].map(([name,value,foot])=><div key={String(name)}><dt>{name}</dt><dd data-tone={usageTone(value as number|null)} className="usage-number">{value==null?"—":`${Number(value).toFixed(0)}%`}</dd><small>{foot}</small></div>)}<div><dt>本期流量</dt><dd>{bytes(monthUsage(node))}</dd><small>{node.traffic_limit?`/ ${bytes(node.traffic_limit)}`:"不限"}</small></div></dl>
-      <dl className="detail-facts grid grid-cols-2 gap-4 border p-4 lg:grid-cols-3">
+      <dl className="detail-facts">
         <Fact label="系统" value={node.os || "待上报"}/><Fact label="架构" value={node.arch || "待上报"}/><Fact label="内核" value={node.kernel || "待上报"}/>
         <Fact label="可用带宽 · 上传 / 下载" value={`${bandwidth(node.bandwidth_up)} / ${bandwidth(node.bandwidth_down)}`}/><Fact label="Agent 版本" value={node.agent_version || "待上报"}/><Fact label="累计上传 / 下载" value={`${bytes(node.total_tx)} / ${bytes(node.total_rx)}`}/>
         {authed && <Fact label="地址" value={[node.ipv4,node.ipv6,node.ip].filter(Boolean).join(" / ")}/>}
       </dl>
 
       {node.remark && (
-        <p className="rounded-md bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-words">{node.remark}</p>
+        <p className="bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-words">{node.remark}</p>
       )}
 
-      <div className="history-controls border-t pt-4">
+      <div className="history-controls">
         <div
           className="flex gap-1"
           role="tablist"
@@ -456,7 +458,7 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
               ) : (
                 <ResponsiveContainer>
                   <ComposedChart data={pingRows}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                    <CartesianGrid strokeDasharray="2 4" className="stroke-border" vertical={false} />
                     <XAxis
                       {...timeAxis(pingRows, zoomed?.[0] ?? 0, zoomed?.[1] ?? pingRows.length - 1)}
                     />
@@ -549,7 +551,7 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
                     onClick={() =>
                       setHiddenProbes((h) => (shown ? [...h, s.id] : h.filter((id) => id !== s.id)))
                     }
-                    className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-opacity ${
+                    className={`inline-flex min-w-0 max-w-full items-center gap-1.5 border px-2 py-1 text-xs transition-opacity ${
                       shown ? "" : "opacity-40"
                     }`}
                   >
@@ -581,7 +583,7 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
           </div>
         )
       ) : <div className="resource-panels">{resourcePlots(node).filter(plot=>tab!=="traffic" || plot.title==="上传 / 下载").map(plot=><div key={plot.title} className="resource-panel"><Panel title={<span className="flex items-center justify-between gap-2"><span className="flex items-baseline gap-2">{plot.title}{"usage" in plot && <span className="usage-number" data-tone={usageTone(plot.usage)}>{plot.usage==null?"—":`${plot.usage.toFixed(0)}%`}</span>}</span><span className="text-xs text-muted-foreground">{ADMIN_RANGES.find(r=>r.hours===hours)?.label}</span></span>}>
-        {metricRows.length===0 ? <p className="py-8 text-center text-sm">这段时间没有历史数据</p> : <ResponsiveContainer><LineChart data={metricRows}><CartesianGrid className="stroke-border" vertical={false}/><XAxis {...timeAxis(metricRows)}/><YAxis domain={[plot.domain[0] as number, plot.domain[1] as number | "auto"]} tickFormatter={plot.bytes?axisBytes:undefined} width={Y_WIDTH} {...AXIS}/><Tooltip labelFormatter={ts=>new Date(Number(ts)).toLocaleString("zh-CN")} formatter={v=>plot.bytes?bytes(Number(v)):String(v)} contentStyle={TOOLTIP_STYLE}/>{plot.series.map((series,i)=>series.disabled ? null : <Line key={series.key} dataKey={series.key} name={series.label} stroke={PALETTE[i].stroke} strokeDasharray={PALETTE[i].dash} connectNulls={false} {...SERIES}/>)}</LineChart></ResponsiveContainer>}
+        {metricRows.length===0 ? <p className="py-8 text-center text-sm">这段时间没有历史数据</p> : <ResponsiveContainer><LineChart data={metricRows}><CartesianGrid strokeDasharray="2 4" className="stroke-border" vertical={false}/><XAxis {...timeAxis(metricRows)}/><YAxis domain={[plot.domain[0] as number, plot.domain[1] as number | "auto"]} tickFormatter={plot.bytes?axisBytes:undefined} width={Y_WIDTH} {...AXIS}/><Tooltip labelFormatter={ts=>new Date(Number(ts)).toLocaleString("zh-CN")} formatter={v=>plot.bytes?bytes(Number(v)):String(v)} contentStyle={TOOLTIP_STYLE}/>{plot.series.map((series,i)=>series.disabled ? null : <Line key={series.key} dataKey={series.key} name={series.label} stroke={PALETTE[i].stroke} strokeDasharray={PALETTE[i].dash} connectNulls={false} {...SERIES}/>)}</LineChart></ResponsiveContainer>}
       </Panel><ul className="chart-series">{plot.series.map((series,i)=><li key={series.key}><span style={{borderTopColor:PALETTE[i].stroke,borderTopStyle:i===1?"dashed":i===2?"dotted":"solid"}} aria-hidden="true"/>{series.label}<b>{series.current==null?"未上报":series.disabled?"未启用":plot.bytes?`${bytes(series.current)}${plot.title==="上传 / 下载"?"/s":""}`:`${series.current}${plot.title==="CPU"?"%":""}`}</b></li>)}</ul>
       {plot.title==="RAM"&&<p className="px-4 pb-4 text-xs text-muted-foreground">Swapfile {m?.swapfile_used==null?"未上报":bytes(m.swapfile_used)} · 分区 {m?.swap_partition_used==null?"未上报":bytes(m.swap_partition_used)}</p>}
       </div>)}</div>}

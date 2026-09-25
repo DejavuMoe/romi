@@ -120,11 +120,12 @@ test('the public range picker is styled by the stylesheet this app ships', async
   // here: this design system sets every radius to zero on purpose.
   expect(style.display).toBe('flex')
   expect(style.border).toBe('solid')
-  // The canary: `data-[size=default]:h-9` exists only in the borrowed
-  // component's own file, so its 36px is what a missed scan takes away, leaving
-  // a bare inline-height control. Not an equality: the shared touch-target rule
-  // raises this to 44px on a coarse pointer, which is the layout working.
-  expect(style.height).toBeGreaterThanOrEqual(36)
+  // The canary: `data-[size=default]:h-8` exists only in the borrowed
+  // component's own file, so its 32px is what a missed scan takes away, leaving
+  // a bare inline-height control of about 20px. Not an equality: the shared
+  // touch-target rule raises this to 44px on a coarse pointer, which is the
+  // layout working.
+  expect(style.height).toBeGreaterThanOrEqual(32)
 })
 
 test('one address holds a bounded number of public streams, returned on close', async ({ page, hub }) => {

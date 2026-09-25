@@ -13,216 +13,6 @@
   "designSources": "design-sources.json",
   "surfaces": [
     {
-      "id": "control-panel-v12",
-      "contentProfile": "operational-strict",
-      "prototype": {
-        "entry": "revision-v12/index.html",
-        "assetPath": "revision-v12/index.html",
-        "files": [
-          "revision-v12/index.html",
-          "revision-v12/app.jsx",
-          "revision-v12/screens.jsx",
-          "revision-v12/components.jsx",
-          "revision-v12/fixtures.js",
-          "revision-v12/styles.css"
-        ],
-        "states": [
-          "ready",
-          "loading",
-          "empty",
-          "error",
-          "offline",
-          "permission",
-          "confirmation",
-          "progress",
-          "cancel",
-          "retry"
-        ],
-        "stableIds": [
-          "main",
-          "nodes",
-          "node-detail",
-          "login",
-          "probes",
-          "notifications",
-          "data",
-          "security",
-          "settings"
-        ]
-      },
-      "production": {
-        "routeOrWindow": "/admin/* including /admin/node/{id}",
-        "files": [
-          "admin/src/App.tsx",
-          "admin/src/components/Admin.tsx",
-          "admin/src/components/sections/common.tsx",
-          "admin/src/components/sections/nodes.tsx",
-          "admin/src/components/sections/node-forms.tsx",
-          "admin/src/components/sections/probes.tsx",
-          "admin/src/components/sections/notify.tsx",
-          "admin/src/components/sections/data.tsx",
-          "admin/src/components/sections/security.tsx",
-          "admin/src/components/sections/settings.tsx",
-          "admin/src/components/Login.tsx",
-          "web/src/components/NodeDetail.tsx",
-          "styles/theme.css",
-          "styles/layout.css",
-          "admin/src/components/Navigation.tsx",
-          "shared/nodes.ts",
-          "shared/format.ts",
-          "server/src/api.rs",
-          "server/src/db/schema.rs",
-          "server/src/db/queries.rs",
-          "agent/src/collect.rs",
-          "server/src/auth.rs",
-          "server/src/geo.rs",
-          "admin/src/components/ui/date-picker.tsx",
-          "admin/src/components/ui/switch.tsx"
-        ],
-        "interfaces": [
-          "GET /api/me",
-          "GET /api/nodes",
-          "WS /api/ws",
-          "GET /api/nodes/{id}/metrics",
-          "POST /api/nodes",
-          "GET /api/nodes/{id}/metrics",
-          "POST/DELETE /api/register-window",
-          "GET/POST/DELETE /api/ping-tasks",
-          "GET/PUT /api/settings; POST /api/notify/test",
-          "GET /api/db; GET /api/db/backup; POST /api/db/restore; POST /api/db/maintenance",
-          "GET/PUT /api/settings; GET/DELETE /api/sessions",
-          "GET/PUT /api/settings",
-          "POST /api/auth/login",
-          "GET/POST/DELETE /api/geolite"
-        ],
-        "tests": [
-          "e2e/admin.spec.mjs",
-          "e2e/public.spec.mjs",
-          "e2e/visual-contract.spec.mjs",
-          "e2e/approved-v12.spec.mjs",
-          "e2e/approved-v13.spec.mjs"
-        ]
-      },
-      "views": [
-        {
-          "id": "nodes",
-          "route": "/admin/",
-          "interface": "POST /api/nodes"
-        },
-        {
-          "id": "node-detail",
-          "route": "/admin/node/{id}",
-          "interface": "GET /api/nodes/{id}/metrics"
-        },
-        {
-          "id": "registration",
-          "route": "/admin/",
-          "interface": "POST/DELETE /api/register-window"
-        },
-        {
-          "id": "probes",
-          "route": "/admin/ping",
-          "interface": "GET/POST/DELETE /api/ping-tasks"
-        },
-        {
-          "id": "notifications",
-          "route": "/admin/notify",
-          "interface": "GET/PUT /api/settings; POST /api/notify/test"
-        },
-        {
-          "id": "data",
-          "route": "/admin/data",
-          "interface": "GET /api/db; GET /api/db/backup; POST /api/db/restore; POST /api/db/maintenance"
-        },
-        {
-          "id": "security",
-          "route": "/admin/security",
-          "interface": "GET/PUT /api/settings; GET/DELETE /api/sessions"
-        },
-        {
-          "id": "settings",
-          "route": "/admin/settings",
-          "interface": "GET/PUT /api/settings; GET/POST/DELETE /api/geolite"
-        },
-        {
-          "id": "login",
-          "route": "/admin/",
-          "interface": "POST /api/auth/login"
-        }
-      ],
-      "status": "implemented"
-    },
-    {
-      "id": "public-status-v12",
-      "contentProfile": "operational-strict",
-      "prototype": {
-        "entry": "revision-v12/public.html",
-        "assetPath": "revision-v12/public.html",
-        "files": [
-          "revision-v12/public.html",
-          "revision-v12/app.jsx",
-          "revision-v12/screens.jsx",
-          "revision-v12/components.jsx",
-          "revision-v12/fixtures.js",
-          "revision-v12/styles.css"
-        ],
-        "states": [
-          "ready",
-          "loading",
-          "empty",
-          "error",
-          "offline",
-          "permission",
-          "confirmation",
-          "progress",
-          "cancel",
-          "retry"
-        ],
-        "stableIds": [
-          "main",
-          "public",
-          "node-detail"
-        ]
-      },
-      "production": {
-        "routeOrWindow": "/ and /node/{id}",
-        "files": [
-          "web/src/App.tsx",
-          "web/src/components/NodeDetail.tsx",
-          "styles/theme.css",
-          "styles/layout.css",
-          "web/src/components/NodeCard.tsx",
-          "shared/nodes.ts",
-          "shared/format.ts",
-          "server/src/api.rs",
-          "server/src/db/schema.rs",
-          "server/src/db/queries.rs",
-          "agent/src/collect.rs",
-          "web/src/components/NodeList.tsx"
-        ],
-        "interfaces": [
-          "GET /api/me",
-          "GET /api/nodes",
-          "WS /api/ws",
-          "GET /api/nodes/{id}/metrics"
-        ],
-        "tests": [
-          "e2e/public.spec.mjs",
-          "e2e/visual-contract.spec.mjs",
-          "e2e/approved-v12.spec.mjs",
-          "e2e/approved-v13.spec.mjs"
-        ]
-      },
-      "views": [
-        {
-          "id": "node-detail",
-          "route": "/node/{id}",
-          "interface": "GET /api/nodes/{id}/metrics"
-        }
-      ],
-      "status": "implemented"
-    },
-    {
       "id": "control-panel-v14",
       "contentProfile": "operational-strict",
       "prototype": {
@@ -310,7 +100,8 @@
           "e2e/public.spec.mjs",
           "e2e/visual-contract.spec.mjs",
           "e2e/approved-v12.spec.mjs",
-          "e2e/approved-v13.spec.mjs"
+          "e2e/approved-v13.spec.mjs",
+          "e2e/approved-v14.spec.mjs"
         ]
       },
       "views": [
@@ -360,7 +151,7 @@
           "interface": "POST /api/auth/login"
         }
       ],
-      "status": "approved"
+      "status": "implemented"
     },
     {
       "id": "public-status-v14",
@@ -408,7 +199,8 @@
           "server/src/db/schema.rs",
           "server/src/db/queries.rs",
           "agent/src/collect.rs",
-          "web/src/components/NodeList.tsx"
+          "web/src/components/NodeList.tsx",
+          "web/src/components/Meter.tsx"
         ],
         "interfaces": [
           "GET /api/me",
@@ -420,7 +212,8 @@
           "e2e/public.spec.mjs",
           "e2e/visual-contract.spec.mjs",
           "e2e/approved-v12.spec.mjs",
-          "e2e/approved-v13.spec.mjs"
+          "e2e/approved-v13.spec.mjs",
+          "e2e/approved-v14.spec.mjs"
         ]
       },
       "views": [
@@ -430,7 +223,7 @@
           "interface": "GET /api/nodes/{id}/metrics"
         }
       ],
-      "status": "approved"
+      "status": "implemented"
     },
     {
       "id": "design-system-v14",
@@ -461,15 +254,21 @@
         "routeOrWindow": "shared tokens for / and /admin/*",
         "files": [
           "styles/theme.css",
-          "styles/layout.css"
+          "styles/layout.css",
+          "admin/src/components/ui/button.tsx",
+          "admin/src/components/ui/input.tsx",
+          "admin/src/components/ui/select.tsx",
+          "web/src/components/ui/button.tsx",
+          "web/src/components/Meter.tsx"
         ],
         "interfaces": [],
         "tests": [
-          "e2e/visual-contract.spec.mjs"
+          "e2e/visual-contract.spec.mjs",
+          "e2e/approved-v14.spec.mjs"
         ]
       },
       "views": [],
-      "status": "approved"
+      "status": "implemented"
     }
   ]
 }
