@@ -1378,6 +1378,10 @@ function Data() {
   // is the one irreversible action here, and it takes minutes on a large
   // backup.
   const abort = useRef<AbortController | null>(null)
+  // Leaving the section stops an unfinished restore, as the dialog's cancel
+  // does. Otherwise it ran on unseen, replaced the database, and reloaded the
+  // page under whatever the operator had moved on to.
+  useEffect(() => () => abort.current?.abort(), [])
   const picker = useRef<HTMLInputElement>(null)
 
   const load = () => api<DbInfo>("/db").then((data) => { setInfo(data); setError("") }).catch((e: Error) => setError(e.message || "网络错误"))

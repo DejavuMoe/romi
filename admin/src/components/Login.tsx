@@ -14,6 +14,21 @@ function callbackError(): string {
   return reason ?? ""
 }
 
+// Where a GitHub sign-in should land. The OAuth round trip leaves the panel and
+// the hub's callback returns to `/admin`, so the page the operator was trying
+// to reach is kept here and resumed by `App` once the session exists.
+export const RETURN_KEY = "romi-admin-return"
+
+/** A stored return path, if it is still one of this panel's own pages. */
+export function takeReturnPath(): string | null {
+  const back = sessionStorage.getItem(RETURN_KEY)
+  sessionStorage.removeItem(RETURN_KEY)
+  // Only a path within the panel: the value round-trips through storage any
+  // script on this origin can write, so it must not become a way to send the
+  // operator anywhere else.
+  return back && /^\/admin\/[\w/-]+$/.test(back) ? back : null
+}
+
 export function Login({ github, onDone }: { github: boolean; onDone: () => void }) {
   const [username, setUsername] = useState("")
   const [submitted, setSubmitted] = useState(false)
@@ -44,7 +59,7 @@ export function Login({ github, onDone }: { github: boolean; onDone: () => void 
         <div className="login-field"><Label htmlFor="password">密码</Label><Input id="password" type="password" value={password} autoComplete="current-password" onChange={e=>setPassword(e.target.value)} aria-invalid={submitted && !password} aria-describedby="password-error"/><p id="password-error" className="field-error">{submitted && !password ? "请填写密码" : ""}</p></div>
         <p role="alert" className="field-error">{error}</p><Button type="submit" className="w-full" disabled={busy}>{busy ? "登录中…" : "登录"}</Button>
       </form></Card>
-      {github && <Button asChild variant="outline" className="w-full"><a href="/api/auth/github">使用 GitHub 登录</a></Button>}
+      {github && <Button asChild variant="outline" className="w-full"><a href="/api/auth/github" onClick={() => sessionStorage.setItem(RETURN_KEY, location.pathname)}>使用 GitHub 登录</a></Button>}
       <a className="text-center text-sm underline" href="/">返回公开状态页</a>
     </div>
   </div>

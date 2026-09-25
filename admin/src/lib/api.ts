@@ -94,11 +94,16 @@ export async function upload<T>(
     // the last piece lands, and `offset = 0` truncates whatever an abandoned
     // attempt left behind, so aborting here leaves the state unchanged.
     if (signal?.aborted) throw new DOMException("aborted", "AbortError")
+    // The final chunk is not abortable once sent. It is the one the hub acts on,
+    // and a request already on the wire may still arrive after the browser gives
+    // up on it -- so aborting it would report "nothing changed" about a restore
+    // the hub may be applying. Earlier chunks change nothing and stay abortable.
+    const final = offset + CHUNK >= file.size
     const res = await fetch(`/api${path}?offset=${offset}&total=${file.size}`, {
       method: "POST",
       headers: { "content-type": "application/octet-stream" },
       body: file.slice(offset, offset + CHUNK),
-      signal,
+      signal: final ? undefined : signal,
     })
     if (!res.ok) {
       // A 413 never reached the hub: the proxy in front answered, and only its

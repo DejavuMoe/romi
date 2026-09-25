@@ -4,7 +4,7 @@ import { Toaster } from "sonner"
 
 import { Sidebar, MobileNavigation, SECTIONS } from "@/components/Navigation"
 import { Admin } from "@/components/Admin"
-import { Login } from "@/components/Login"
+import { Login, takeReturnPath } from "@/components/Login"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, provisioningSite, useNodes } from "@/lib/api"
@@ -95,6 +95,15 @@ export default function App() {
     if (me?.authed && admin === false) loadMe()
   }, [admin, me?.authed, loadMe])
 
+  // A GitHub sign-in returns through the hub's callback to `/admin`; resume the
+  // page it left from. Taken once the session exists, and consumed either way,
+  // so a stale entry cannot redirect a later visit.
+  useEffect(() => {
+    if (!me?.authed) return
+    const back = takeReturnPath()
+    if (back) go(back)
+  }, [me?.authed, go])
+
   // Only while there is nothing else to show. Login's onDone reloads /me, so a
   // transient failure in the second after signing in would otherwise replace the
   // entire signed-in panel with a full-page error while the node list streamed
@@ -108,7 +117,10 @@ export default function App() {
   if (!me.authed) {
     return (
       <>
-        <Login github={me.github} onDone={() => { loadMe(); refresh(); go("/admin/nodes") }} />
+        {/* No navigation on success: the address bar already holds the page
+            the operator asked for, a node detail or a section, and sending them
+            to the node list discarded it. */}
+        <Login github={me.github} onDone={() => { loadMe(); refresh() }} />
         <Toaster position="top-center" theme={dark ? "dark" : "light"} />
       </>
     )

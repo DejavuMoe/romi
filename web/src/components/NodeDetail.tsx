@@ -181,7 +181,11 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
   const [refreshing, setRefreshing] = useState(false)
   const refresh = useRef<() => void>(() => {})
   // Where the brush has been dragged, so the axis reticks for the visible span
-  // rather than retaining the whole window's ticks.
+  // rather than retaining the whole window's ticks. Held as times, not row
+  // indices: the minute refresh moves a rolling window along, which leaves an
+  // index pointing at a different moment -- so the zoom used to be dropped on
+  // every refresh instead. An end of `Infinity` is a span pinned to the newest
+  // sample, which keeps following it.
   const [zoom, setZoom] = useState<[number, number] | null>(null)
   // Where the chart begins on screen, so its height can occupy the remainder.
   const [chartTop, setChartTop] = useState(0)
@@ -220,8 +224,6 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
         )
         if (!controller.signal.aborted) {
           setData(next)
-          // A rolling window can shrink; old brush indices may no longer exist.
-          setZoom(null)
           setFailed("")
         }
       } catch (e) {
@@ -315,6 +317,16 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
     }
     return [...rows.values()].sort((a, b) => a.ts - b.ts)
   }, [pingSeries])
+
+  // The zoomed span as indices into the rows now on screen, or null for the
+  // whole window -- including when the window has rolled past the span
+  // entirely, which leaves nothing of it to show.
+  const zoomed = useMemo((): [number, number] | null => {
+    if (!zoom) return null
+    const from = pingRows.findIndex((row) => row.ts >= zoom[0])
+    const to = pingRows.findLastIndex((row) => row.ts <= zoom[1])
+    return from < 0 || to <= from ? null : [from, to]
+  }, [pingRows, zoom])
 
   // A real time axis rather than the category axis recharts defaults to: on a
   // category axis ticks are selected by index, so a period the agent was offline
@@ -446,11 +458,7 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
                   <ComposedChart data={pingRows}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                     <XAxis
-                      {...timeAxis(
-                        pingRows,
-                        Math.min(zoom?.[0] ?? 0, pingRows.length - 1),
-                        Math.min(zoom?.[1] ?? pingRows.length - 1, pingRows.length - 1),
-                      )}
+                      {...timeAxis(pingRows, zoomed?.[0] ?? 0, zoomed?.[1] ?? pingRows.length - 1)}
                     />
                     {/* Not anchored at zero: these lines live in a narrow band
                         far from it, and zero flattens every wobble. */}
@@ -509,7 +517,17 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
                       tickFormatter={clockFor(hours)}
                       fill="var(--popover)"
                       stroke="var(--primary)"
-                      onChange={(r) => setZoom([r.startIndex ?? 0, r.endIndex ?? pingRows.length - 1])}
+                      // Controlled: left to itself the brush snaps back to the
+                      // full range whenever the rows change.
+                      startIndex={zoomed?.[0] ?? 0}
+                      endIndex={zoomed?.[1] ?? pingRows.length - 1}
+                      onChange={(r) => {
+                        const last = pingRows.length - 1
+                        const from = r.startIndex ?? 0
+                        const to = r.endIndex ?? last
+                        if (from <= 0 && to >= last) return setZoom(null)
+                        setZoom([pingRows[from].ts, to >= last ? Infinity : pingRows[to].ts])
+                      }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
