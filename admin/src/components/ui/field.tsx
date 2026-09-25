@@ -15,8 +15,8 @@ export function Field({ label, hint, error, className = "", children }: { label:
   const described = error ? `${id}-error` : hint ? `${id}-hint` : undefined
   return (
     <FieldContext.Provider value={{ id, "aria-describedby": described, "aria-invalid": error ? true : undefined }}>
-      <div className={`flex min-w-0 flex-col gap-2 ${className}`}>
-        <Label htmlFor={id}>{label}</Label>
+      <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
+        <Label htmlFor={id} className="text-xs leading-normal font-normal">{label}</Label>
         {children}
         {error
           ? <p id={`${id}-error`} role="alert" className="field-error">{error}</p>

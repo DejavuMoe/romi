@@ -101,7 +101,7 @@ export function Ping({ nodes }: { nodes: Node[] }) {
               <TableHead className="w-[40%]">目标</TableHead>
               <TableHead className="w-[12%]">间隔</TableHead>
               <TableHead className="w-[12%]">节点</TableHead>
-              <TableHead className="text-right">操作</TableHead>
+              <TableHead className="w-px text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

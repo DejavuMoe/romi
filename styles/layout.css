@@ -101,6 +101,13 @@
 .detail-facts>div:last-child:nth-child(3n+1) {grid-column:1/-1;}
 .detail-facts>div:last-child:nth-child(3n+2) {grid-column:span 2;}
 .detail-facts dd {margin-top:2px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;}
+/* The database figures: the same tiled strip, four across and two on a phone. */
+.stat-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);}
+.stat-grid>div {padding:8px 12px;background:var(--card);min-width:0;}
+.stat-grid>div:last-child:nth-child(4n+1) {grid-column:1/-1;}
+.stat-grid>div:last-child:nth-child(4n+2) {grid-column:span 3;}
+.stat-grid>div:last-child:nth-child(4n+3) {grid-column:span 2;}
+@media(max-width:639px){.stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.stat-grid>div:last-child:nth-child(n){grid-column:auto;}.stat-grid>div:last-child:nth-child(2n+1){grid-column:1/-1;}}
 .node-detail {min-height:150svh;}
 .resource-panels {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-height:100svh;align-content:start;}
 .resource-panel {border:1px solid var(--border);min-width:0;}
@@ -185,10 +192,11 @@
 .view-switch>[data-slot="button"]:hover { background:transparent; color:var(--foreground); }
 .view-switch [aria-pressed="true"], .view-switch [aria-pressed="true"]:hover { background:var(--secondary); color:var(--foreground); font-weight:600; }
 .login-content h1 { margin:0; }
-.login-field { display:grid; gap:8px; }
-.login-field>label { font-size:14px; line-height:1.5; }
+.login-field { display:grid; gap:4px; }
+.login-field>label { font-size:12px; font-weight:400; line-height:1.5; }
 a { text-underline-offset:4px; text-decoration-thickness:1px; }
-.login-content>a:last-child { display:flex; justify-content:center; align-items:center; min-height:44px; }
+.login-content>a:last-child { display:flex; align-items:center; min-height:44px; width:max-content; color:var(--muted-foreground); }
+.login-content>a:last-child:hover { color:var(--foreground); }
 .resource-heading { display:flex; justify-content:space-between; gap:8px; align-items:baseline; font-size:12px; line-height:18px; white-space:nowrap; }
 .resource-heading>span { font-size:inherit; }
 .resource-heading .usage-number { text-align:right; }
@@ -254,8 +262,8 @@ a { text-underline-offset:4px; text-decoration-thickness:1px; }
 
 .login-screen { display:block; padding:10vh 20px 40px; }
 .login-content { margin-inline:auto; }
-.monitoring-actions { display:flex; flex-wrap:wrap; gap:4px; }
-@media(max-width:767px){.login-screen{padding-top:7vh;}.monitoring-actions button{padding:8px;}}
+.monitoring-actions { display:flex; justify-content:flex-end; gap:4px; }
+@media(max-width:767px){.login-screen{padding-top:7vh;}.monitoring-actions{flex-wrap:wrap;}.monitoring-actions button{padding:8px;}}
 
 /* The status page's site name is its way home, so it is sized like a control. */
 .brand-button { min-height:32px; }

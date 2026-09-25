@@ -126,9 +126,9 @@ export function Data() {
   return (
     <div className="space-y-4">
       {error && <LoadState error={error} retry={load} />}
-      <Card className="gap-4 p-5">
+      <Card>
         <h3 className="text-sm font-medium">数据库</h3>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="stat-grid">
           {stat("文件大小", bytes(info.size))}
           {stat("预写日志", bytes(info.wal))}
           {stat("可复用空间", bytes(info.free))}
@@ -141,7 +141,7 @@ export function Data() {
 
       </Card>
 
-      <Card className="gap-4 p-5">
+      <Card>
         <div>
           <h3 className="text-sm font-medium">数据库维护</h3>
           {maintenanceSettings.s && <div className="my-4 flex items-end gap-3"><Field label="自动维护周期"><Select value={String(maintenanceSettings.s.maintenance_days || "0")} onValueChange={v=>maintenanceSettings.set("maintenance_days",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{[0,7,30,90,180].map(n=><SelectItem key={n} value={String(n)}>{n ? `每 ${n} 天` : "关闭"}</SelectItem>)}</SelectContent></Select></Field><Button onClick={()=>maintenanceSettings.save({maintenance_days:String(maintenanceSettings.s?.maintenance_days || "0")})}>保存周期</Button></div>}
@@ -156,7 +156,7 @@ export function Data() {
         </div>
       </Card>
 
-      <Card className="gap-4 p-5">
+      <Card>
         <div>
           <h3 className="text-sm font-medium">备份</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

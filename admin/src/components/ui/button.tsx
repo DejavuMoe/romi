@@ -5,7 +5,7 @@ import { Slot, Tooltip } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:border-ring disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:border-ring disabled:pointer-events-none disabled:opacity-45 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -13,9 +13,9 @@ const buttonVariants = cva(
         destructive:
           "border border-destructive bg-transparent text-destructive hover:bg-secondary",
         outline:
-          "border border-input bg-popover hover:bg-accent hover:text-accent-foreground",
+          "border border-input bg-transparent text-foreground hover:bg-secondary",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-accent",
+          "border border-input bg-transparent text-foreground hover:bg-secondary",
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent",
         link: "text-primary underline-offset-4 hover:underline",

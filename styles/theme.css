@@ -175,7 +175,6 @@ textarea { resize: vertical; }
 [data-slot="table-container"] { overscroll-behavior-x: contain; }
 @media (max-width: 639px) {
   [data-slot="dialog-content"] { padding: 16px; max-width: calc(100% - 24px); }
-  [data-slot="card"]:not(.p-0) { padding: 16px; }
 }
 /* Compact 32px controls on a desk, 44px wherever a finger is the pointer. */
 @media (max-width: 767px), (pointer: coarse) {

@@ -259,7 +259,10 @@
           "admin/src/components/ui/input.tsx",
           "admin/src/components/ui/select.tsx",
           "web/src/components/ui/button.tsx",
-          "web/src/components/Meter.tsx"
+          "web/src/components/Meter.tsx",
+          "admin/src/components/ui/card.tsx",
+          "admin/src/components/ui/field.tsx",
+          "admin/src/components/ui/table.tsx"
         ],
         "interfaces": [],
         "tests": [

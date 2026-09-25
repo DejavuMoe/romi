@@ -26,7 +26,6 @@ OpenRC 演练覆盖到：Hub 安装并健康、引导密码轮换、登录、创
 同一容器内的 smoke 对 Hub 发送 SIGTERM 并在 5 秒内回收成功，存储层的 `close_drains_accepted_writes_and_releases_the_lock_last` 也通过。
 重装与重启这一段仍以 CI 的 Ubuntu runner 为准，本地未验证。
 
-界面改动只完成到原型阶段，两个受影响界面标记 needs-review，生产代码未实现。
 systemd/Nginx/TLS 演练需要一次性 root 主机，本轮未执行；真实 iOS、Safari、读屏器和真实服务器部署同样未覆盖。
 
 新候选的本地检查按[测试](testing.md)执行；发布还需绑定候选 SHA、工件摘要、CI 与安装演练，见[发布](release.md)。历史浏览器观测不证明真实 iOS、Safari、读屏器或真实服务器部署。

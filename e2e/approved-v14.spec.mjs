@@ -7,15 +7,24 @@ const PAGES = [
   ['public cards', () => '/'],
   ['public list', () => '/', async (page) => page.getByRole('button', { name: '列表', exact: true }).click()],
   ['public detail', (hub) => `/node/${hub.first}`],
+  // Before the admin pages: once signed in, /admin/ shows the panel instead.
+  ['admin login', () => '/admin/'],
   ['admin nodes', () => '/admin/nodes', null, true],
   ['admin detail', (hub) => `/admin/node/${hub.first}`, null, true],
+  ['admin probes', () => '/admin/ping', null, true],
+  ['admin notifications', () => '/admin/notify', null, true],
+  ['admin data', () => '/admin/data', null, true],
+  ['admin security', () => '/admin/security', null, true],
+  ['admin settings', () => '/admin/settings', null, true],
 ]
+const named = (name) => PAGES.find(([label]) => label === name)
 
 async function seed(hub) {
   hub.first = await hub.node('东京 · edge-01', true)
   await hub.node('新加坡 · core-02', true)
   await hub.node('法兰克福 · eu-01', false)
   await hub.request('/api/settings', { method: 'PUT', body: { public_page: 'on' } })
+  await hub.request('/api/ping-tasks', { method: 'POST', body: { name: '主站 HTTPS', target: 'status.example.invalid:443', interval: 60, nodes: [hub.first] } })
 }
 
 async function visit(page, hub, [, path, step, admin], theme) {
@@ -26,7 +35,7 @@ async function visit(page, hub, [, path, step, admin], theme) {
     page.signedIn = true
   }
   await page.goto(path(hub))
-  await page.locator('main').waitFor()
+  await page.locator('main, .login-screen').first().waitFor()
   if (step) await step(page)
   await page.waitForLoadState('networkidle')
 }
@@ -53,7 +62,7 @@ test('square and flat in both themes, with one monospace face and one focus ring
   }
 
   // The whole interface is set in the monospace face; figures in tabular digits.
-  await visit(page, hub, PAGES[0], 'light')
+  await visit(page, hub, named('public cards'), 'light')
   const faces = await page.evaluate(() => ({
     body: getComputedStyle(document.body).fontFamily,
     figure: getComputedStyle(document.querySelector('.usage-number')).fontVariantNumeric,
@@ -62,7 +71,7 @@ test('square and flat in both themes, with one monospace face and one focus ring
   expect(faces.figure).toContain('tabular-nums')
 
   // One focus treatment: a 2px solid ring.
-  await visit(page, hub, PAGES[3], 'light')
+  await visit(page, hub, named('admin nodes'), 'light')
   await page.getByLabel('搜索节点').focus()
   for (const target of [page.getByLabel('搜索节点'), page.getByRole('button', { name: '全部', exact: true })]) {
     await target.focus()
@@ -84,7 +93,7 @@ test('nothing overflows from 320 to 1440 and the admin list stays level', async 
     }
   }
   await page.setViewportSize({ width: 1440, height: 900 })
-  await visit(page, hub, PAGES[3], 'light')
+  await visit(page, hub, named('admin nodes'), 'light')
   const rows = await page.evaluate(() => [...document.querySelectorAll('.admin-node-table tbody tr')].map((tr) =>
     [...tr.children].map((td) => Math.round([...td.children].find((el) => el.getBoundingClientRect().height > 0).getBoundingClientRect().top))))
   expect(rows.length).toBe(3)
@@ -102,6 +111,8 @@ test('every control on a phone is at least 44px tall', async ({ page, hub }, tes
           const r = el.getBoundingClientRect()
           return r.width && r.height && getComputedStyle(el).visibility !== 'hidden' && !el.matches('.public-node-card, .skip-link')
         })
+        // A checkbox or switch is pressed through the row that labels it.
+        .map((el) => (el.matches('input[type="checkbox"], [role="switch"]') && el.closest('label')) || el)
         .filter((el) => el.getBoundingClientRect().height < 44)
         .map((el) => `${el.tagName} "${(el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 20)}" ${Math.round(el.getBoundingClientRect().height)}px`))
     expect(small, entry[0]).toEqual([])

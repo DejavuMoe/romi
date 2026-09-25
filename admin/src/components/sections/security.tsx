@@ -42,7 +42,7 @@ function Sessions() {
 
   if (!rows && !failed) return null
   return (
-    <Card className="gap-4 p-5">
+    <Card>
       <div>
         <h3 className="text-sm font-medium">登录会话</h3>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -88,7 +88,7 @@ export function Security() {
   return (
     // The approved order: the account form, then the sessions it governs.
     <div className="space-y-4">{error && <p role="alert" className="field-error">{error}</p>}
-      <Card className="gap-4 p-5">
+      <Card>
         <div>
           <h3 className="text-sm font-medium">账号与密码</h3>
           <p className="mt-1 text-xs text-muted-foreground">

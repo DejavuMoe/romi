@@ -56,7 +56,7 @@ function TemplatePreview({ template, site, json = false }: { template: string; s
 // channel is configured, so the closed card still answers the common question.
 function ChannelCard({ title, configured, children }: { title: string; configured: boolean; children: React.ReactNode }) {
   return (
-    <Card className="p-5">
+    <Card>
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 outline-none [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2 text-sm font-medium">
@@ -96,7 +96,7 @@ function OfflineNodes({ nodes, refresh }: { nodes: Node[]; refresh: () => void }
 
   const enabled = nodes.filter((n) => n.notify).length
   return (
-    <Card className="gap-4 p-5">
+    <Card>
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-medium">离线通知</h3>
@@ -231,7 +231,7 @@ export function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void 
 
       <OfflineNodes nodes={nodes} refresh={refresh} />
 
-      <Card className="gap-4 p-5">
+      <Card>
         <h3 className="text-sm font-medium">事件</h3>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="离线宽限期（分钟）" hint="断开超过这么久才算离线，1–30">
@@ -244,10 +244,10 @@ export function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void 
             <Input type="number" min={0} max={365} value={text("notify_expiry")} onChange={(e) => set("notify_expiry", e.target.value)} />
           </Field>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <Switch aria-labelledby="notify-login-label" checked={s.notify_login !== "off"} onCheckedChange={(v) => set("notify_login", v ? "on" : "off")} />
-          <span id="notify-login-label">登录后台时提醒</span>
-        </div>
+        <label className="choice-row">
+          <Switch checked={s.notify_login !== "off"} onCheckedChange={(v) => set("notify_login", v ? "on" : "off")} />
+          <span>登录后台时提醒</span>
+        </label>
         <div>
           <Button
             size="sm"

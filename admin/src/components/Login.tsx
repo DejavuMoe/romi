@@ -31,12 +31,12 @@ export function Login({ onDone }: { onDone: () => void }) {
 
   return <div className="login-screen">
     <div className="login-content"><h1>登录</h1>
-      <Card className="p-6"><form noValidate onSubmit={submit} className="space-y-4">
+      <Card><form noValidate onSubmit={submit} className="space-y-4">
         <div className="login-field"><Label htmlFor="username">账号</Label><Input id="username" value={username} autoComplete="username" autoFocus onChange={e=>setUsername(e.target.value)} aria-invalid={submitted && !username.trim()} aria-describedby="username-error"/><p id="username-error" className="field-error">{submitted && !username.trim() ? "请填写账号" : ""}</p></div>
         <div className="login-field"><Label htmlFor="password">密码</Label><Input id="password" type="password" value={password} autoComplete="current-password" onChange={e=>setPassword(e.target.value)} aria-invalid={submitted && !password} aria-describedby="password-error"/><p id="password-error" className="field-error">{submitted && !password ? "请填写密码" : ""}</p></div>
         <p role="alert" className="field-error">{error}</p><Button type="submit" className="w-full" disabled={busy}>{busy ? "登录中…" : "登录"}</Button>
       </form></Card>
-      <a className="text-center text-sm underline" href="/">返回公开状态页</a>
+      <a className="text-xs underline" href="/">返回公开状态页</a>
     </div>
   </div>
 }
