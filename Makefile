@@ -92,6 +92,7 @@ check-release-scripts:
 # repositories, so keep them in check (CI), outside the Windows-owned WSL path.
 check-linux: frontend
 	$(MAKE) check-scripts
+	$(MAKE) check-licenses
 	$(MAKE) check-frontends
 	$(MAKE) check-format
 	$(MAKE) check-clippy
@@ -104,14 +105,14 @@ check-scripts:
 	python3 scripts/test_bench_transport.py
 	python3 scripts/test_release_gate.py
 	python3 scripts/test_version.py
-	$(MAKE) check-licenses
 	python3 scripts/version.py check
 	python3 scripts/test_installers.py
 	python3 scripts/test_systemd_rehearsal.py
 	python3 scripts/systemd_rehearsal.py --help >/dev/null
 
 # Needs locked dependencies installed (make setup): it reads crate sources and
-# node_modules to regenerate the notices every release archive carries.
+# node_modules to regenerate the notices every release archive carries. Kept
+# out of check-scripts, which the release workflow runs before any install.
 check-licenses:
 	python3 scripts/third_party.py check
 
