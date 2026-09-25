@@ -1,31 +1,42 @@
-# 验证记录与适用范围
+# 验收状态
 
 验证结果只适用于执行时的源树、构建产物和环境；历史记录不能替代当前候选的检查。
 
-| 记录 | 能证明的范围 |
-| --- | --- |
-| [文档消融](experiments/documentation.md) | 2026-09-22 的文档/历史整理，以及本次非代码文档审校的静态度量和文档站检查 |
-| [运行代码清理消融](experiments/runtime-cleanup.md) | 对应基线与变体的构建、E2E、截图和格式化输出比较 |
-| [界面契约](ui/implementation.md) | 已批准规格、生产位置和采集时的浏览器观测；不代表后续源码已复测 |
+## 记录规则
 
-## 2026-09-25 代码审查修复
+- 每次发版在本页新增一个 `## vX.Y.Z` 小节，新版本在上，旧版本的小节保留不改。
+  `scripts/version.py check` 在 CI 和打标签时都要求当前 `VERSION` 的小节存在且非空，漏写会让门禁失败，见[发布](release.md)。
+- 小节记录发版前在本地实际执行的检查、结果和未覆盖的范围，不写未执行的检查，也不预填结果。
+- 小节随候选提交一起提交，因此不写候选提交自身的 SHA：版本标签指向的提交就是它适用的源树。
+- CI、Linux platforms、Release 与 Release Rehearsal 的结果以 GitHub 上同一提交的运行记录为准，
+  用 `python3 scripts/release_gate.py --repo DejavuMoe/romi --sha <完整提交>` 查询，不复制到本页。
 
-本轮按代码审查结果修改存储、安全、前端和安装路径，检查在 Debian WSL2 构建镜像执行，Git 与源码在 Windows。
+## v0.1.0
+
+2026-09-25 执行。Linux 检查在 Debian WSL2 的 ext4 构建镜像中运行；需要 Git 元数据或会修改临时 Git 仓库的脚本在 Windows 检出中运行。
 
 | 检查 | 结果 | 范围 |
 | --- | --- | --- |
-| `make check-linux` | 通过 | 脚本、前端、fmt、Clippy；Hub 167、引擎 9、Agent 26 |
-| `make e2e` | 60 通过 | 桌面/移动 Chromium；含新增的响应头、登录页轮询与借用控件样式 |
-| `scripts/test_installers.py` | 11 通过 | 含 Hub/Agent 同机共存回归 |
-| `scripts/platform_build.py --target x86_64-unknown-linux-musl` | 构建与 smoke 通过 | 一次性容器内的 musl 静态链接检查、GLIBC 基线与 smoke |
-| OpenRC 安装演练 | 部分通过，见下 | 一次性特权容器内的真实 OpenRC 安装与上报 |
-| 原型校验 | 通过 | `content_audit.py check`、`validate_workflow.py` 四项、`verify.cjs` |
+| `make check-linux` | 通过 | 脚本自测、版本同步、第三方许可清单（419 个组件）、两端前端 lint/单测、fmt、Clippy；Rust 测试 Hub 170、DuckDB 引擎 9、Agent 26（另 1 项手动基准按设计忽略） |
+| `make smoke` | 通过 | release 二进制：登录、创建节点、私有默认值、DuckDB 单写锁、令牌轮换、Agent 上报、健康检查与版本化 Agent 分发 |
+| `make e2e` | 88 通过，2 项按设计跳过 | 桌面 1280×900 与移动 390×844 Chromium；公开页、登录与全部后台页面的 v14 视觉契约、弹窗与手机底部面板 |
+| `make check-docs` | 通过 | 24 个页面、30 个站内路径与资源、中文搜索、320/390/1360px 无横向溢出 |
+| `make live-capacity` | 通过 | 真实套接字：单地址 4 个、匿名 64 个、管理员预留 32 个实时连接，关闭后席位回收 |
+| `scripts/release.py check` 等发布脚本（Windows） | 通过 | 发布工具 15 项自测、发布矩阵、演练标签只在本地、快照安全检查 |
+| `scripts/documentation_audit.py check`（Windows） | 通过 | 项目文档本地链接 |
+| `validate_workflow.py contract --phase implemented` | 通过 | 3 个界面契约；32 条内容审查提示为已复核的数据属性标识 |
 
-OpenRC 演练覆盖到：Hub 安装并健康、引导密码轮换、登录、创建节点、Agent 安装并上报实时指标、`agent.env` 为 0600，全部在新的 `/opt/romi/<组件>/` 布局下通过。
-它在同版本重装的服务停止步骤超时，原因是 Docker Desktop 下 supervise-daemon 的 cgroup 清理（OpenRC 报 `bounded cleanup timed out`），不是 Hub 未退出：
-同一容器内的 smoke 对 Hub 发送 SIGTERM 并在 5 秒内回收成功，存储层的 `close_drains_accepted_writes_and_releases_the_lock_last` 也通过。
-重装与重启这一段仍以 CI 的 Ubuntu runner 为准，本地未验证。
+未覆盖：
 
-systemd/Nginx/TLS 演练需要一次性 root 主机，本轮未执行；真实 iOS、Safari、读屏器和真实服务器部署同样未覆盖。
+- 真实服务器上的完整部署（systemd、Nginx 与公共 CA 证书）。Release Rehearsal 在 CI 的一次性 runner 上演练 systemd、TLS、注册、重装与重启；真实 VPS 部署由维护者另行测试。
+- OpenRC 安装由 Linux platforms 工作流的 musl 任务验证，本地未重复。
+- 100/500 节点的容量基准未在本候选重跑，方法见[容量基准](bench.md)。
+- 真实 iOS/Safari 设备、触摸硬件与读屏器。
 
-新候选的本地检查按[测试](testing.md)执行；发布还需绑定候选 SHA、工件摘要、CI 与安装演练，见[发布](release.md)。历史浏览器观测不证明真实 iOS、Safari、读屏器或真实服务器部署。
+## 历史记录
+
+| 记录 | 能证明的范围 |
+| --- | --- |
+| [文档消融](experiments/documentation.md) | 2026-09-22 的文档与历史整理的静态度量 |
+| [运行代码清理消融](experiments/runtime-cleanup.md) | 2026-09-22 那次清理的构建、E2E、截图与格式化输出比较 |
+| [界面契约](ui/implementation.md) | 已批准规格、生产位置与回归入口 |

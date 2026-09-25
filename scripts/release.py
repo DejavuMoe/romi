@@ -194,6 +194,7 @@ def component_sources(component: str):
     common = (
         ("LICENSE", "LICENSE", 0o644),
         ("THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md", 0o644),
+        ("THIRD_PARTY_LICENSES.txt", "THIRD_PARTY_LICENSES.txt", 0o644),
         ("VERSION", "VERSION", 0o644),
         ("docs/deployment.md", "docs/deployment.md", 0o644),
         ("docs/release.md", "docs/release.md", 0o644),
@@ -717,6 +718,12 @@ def fixture_version_files(root: Path, version: str = "0.1.0") -> None:
             json.dumps({"name": f"@romi/{component}", "private": True, "version": "0.0.0"}),
             encoding="utf-8",
         )
+    compose = root / "deploy" / "agent" / "compose.yml"
+    compose.parent.mkdir(parents=True, exist_ok=True)
+    compose.write_text(f"services:\n  romi-agent:\n    image: romi-agent:{version}\n", encoding="utf-8")
+    readiness = root / "docs" / "readiness.md"
+    readiness.parent.mkdir(parents=True, exist_ok=True)
+    readiness.write_text(f"# readiness fixture\n\n## v{version}\n\nfixture record\n", encoding="utf-8")
 
 
 def fixture_release_inputs(root: Path) -> Path:
@@ -724,6 +731,7 @@ def fixture_release_inputs(root: Path) -> Path:
     fixture_version_files(root)
     (root / "LICENSE").write_text("MIT fixture\n", encoding="utf-8")
     (root / "THIRD_PARTY_NOTICES.md").write_text("notices fixture\n", encoding="utf-8")
+    (root / "THIRD_PARTY_LICENSES.txt").write_text("licenses fixture\n", encoding="utf-8")
     (root / "README.md").write_text("romi fixture\n", encoding="utf-8")
     (root / "docs").mkdir(exist_ok=True)
     (root / "docs" / "deployment.md").write_text("deployment fixture\n", encoding="utf-8")

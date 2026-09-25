@@ -38,6 +38,8 @@ def check(gnu, musl, output):
         context.mkdir()
         shutil.copy2(agent, context / 'romi-agent')
         shutil.copy2(ROOT / 'deploy/agent/Dockerfile', context / 'Dockerfile')
+        for notice in ('LICENSE', 'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_LICENSES.txt'):
+            shutil.copy2(ROOT / notice, context / notice)
         subprocess.run(['docker', 'build', '-t', image, '--build-arg', 'VERSION=' + version,
                         '--build-arg', 'SOURCE_COMMIT=' + metadata['source_commit'], str(context)], check=True)
         config = test.work / 'agent.env'

@@ -1,6 +1,6 @@
 services:
   romi-agent:
-    image: romi-agent:0.0.1
+    image: romi-agent:0.1.0
     pull_policy: never
     restart: unless-stopped
     network_mode: host

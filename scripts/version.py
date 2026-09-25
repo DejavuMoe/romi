@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 TAG = re.compile(r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 PRIVATE_COMPONENTS = ("admin", "web")
+READINESS = "docs/readiness.md"
 
 
 class VersionError(ValueError):
@@ -82,6 +83,28 @@ def fresh_private_package(root, relative):
     return package
 
 
+def readiness_section(root, version):
+    """Return the verification record for ``version`` in docs/readiness.md.
+
+    Every release records what was checked for it, so a VERSION bump that
+    leaves the record behind fails here, in CI and at the tag.
+    """
+    path = root / READINESS
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise VersionError(f"cannot read {path}: {error}") from error
+    heading = re.search(rf"^## v{re.escape(version)}[ \t]*$", text, re.MULTILINE)
+    if heading is None:
+        raise VersionError(f"{READINESS} has no '## v{version}' section; record this release's verification there")
+    rest = text[heading.end():]
+    following = re.search(r"^## ", rest, re.MULTILINE)
+    body = rest[:following.start()] if following else rest
+    if not body.strip():
+        raise VersionError(f"{READINESS}: the '## v{version}' section is empty")
+    return body
+
+
 def check(root=ROOT, tag=None):
     """Validate VERSION and every release-relevant synchronized file."""
     version = read_version(root)
@@ -111,6 +134,22 @@ def check(root=ROOT, tag=None):
             fresh_private_package(root, f"{component}/package.json")
         except VersionError as error:
             errors.append(str(error))
+
+    # The compose file loads the image `docker load` created from the release
+    # archive and never pulls, so its tag must be exactly this version.
+    compose = root / "deploy/agent/compose.yml"
+    try:
+        images = re.findall(r"^\s*image:\s*(\S+)\s*$", compose.read_text(encoding="utf-8"), re.MULTILINE)
+    except OSError as error:
+        errors.append(f"cannot read {compose}: {error}")
+    else:
+        if images != [f"romi-agent:{version}"]:
+            errors.append(f"deploy/agent/compose.yml: image must be romi-agent:{version}, got {images!r}")
+
+    try:
+        readiness_section(root, version)
+    except VersionError as error:
+        errors.append(str(error))
 
     if tag is not None:
         if TAG.fullmatch(tag) is None:

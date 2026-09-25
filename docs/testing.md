@@ -10,14 +10,18 @@ Windows 负责源码和 Git。Linux 检查使用 ext4 镜像：
 linux-task.ps1 -Mode build -Project (Get-Location).Path -Command 'make setup && make check-linux'
 ```
 
-`make check-linux` 包含两端构建、lint/单测、Rust fmt/Clippy/测试、安装器和演练驱动离线检查。
-它不需要 Git 元数据。`make check` 还运行修改临时 Git 仓库的发布检查，留给 Windows 或一次性 CI。
+`make check-linux` 包含两端构建、lint/单测、Rust fmt/Clippy/测试、安装器和演练驱动离线检查，
+以及版本同步（含[验收状态](readiness.md)中当前版本的小节）与第三方许可清单核对。
+依赖变化后运行 `python3 scripts/third_party.py generate` 重新生成 `THIRD_PARTY_LICENSES.txt`，否则 `make check-licenses` 失败。
+它不需要 Git 元数据。`make check` 还运行修改临时 Git 仓库的发布检查（`make check-release-scripts`），留给 Windows 或一次性 CI。
+`documentation_audit.py check` 用 `git ls-files` 检查项目文档的本地链接，也需在带 Git 元数据的检出中运行：
 
 ```powershell
-python -X utf8 scripts/documentation_audit.py check
 python -X utf8 scripts/release.py check
-python -X utf8 scripts/package.py check
 python -X utf8 scripts/test_release_matrix.py
+python -X utf8 scripts/rehearse_release.py check
+python -X utf8 scripts/package.py check
+python -X utf8 scripts/documentation_audit.py check
 ```
 
 只改前端时运行 `make frontend check-frontends`；Rust 局部修改运行对应 Cargo 测试，按影响扩展到集成检查。

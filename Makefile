@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 export CARGO_TARGET_DIR := $(CURDIR)/target
-.PHONY: help setup frontend build release release-candidate release-package release-rehearsal systemd-rehearsal package check check-linux smoke e2e live-capacity bench bench-fixture dev-server dev-admin dev-web
-.PHONY: check-scripts check-frontends check-docs check-format check-clippy check-rust-tests check-release-scripts
+.PHONY: help setup frontend build release-binaries release release-candidate release-package release-rehearsal systemd-rehearsal package check check-linux smoke e2e live-capacity bench bench-fixture dev-server dev-admin dev-web
+.PHONY: check-scripts check-licenses check-frontends check-docs check-format check-clippy check-rust-tests check-release-scripts
 
 help:
 	@echo 'make setup       Install locked frontend dependencies and fetch Rust dependencies'
@@ -9,7 +9,7 @@ help:
 	@echo 'make check       Lint, typecheck/build frontends and run existing tests'
 	@echo 'make check-linux Run runtime checks without Git metadata or Git-mutating release fixtures'
 	@echo 'make check-docs  Build and exercise the VitePress documentation site'
-	@echo 'make smoke       Build and verify server + agent over loopback'
+	@echo 'make smoke       Build release binaries and verify server + agent over loopback'
 	@echo 'make e2e         Build and run desktop/mobile browser tests against a temporary Hub'
 	@echo 'make live-capacity  Build and check the live viewer limits over real sockets'
 	@echo 'make bench       Run the storage benchmark against target/release (see scripts/bench.py)'
@@ -44,9 +44,12 @@ build: frontend
 	cargo build --locked --manifest-path server/Cargo.toml
 	cargo build --locked --manifest-path agent/Cargo.toml
 
-release: frontend
+release-binaries: frontend
 	cargo build --locked --release --manifest-path server/Cargo.toml
 	cargo build --locked --release --manifest-path agent/Cargo.toml
+
+# The receipt reads git ls-files, so this needs a checkout, not a build mirror.
+release: release-binaries
 	python3 scripts/package.py record
 
 package: release
@@ -100,10 +103,17 @@ check-scripts:
 	python3 scripts/ci_ablation.py --self-check
 	python3 scripts/test_bench_transport.py
 	python3 scripts/test_release_gate.py
+	python3 scripts/test_version.py
+	$(MAKE) check-licenses
 	python3 scripts/version.py check
 	python3 scripts/test_installers.py
 	python3 scripts/test_systemd_rehearsal.py
 	python3 scripts/systemd_rehearsal.py --help >/dev/null
+
+# Needs locked dependencies installed (make setup): it reads crate sources and
+# node_modules to regenerate the notices every release archive carries.
+check-licenses:
+	python3 scripts/third_party.py check
 
 check-frontends:
 	node shared/contract.test.ts
@@ -131,8 +141,10 @@ check-rust-tests:
 	cargo test --locked --manifest-path server/Cargo.toml -- --test-threads=1
 	cargo test --locked --manifest-path agent/Cargo.toml
 
-smoke: build
-	python3 scripts/smoke.py
+# Release binaries, as CI uses: a debug Agent is larger than the Hub accepts
+# for distribution (16 MiB), so a debug smoke run would stop at Hub startup.
+smoke: release-binaries
+	python3 scripts/smoke.py --release
 
 e2e: build
 	pnpm test:e2e
