@@ -18,7 +18,7 @@
         {
           "path": "revision-v14/index.html",
           "createdAt": "2026-09-25T02:43:42.431Z",
-          "status": "needs-review",
+          "status": "approved",
           "subtitle": "v14 visual convergence",
           "viewport": {
             "width": 1440,
@@ -42,7 +42,7 @@
         {
           "path": "revision-v14/public.html",
           "createdAt": "2026-09-25T02:43:42.805Z",
-          "status": "needs-review",
+          "status": "approved",
           "subtitle": "v14 visual convergence",
           "viewport": {
             "width": 1440,
@@ -56,7 +56,7 @@
         {
           "path": "revision-v14/system.html",
           "createdAt": "2026-09-25T02:43:43.293Z",
-          "status": "needs-review",
+          "status": "approved",
           "subtitle": "v14 tokens and components",
           "viewport": {
             "width": 1440,
@@ -67,6 +67,6 @@
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T02:43:43.295Z",
+  "updatedAt": "2026-09-25T03:04:31.912Z",
   "title": "romi 下一版界面原型"
 }
