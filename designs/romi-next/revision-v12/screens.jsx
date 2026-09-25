@@ -438,7 +438,7 @@ function Notifications({ onSave, nodes, state, onRetry }) {
     </section>
   );
 }
-function Security({ onSave, onConfirm, account, setAccount }) {
+function Security({ onSave, onConfirm, account, setAccount, state, onRetry }) {
   // The hub answers a wrong current password with a refusal, so the form has to
   // show one. `romi-prototype` is this fixture's stand-in for the stored value.
   const [currentPasswordError, setCurrentPasswordError] = React.useState("");
@@ -518,9 +518,20 @@ function Security({ onSave, onConfirm, account, setAccount }) {
         <div className="box">
           <div className="box-head">
             <h2>登录会话</h2>
-            <span className="muted small">2 个</span>
+            {state !== "sessions-error" && <span className="muted small">2 个</span>}
           </div>
-          {["当前浏览器", "另一台浏览器"].map((name, i) => (
+          {/* The list fails on its own while the rest of the page works, so the
+              card says so where the list would be. An absent card read as "no
+              other sessions", which is the one thing it cannot know. */}
+          {state === "sessions-error" ? (
+            <Empty
+              error
+              title="会话列表加载失败"
+              detail="暂时无法确认其他设备的登录状态。"
+              action="重试"
+              onAction={onRetry}
+            />
+          ) : ["当前浏览器", "另一台浏览器"].map((name, i) => (
             <div className="data-row" key={name}>
               <div>
                 <h3>{name}</h3>

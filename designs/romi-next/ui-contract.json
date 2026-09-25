@@ -142,7 +142,7 @@
           "interface": "POST /api/auth/login; GET /api/auth/github"
         }
       ],
-      "status": "implemented"
+      "status": "needs-review"
     },
     {
       "id": "public-status-v12",

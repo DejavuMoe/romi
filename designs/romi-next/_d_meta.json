@@ -7,13 +7,13 @@
       "versions": [
         {
           "path": "revision-v12/index.html",
-          "createdAt": "2026-09-25T04:10:00.000Z",
-          "status": "approved",
+          "createdAt": "2026-09-25T06:30:00.000Z",
+          "status": "needs-review",
           "viewport": {
             "width": 1326,
             "height": 831
           },
-          "summary": "Keyboard-navigable history tabs wired to their panel, and public cards whose own content is their accessible name."
+          "summary": "The session list shows its own load failure with a retry, instead of the card disappearing."
         }
       ]
     },
@@ -33,6 +33,6 @@
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T04:10:00.000Z",
+  "updatedAt": "2026-09-25T06:30:00.000Z",
   "title": "romi 下一版界面原型"
 }

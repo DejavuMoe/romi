@@ -238,7 +238,7 @@ function App() {
           <SettingsScreen onSave={setToast} state={state} onRetry={retry} settings={settings} setSettings={setSettings} />
         );
       case "security":
-        return <Security onSave={setToast} onConfirm={confirm} account={account} setAccount={setAccount} />;
+        return <Security onSave={setToast} onConfirm={confirm} account={account} setAccount={setAccount} state={state} onRetry={retry} />;
       case "data":
         return (
           <DataScreen maintenance={maintenance} setMaintenance={setMaintenance}

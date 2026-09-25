@@ -13,11 +13,12 @@
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+      "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
       "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
     ],
-    "capturedAt": "2026-09-24T19:44:57Z",
+    "capturedAt": "2026-09-25T00:36:06Z",
     "surfaces": [
       {
         "source": "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/admin-nodes.json",
@@ -107,6 +108,16 @@
           "devicePixelRatio": 1,
           "height": 831,
           "width": 1601
+        }
+      },
+      {
+        "source": "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
+        "url": "http://127.0.0.1:4399/romi-next/revision-v12/index.html",
+        "title": "romi",
+        "viewport": {
+          "width": 1326,
+          "height": 831,
+          "devicePixelRatio": 1
         }
       },
       {
@@ -242,6 +253,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -380,6 +392,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -411,6 +424,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -442,6 +456,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -473,6 +488,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -504,6 +520,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -535,6 +552,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -2864,6 +2882,28 @@
       "notes": null
     },
     {
+      "id": "content-d908b7b464a032ba",
+      "text": "[ ! ]",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > div.box > div.empty:nth-of-type(2) > span.mono.danger"
+      ],
+      "visibility": [
+        "accessibility-hidden"
+      ],
+      "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json"
+      ],
+      "purpose": "state",
+      "origin": "agent-generated-task-copy",
+      "decision": "allow",
+      "evidence": "Error glyph of the approved Empty component; aria-hidden, paired with the alert title.",
+      "flags": [],
+      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
+    },
+    {
       "id": "content-8c6976e5b5410415",
       "text": "admin",
       "channels": [
@@ -2884,6 +2924,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -3107,6 +3148,7 @@
         "text"
       ],
       "locations": [
+        "input#\\:r0\\:",
         "input#\\:r1g\\:",
         "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > div.form-grid:nth-of-type(1) > label.field:nth-of-type(1) > span:nth-of-type(1)"
       ],
@@ -3114,6 +3156,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-field",
@@ -3131,6 +3174,7 @@
         "text"
       ],
       "locations": [
+        "input#\\:r1\\:",
         "input#\\:r1h\\:",
         "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > div.form-grid:nth-of-type(1) > label.field:nth-of-type(2) > span:nth-of-type(1)"
       ],
@@ -3138,6 +3182,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-field",
@@ -3416,6 +3461,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-object",
@@ -3687,6 +3733,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-probes.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-public.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -4154,6 +4201,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -4214,6 +4262,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -4261,6 +4310,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "machine-identifier",
@@ -4317,6 +4367,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -4653,6 +4704,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -4894,6 +4946,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -4950,6 +5003,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-probes.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-public.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -5363,6 +5417,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -5416,6 +5471,28 @@
       "origin": "agent-generated-task-copy",
       "decision": "allow",
       "evidence": "Help text stating an input bound or a consequence enforced by the hub; bounds cross-checked against docs/domain.md.",
+      "flags": [],
+      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
+    },
+    {
+      "id": "content-235a35f9d6038566",
+      "text": "会话列表加载失败",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > div.box > div.empty:nth-of-type(2) > h2"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json"
+      ],
+      "purpose": "state",
+      "origin": "agent-generated-task-copy",
+      "decision": "allow",
+      "evidence": "Card-local failure title for the session list in revision-v12 sessions-error state.",
       "flags": [],
       "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
     },
@@ -5520,6 +5597,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "user-action",
@@ -5630,6 +5708,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "user-action",
@@ -5648,12 +5727,15 @@
       ],
       "locations": [
         "input#\\:r1k\\:",
-        "span#\\:r1k\\:-hint"
+        "input#\\:r4\\:",
+        "span#\\:r1k\\:-hint",
+        "span#\\:r4\\:-hint"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "task-help",
@@ -5672,12 +5754,14 @@
       ],
       "locations": [
         "input#\\:r1i\\:",
+        "input#\\:r2\\:",
         "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(1) > label.field > span:nth-of-type(1)"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-field",
@@ -5786,6 +5870,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -5968,6 +6053,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-probes.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-public.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -6972,12 +7058,14 @@
         "placeholder"
       ],
       "locations": [
-        "input#\\:r1i\\:"
+        "input#\\:r1i\\:",
+        "input#\\:r2\\:"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "task-help",
@@ -6997,6 +7085,7 @@
       "locations": [
         "div#root > div.shell > aside.sidebar > nav.side-nav > a:nth-of-type(5) > span:nth-of-type(2)",
         "div#root > div.shell > div.main-shell > div.workspace-nav > nav > a:nth-of-type(5)",
+        "div#root > div.shell > div.main-shell > header.topbar > span.crumb:nth-of-type(1) > span:nth-of-type(2)",
         "div#root > div.shell:nth-of-type(1) > aside.sidebar > nav.side-nav > a:nth-of-type(5) > span:nth-of-type(2)",
         "div#root > div.shell:nth-of-type(1) > div.main-shell > div.workspace-nav > nav > a:nth-of-type(5)",
         "div#root > div.shell:nth-of-type(1) > div.main-shell > header.topbar > span.crumb:nth-of-type(1) > span:nth-of-type(2)",
@@ -7015,6 +7104,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -7076,6 +7166,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -7344,12 +7435,14 @@
       ],
       "locations": [
         "input#\\:r1k\\:",
+        "input#\\:r4\\:",
         "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > label.field:nth-of-type(2) > span:nth-of-type(1)"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-field",
@@ -7430,6 +7523,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -7693,6 +7787,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -7724,6 +7819,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -7774,12 +7870,14 @@
       ],
       "locations": [
         "input#\\:r1l\\:",
+        "input#\\:r5\\:",
         "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > label.field:nth-of-type(3) > span:nth-of-type(1)"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-field",
@@ -7811,6 +7909,28 @@
       "evidence": "revision-v6 components/screens/fixtures: resource graph labels, series identity, synthetic measurements or operational state",
       "flags": [],
       "notes": null
+    },
+    {
+      "id": "content-3aef7cbace87aadd",
+      "text": "暂时无法确认其他设备的登录状态。",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > div.box > div.empty:nth-of-type(2) > p"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json"
+      ],
+      "purpose": "state",
+      "origin": "agent-generated-task-copy",
+      "decision": "allow",
+      "evidence": "States what the failure leaves unknown, so an absent list is not read as no other sessions.",
+      "flags": [],
+      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
     },
     {
       "id": "content-76516931f5527dd6",
@@ -8499,12 +8619,15 @@
       ],
       "locations": [
         "input#\\:r1i\\:",
-        "span#\\:r1i\\:-hint"
+        "input#\\:r2\\:",
+        "span#\\:r1i\\:-hint",
+        "span#\\:r2\\:-hint"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "task-help",
@@ -8521,6 +8644,7 @@
         "placeholder"
       ],
       "locations": [
+        "input#\\:r1\\:",
         "input#\\:r1h\\:",
         "input#\\:r6\\:"
       ],
@@ -8529,6 +8653,7 @@
       ],
       "captures": [
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-notifications.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-field",
@@ -8581,6 +8706,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-object",
@@ -8618,6 +8744,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -8967,6 +9094,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -9283,12 +9411,15 @@
       ],
       "locations": [
         "input#\\:r1l\\:",
-        "span#\\:r1l\\:-hint"
+        "input#\\:r5\\:",
+        "span#\\:r1l\\:-hint",
+        "span#\\:r5\\:-hint"
       ],
       "visibility": [
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "task-help",
@@ -9325,6 +9456,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -9493,6 +9625,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -9562,6 +9695,7 @@
         "div#root > div[data-screen-id=\"login\"] > form.box > label.field:nth-of-type(1) > span:nth-of-type(1)",
         "input#\\:r0\\:",
         "input#\\:r1j\\:",
+        "input#\\:r3\\:",
         "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > form.box.stack:nth-of-type(2) > label.field:nth-of-type(1) > span:nth-of-type(1)"
       ],
       "visibility": [
@@ -9569,6 +9703,7 @@
       ],
       "captures": [
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-login.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-field",
@@ -9591,6 +9726,7 @@
         "visible"
       ],
       "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json"
       ],
       "purpose": "domain-object",
@@ -9644,6 +9780,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-public-cards.json"
@@ -9816,6 +9953,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -9854,6 +9992,7 @@
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/approved-settings.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/edit-menu.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/install.json",
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-current-password.json",
         "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/v13-node-visibility.json"
       ],
@@ -9865,6 +10004,28 @@
         "dom-metadata"
       ],
       "notes": "Reviewed data attributes identify actual screens, theme, audience or runtime flags; they contain no design rationale or task instructions."
+    },
+    {
+      "id": "content-b8784c8dd5636ff2",
+      "text": "重试",
+      "channels": [
+        "text"
+      ],
+      "locations": [
+        "main#main > section[data-screen-id=\"security\"] > div.settings-list:nth-of-type(2) > div.box > div.empty:nth-of-type(2) > button.btn"
+      ],
+      "visibility": [
+        "visible"
+      ],
+      "captures": [
+        "/mnt/d/Forgejo/romi/designs/romi-next/revision-v12/captures/sessions-error.json"
+      ],
+      "purpose": "user-action",
+      "origin": "agent-generated-task-copy",
+      "decision": "allow",
+      "evidence": "Retry action of the approved Empty component.",
+      "flags": [],
+      "notes": "Reviewed operational content; no brief text, rationale, or marketing copy."
     },
     {
       "id": "content-ab7e3afbecbdafbe",
