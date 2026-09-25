@@ -8,10 +8,7 @@
 
 - **Hub**：Rust 单文件二进制，内嵌 DuckDB、管理后台和公开状态页，不依赖外部数据库。
 - **Agent**：每台主机一个，只采集和探测，不执行远程命令；从你的 Hub 按精确版本安装。
-- **平台**：Linux x86_64 / ARM64，GNU 或 musl，systemd 或 OpenRC；Agent 另有 Docker 镜像。
-
-> [!WARNING]
-> romi 目前是 **0.1.x 测试版**，以 GitHub Pre-release 发布。功能和数据格式仍可能调整，请在可以重装的主机上试用，升级前先备份。
+- **平台**：Linux x86_64 / ARM64，GNU 或 musl，systemd 或 OpenRC；Agent 另有 Docker 镜像（`ghcr.io/dejavumoe/romi-agent`）。
 
 ## 快速开始
 

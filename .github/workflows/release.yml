@@ -92,6 +92,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+      packages: write
     env:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
@@ -134,13 +135,28 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft,body > "$RUNNER_TEMP/romi-existing-release.json" 2>/dev/null; then
             python3 -c 'import json,os; from pathlib import Path; r=json.loads((Path(os.environ["RUNNER_TEMP"])/"romi-existing-release.json").read_text()); assert r["isDraft"] and "<!-- romi-source:"+os.environ["GITHUB_SHA"]+" -->" in r["body"], "refusing to overwrite a published or unrelated release"'
           else
-            gh release create "$RELEASE_TAG" --draft --prerelease --verify-tag --latest=false \
-              --title "romi $RELEASE_TAG — testing release" --notes-file "$notes"
+            gh release create "$RELEASE_TAG" --draft --verify-tag --latest=false \
+              --title "romi $RELEASE_TAG" --notes-file "$notes"
           fi
           gh release upload "$RELEASE_TAG" dist/release/* --clobber
       - name: Attest every uploaded asset
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/release/*
-      - name: Publish the complete Pre-release
-        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+      # The image archives are the ones verified above. They are only loaded,
+      # retagged and pushed; the release stays a draft until the image and its
+      # attestation are in the registry.
+      - name: Push the verified Agent image to GHCR
+        id: image
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          python3 scripts/publish_image.py --directory dist/release --latest
+      - name: Attest the Agent image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - name: Publish the complete release
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest

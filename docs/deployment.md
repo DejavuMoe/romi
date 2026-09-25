@@ -7,7 +7,7 @@ GNU 工件在 Debian 12 基线构建，glibc 要求不高于 2.36；musl 工件�
 
 Hub/Agent 都以独立非 root 账号运行。Hub 仅监听回环，外部 HTTPS 由反向代理终止。
 原生安装需要 shell、curl、sha256sum 和系统账号管理工具；GNU Hub 需要系统 libstdc++。
-Agent Docker 使用 Release 镜像归档，见本文末尾；不提供 Hub Docker 交付。
+Agent Docker 镜像发布在 GHCR，见本文末尾；不提供 Hub Docker 交付。
 不提供从可变 master 源码执行 `curl | sh` 的安装路径。
 
 ## 信任边界
@@ -279,14 +279,17 @@ OpenRC 服务由 supervise-daemon 管理，以 romi / romi-agent 账号运行，
 
 ## Agent Docker（Linux 宿主机）
 
-下载并验证与你的 CPU 对应的镜像归档，随后：
+镜像发布在 GHCR，同一标签包含 x86_64 与 ARM64，拉取前可验证来源：
 
 ```sh
-docker load --input romi-agent-vX.Y.Z-docker-x86_64.tar.gz
-# ARM64 对应 romi-agent-vX.Y.Z-docker-aarch64.tar.gz
+gh attestation verify oci://ghcr.io/dejavumoe/romi-agent:X.Y.Z --repo DejavuMoe/romi
+docker pull ghcr.io/dejavumoe/romi-agent:X.Y.Z
 ```
 
-`compose.yml` 不在发布资产中，取自与发布标签对应的源码 `deploy/agent/compose.yml`。将它放在一个专用目录，在同目录创建 `agent.env`（权限 0600）：
+无法访问 GHCR 时，下载发布资产中的 `romi-agent-vX.Y.Z-docker-<arch>.tar.gz` 并校验，
+用 `docker load --input <归档>` 导入，再 `docker tag romi-agent:X.Y.Z ghcr.io/dejavumoe/romi-agent:X.Y.Z`。
+
+`compose.yml` 取自与发布标签对应的源码 `deploy/agent/compose.yml`。将它放在一个专用目录，在同目录创建 `agent.env`（权限 0600）：
 
 ```dotenv
 ROMI_SERVER=https://hub.example.com
@@ -294,8 +297,8 @@ ROMI_TOKEN=<node-token>
 ROMI_INTERVAL=3
 ```
 
-执行 `docker compose up -d`。`image:` 必须与导入的 `romi-agent:X.Y.Z` 一致；配置设置了 `pull_policy: never`，不自动拉取或替换镜像。
-升级时显式下载、校验、导入新版本并重建容器。
+执行 `docker compose up -d`。`image:` 固定到一个版本标签，不跟随 `latest`；
+升级时把它改为新版本，拉取后重建容器。
 
 host network/PID/UTS 与 `/:/host:ro` 用于读取宿主机真实指标。容器为 UID 65534，根文件系统只读，
 capabilities 全部移除，no-new-privileges 开启，默认内存限制 64 MiB、PID 限制 32；
@@ -312,13 +315,9 @@ Agent 默认每 3 秒采集上报，无本地数据库；Hub 默认分钟明细 
 
 ### Agent 上报参数
 
-上报默认间隔为 3 秒，Agent、安装器与后台命令均只接受 3–60 秒整数。已有安装的环境文件不会被 Hub 自动改写；
-升级前将超出范围的 `ROMI_INTERVAL` 调整到该范围。TCP 探测周期独立，仍为 5–3600 秒。
-新 Agent 额外上报 ZRAM 实际物理占用、普通 Swap、Swapfile 与交换分区；读取不到的字段发送 null，不能当成零。
+上报默认间隔为 3 秒，Agent、安装器与后台命令均只接受 3–60 秒整数。TCP 探测周期独立，为 5–3600 秒。
+Agent 上报 ZRAM 实际物理占用、普通 Swap、Swapfile 与交换分区；读取不到的字段发送 null，不能当成零。
 
-### Hub 升级边界
+### 国家/地区数据库
 
-首次打开旧库自动迁移 schema 2 到 3；升级前保留原备份，回退旧二进制时恢复该备份。
-本地登录默认账号为 `admin`，已有密码保持不变；自动化调用 `/api/auth/login` 必须增加 `username`。
-`--themes`、`--allow-custom-themes` 和外部主题 API 已移除；旧主题目录不会自动删除，但不再加载。
 后台设置页可保存 HTTPS Country MMDB 直链并更新、取消或重试；仅接受 Country 类型，下载上限 32 MiB、总超时 120 秒，格式完整验证后原子替换，失败保留旧库。查询完全本地进行。

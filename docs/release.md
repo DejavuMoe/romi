@@ -10,6 +10,7 @@
 
 每个目标交付 Hub/Agent 归档、release manifest（`romi-release-vX.Y.Z-<target>.json`）和 `SHA256SUMS-<target>`；
 另有覆盖全部资产的 `SHA256SUMS`、两种 CPU 的 Docker Agent 镜像归档及其验收记录 `container-<arch>.json`。
+同一对镜像归档推送到 `ghcr.io/dejavumoe/romi-agent`：`X.Y.Z` 与 `latest` 是包含两种 CPU 的索引，`X.Y.Z-amd64`/`X.Y.Z-arm64` 为单架构镜像。
 Hub 归档包含受控分发所需的各目标 Agent；Agent 归档只包含对应 Agent。安装器、服务模板、项目 MIT 及必需的第三方声明随包提供。
 不交付测试数据库、开发凭据或 benchmark 二进制。
 
@@ -31,7 +32,8 @@ Hub 归档包含受控分发所需的各目标 Agent；Agent 归档只包含对�
 3. 在最终 master SHA 手动运行 Release，组合相同 SHA 的平台工件并验证发行形状。此步骤不发布。
 4. Release Rehearsal 使用第 3 步的确定字节，验证 systemd、TLS、注册、重装与重启持久性。
 5. 授权后推送同一提交的版本标签。工作流核对门禁与摘要，复用已验收归档，不重编译。
-6. 发布 job 再核对身份，上传资产并生成 attestation；当前工作流发布为 Pre-release。
+6. 发布 job 再核对身份，上传资产并生成 attestation，把已验收的镜像归档推送到 GHCR 并为镜像生成 attestation，
+   全部完成后才把草稿发布为正式版本并标记为最新。
 
 `python3 scripts/release_gate.py --repo DejavuMoe/romi --sha <完整提交>` 检查候选门禁。
 失败、未完成、skipped、PR 或旧提交的成功不能替代当前候选。工件字节变更后需要重新演练。
@@ -42,6 +44,7 @@ Hub 归档包含受控分发所需的各目标 Agent；Agent 归档只包含对�
 
 ```sh
 gh attestation verify <文件> --repo DejavuMoe/romi
+gh attestation verify oci://ghcr.io/dejavumoe/romi-agent:X.Y.Z --repo DejavuMoe/romi
 ```
 
 全部资产（在对应标签的源码检出中运行，目录须恰好包含全部发行资产）：

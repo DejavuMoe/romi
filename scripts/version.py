@@ -18,6 +18,7 @@ SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 TAG = re.compile(r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 PRIVATE_COMPONENTS = ("admin", "web")
 READINESS = "docs/readiness.md"
+AGENT_IMAGE = "ghcr.io/dejavumoe/romi-agent"
 
 
 class VersionError(ValueError):
@@ -135,16 +136,16 @@ def check(root=ROOT, tag=None):
         except VersionError as error:
             errors.append(str(error))
 
-    # The compose file loads the image `docker load` created from the release
-    # archive and never pulls, so its tag must be exactly this version.
+    # The compose file pins the released GHCR image, so its tag must be
+    # exactly this version.
     compose = root / "deploy/agent/compose.yml"
     try:
         images = re.findall(r"^\s*image:\s*(\S+)\s*$", compose.read_text(encoding="utf-8"), re.MULTILINE)
     except OSError as error:
         errors.append(f"cannot read {compose}: {error}")
     else:
-        if images != [f"romi-agent:{version}"]:
-            errors.append(f"deploy/agent/compose.yml: image must be romi-agent:{version}, got {images!r}")
+        if images != [f"{AGENT_IMAGE}:{version}"]:
+            errors.append(f"deploy/agent/compose.yml: image must be {AGENT_IMAGE}:{version}, got {images!r}")
 
     try:
         readiness_section(root, version)

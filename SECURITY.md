@@ -2,11 +2,11 @@
 
 ## 支持的版本
 
-romi 目前处于测试版阶段，安全修复只进入最新的预发布版本和 `master`，旧版本不单独回补。
+安全修复进入最新发布的版本和 `master`，旧版本不单独回补。
 
 | 版本 | 安全修复 |
 | --- | --- |
-| 最新的 0.1.x 预发布 | 是 |
+| 最新发布的版本 | 是 |
 | 更早的版本 | 否，请升级 |
 
 ## 报告漏洞
@@ -26,7 +26,7 @@ romi 目前处于测试版阶段，安全修复只进入最新的预发布版本
 ## 处理方式
 
 项目由一人维护，不承诺固定的响应时限。收到报告后会先确认是否可复现，再按影响排序处理：
-修复随新的预发布版本发布，同时发布 GitHub 安全公告；报告者愿意时在公告中致谢。
+修复随新版本发布，同时发布 GitHub 安全公告；报告者愿意时在公告中致谢。
 在修复发布之前，请不要公开细节。
 
 ## 范围
@@ -48,5 +48,5 @@ romi 目前处于测试版阶段，安全修复只进入最新的预发布版本
 
 Please report vulnerabilities privately through GitHub Security Advisories:
 <https://github.com/DejavuMoe/romi/security/advisories/new>. Do not open a public issue.
-Only the latest 0.1.x pre-release receives security fixes. Remove passwords, session cookies,
+Only the latest release receives security fixes. Remove passwords, session cookies,
 node tokens and database contents from anything you attach.

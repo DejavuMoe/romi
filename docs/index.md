@@ -37,9 +37,4 @@ features:
     link: /security-baseline
 ---
 
-## 当前状态
-
-romi 处于 **0.1.x 测试版**，以 GitHub Pre-release 发布：功能和数据格式仍可能调整，升级前请先备份。
-已验证的范围与未覆盖的环境见[验收状态](readiness.md)，问题与建议请提交到 [GitHub Issues](https://github.com/DejavuMoe/romi/issues)。
-
-romi 由 Dejavu Moe 独立维护，以 [MIT 协议](legal.md)开源。
+romi 由 Dejavu Moe 独立维护，以 [MIT 协议](legal.md)开源。问题与建议请提交到 [GitHub Issues](https://github.com/DejavuMoe/romi/issues)。

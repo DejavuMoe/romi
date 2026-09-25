@@ -720,7 +720,7 @@ def fixture_version_files(root: Path, version: str = "0.1.0") -> None:
         )
     compose = root / "deploy" / "agent" / "compose.yml"
     compose.parent.mkdir(parents=True, exist_ok=True)
-    compose.write_text(f"services:\n  romi-agent:\n    image: romi-agent:{version}\n", encoding="utf-8")
+    compose.write_text(f"services:\n  romi-agent:\n    image: ghcr.io/dejavumoe/romi-agent:{version}\n", encoding="utf-8")
     readiness = root / "docs" / "readiness.md"
     readiness.parent.mkdir(parents=True, exist_ok=True)
     readiness.write_text(f"# readiness fixture\n\n## v{version}\n\nfixture record\n", encoding="utf-8")

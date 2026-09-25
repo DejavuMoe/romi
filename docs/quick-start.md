@@ -2,10 +2,6 @@
 
 从发布包安装一个 Hub，再把第一台主机接入。每一步的细节与原理见[部署](deployment.md)。
 
-::: warning 测试版
-romi 目前是 0.1.x 测试版，以 GitHub Pre-release 发布。请在可以重装的主机上试用，并定期导出备份。
-:::
-
 ## 准备
 
 - 一台运行 Hub 的 Linux 主机：x86_64 或 ARM64；Debian 12 这类 glibc ≥ 2.36 的 systemd 发行版，或 Alpine（OpenRC）。建议从 1 GiB 内存起步。
