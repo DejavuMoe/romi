@@ -555,6 +555,7 @@ impl Db {
         // tables is not ours to initialize; `schema::initialize` refuses it.
         let fresh = schema::user_tables(&conn)? == 0;
         schema::initialize(&mut conn, fresh, env!("CARGO_PKG_VERSION"))?;
+        schema::retire_settings(&conn)?;
         // A restored database is stamped when it is built, so this only repairs
         // a counter that somehow lagged the rows -- cheap, and it removes the one
         // way a later insert could collide with an existing id. It never lowers

@@ -1,29 +1,24 @@
-//! Sessions, the local emergency password, and GitHub single sign-on.
-//!
-//! GitHub is the primary sign-in path. The local password exists so that a
-//! broken OAuth app or an unreachable github.com cannot lock the owner out.
+//! Sessions and the account password, which is the only way to sign in.
 
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
-use axum::extract::{ConnectInfo, Query, State};
+use axum::extract::{ConnectInfo, State};
 use axum::http::{header, HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use chrono::Utc;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use tracing::{info, warn};
 
 use crate::App;
 
 pub const COOKIE: &str = "monitor_session";
-const STATE_COOKIE: &str = "monitor_oauth_state";
 const SESSION_DAYS: i64 = 14;
 /// Failed password attempts allowed per address before it is shut out.
 const MAX_ATTEMPTS: u32 = 5;
@@ -212,83 +207,6 @@ pub async fn logout(State(app): State<crate::Shared>, headers: HeaderMap) -> Res
     )
 }
 
-/// Step one of the OAuth exchange: issue a state nonce and redirect the browser
-/// to GitHub. The nonce returns in step two and must match.
-pub async fn github_start(State(app): State<crate::Shared>, headers: HeaderMap) -> Response {
-    let Some(client_id) = app.db.get("github_client_id").filter(|v| !v.is_empty()) else {
-        return (StatusCode::PRECONDITION_FAILED, "GitHub sign-in is not configured").into_response();
-    };
-    let state = random_token();
-    let url = format!(
-        "https://github.com/login/oauth/authorize?client_id={client_id}&scope=read:user&state={state}"
-    );
-    with_cookies(Redirect::to(&url), [set_cookie(STATE_COOKIE, &state, 600, app.secure_cookies(&headers))])
-}
-
-/// Every field is optional. With required fields axum would reject a malformed
-/// callback before the handler runs, returning a bare 400 and logging nothing;
-/// GitHub also reports a refusal with `error` and no `code`.
-#[derive(Deserialize, Default)]
-pub struct Callback {
-    #[serde(default)]
-    code: Option<String>,
-    #[serde(default)]
-    state: Option<String>,
-    #[serde(default)]
-    error: Option<String>,
-    #[serde(default)]
-    error_description: Option<String>,
-}
-
-pub async fn github_callback(
-    State(app): State<crate::Shared>,
-    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
-    headers: HeaderMap,
-    Query(query): Query<Callback>,
-) -> Response {
-    // GitHub reports a refusal in the query string rather than the body.
-    if let Some(error) = &query.error {
-        let reason = query.error_description.as_deref().unwrap_or(error);
-        return sign_in_failed(&app, &headers, &format!("GitHub returned {error}: {reason}"));
-    }
-    // Reject a callback the browser did not initiate.
-    let state = query.state.as_deref().unwrap_or_default();
-    if state.is_empty() || cookie_value(&headers, STATE_COOKIE).as_deref() != Some(state) {
-        return sign_in_failed(
-            &app,
-            &headers,
-            "state mismatch or missing; start again from the sign-in page",
-        );
-    }
-    let Some(code) = query.code.as_deref().filter(|c| !c.is_empty()) else {
-        return sign_in_failed(&app, &headers, "GitHub sent no authorization code");
-    };
-    let user = match github_login(&app, code).await {
-        Ok(user) => user,
-        Err(e) => return sign_in_failed(&app, &headers, &e.to_string()),
-    };
-    let session = match issue_session(&app, &headers) {
-        Ok(cookie) => cookie,
-        Err(e) => return sign_in_failed(&app, &headers, &e.to_string()),
-    };
-    crate::notify::signed_in(&app, &format!("GitHub {user}"), client_ip(&headers, peer.ip()));
-    with_cookies(Redirect::to("/admin"), [clear_state(&app, &headers), session])
-}
-
-/// Redirects the browser back to the sign-in page with the reason, rather than
-/// leaving a bare 401 at a callback URL offering no way forward.
-fn sign_in_failed(app: &App, headers: &HeaderMap, reason: &str) -> Response {
-    // A rejected sign-in must leave a server-side record; the browser sees only
-    // the redirect.
-    warn!("GitHub sign-in rejected: {reason}");
-    let target = format!("/admin?login_error={}", urlencode(reason));
-    with_cookies(Redirect::to(&target), [clear_state(app, headers), String::new()])
-}
-
-fn clear_state(app: &App, headers: &HeaderMap) -> String {
-    set_cookie(STATE_COOKIE, "", 0, app.secure_cookies(headers))
-}
-
 /// Attaches several `Set-Cookie` headers to one response. An array of header
 /// tuples is unsuitable: axum applies those with `HeaderMap::insert`, so a
 /// second `Set-Cookie` replaces the first. Empty entries are skipped.
@@ -306,113 +224,6 @@ pub fn with_cookies<const N: usize>(response: impl IntoResponse, cookies: [Strin
         }
     }
     response
-}
-
-/// Percent-encodes everything outside the unreserved set, sufficient for
-/// placing an arbitrary message in a query string.
-fn urlencode(value: &str) -> String {
-    value
-        .bytes()
-        .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
-}
-
-/// Whether the allow list admits this account.
-///
-/// An entry made only of digits names GitHub's account id; anything else names
-/// the login. Both forms may appear in one list, so an operator can pin the
-/// accounts that matter without rewriting the rest, and `id:12345` is accepted
-/// for readability as the same thing as `12345`.
-///
-/// The distinction matters because a login is not an identity: GitHub lets an
-/// account be renamed, and the name it frees can then be registered by anyone.
-/// A list written in logins alone therefore admits whoever holds the name at
-/// sign-in time, which is why every acceptance logs the id.
-///
-/// `allowed` is already trimmed and lowercased by the caller.
-fn allows(allowed: &[String], login: &str, id: i64) -> bool {
-    let login = login.to_lowercase();
-    allowed.iter().any(|entry| match entry.strip_prefix("id:").unwrap_or(entry) {
-        digits if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) => {
-            digits.parse::<i64>().is_ok_and(|wanted| wanted == id)
-        }
-        name => name == login,
-    })
-}
-
-/// Exchanges the code for a token and checks the login against the allow list,
-/// returning the accepted login.
-async fn github_login(app: &App, code: &str) -> Result<String> {
-    let (Some(id), Some(secret)) = (app.db.get("github_client_id"), app.db.get("github_client_secret"))
-    else {
-        bail!("not configured");
-    };
-    let allowed = app.db.get("github_allowed_users").unwrap_or_default();
-    let allowed: Vec<String> =
-        allowed.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect();
-    if allowed.is_empty() {
-        // Without an allow list, any GitHub account could sign in.
-        bail!("no allowed GitHub users configured");
-    }
-
-    #[derive(Deserialize)]
-    struct TokenResponse {
-        access_token: Option<String>,
-        error_description: Option<String>,
-    }
-    let token: TokenResponse = app
-        .http
-        .post("https://github.com/login/oauth/access_token")
-        .header(header::ACCEPT, "application/json")
-        .json(&serde_json::json!({"client_id": id, "client_secret": secret, "code": code}))
-        .send()
-        .await
-        .context("token request")?
-        .json()
-        .await
-        .context("token response")?;
-    let Some(access) = token.access_token else {
-        bail!("{}", token.error_description.unwrap_or_else(|| "no access token".into()));
-    };
-
-    #[derive(Deserialize)]
-    struct GithubUser {
-        login: String,
-        /// GitHub's immutable account identifier. A login can be changed, and
-        /// the name it frees can then be registered by anyone, so an allow list
-        /// written in logins alone accepts whoever holds the name today.
-        id: i64,
-    }
-    let response = app
-        .http
-        .get("https://api.github.com/user")
-        .header(header::AUTHORIZATION, format!("Bearer {access}"))
-        .header(header::USER_AGENT, "romi-hub")
-        .send()
-        .await
-        .context("user request")?;
-    let status = response.status();
-    let body = response.text().await.context("user response")?;
-    // Decoding an error page into GithubUser would report "missing field login"
-    // instead of GitHub's actual message.
-    let user: GithubUser = serde_json::from_str(&body).with_context(|| {
-        format!("user response ({status}): {}", body.chars().take(200).collect::<String>())
-    })?;
-
-    if !allows(&allowed, &user.login, user.id) {
-        // The list stays in the log and out of the reason, which travels back in
-        // a query string: any GitHub account can reach that page, and a reason
-        // carrying the allow list would disclose the accounts worth phishing.
-        warn!("GitHub user {} (id {}) is not on the allowed list {allowed:?}", user.login, user.id);
-        bail!("GitHub user {} is not on the allowed list", user.login);
-    }
-    // The id is logged on every acceptance so an operator can replace a login
-    // entry with the identifier that cannot be transferred.
-    info!("GitHub sign-in accepted for {} (id {})", user.login, user.id);
-    Ok(user.login)
 }
 
 /// Peer address, or the last hop in X-Forwarded-For when the request arrived
@@ -531,72 +342,6 @@ mod tests {
         assert!(app.password_gate.try_acquire().is_ok(), "permits come back when the checks finish");
     }
 
-    /// A login is a name its owner can give up; the id is the account. The list
-    /// takes either, so an operator can pin the accounts that matter without
-    /// rewriting entries that are fine as names.
-    #[test]
-    fn the_allow_list_takes_logins_and_the_ids_a_rename_cannot_move() {
-        let list = |entries: &str| -> Vec<String> {
-            entries.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect()
-        };
-
-        // A login entry matches by name, case-insensitively.
-        assert!(allows(&list("dejavumoe"), "DejavuMoe", 1));
-        assert!(!allows(&list("dejavumoe"), "someone-else", 1));
-        // And it matches whoever holds that name, which is the weakness the id
-        // form exists to close.
-        assert!(allows(&list("dejavumoe"), "dejavumoe", 999));
-
-        // An id entry matches the account, whatever it is currently called.
-        assert!(allows(&list("4242"), "renamed-since", 4242));
-        assert!(!allows(&list("4242"), "dejavumoe", 1));
-        assert!(allows(&list("id:4242"), "renamed-since", 4242));
-
-        // Mixed lists, and an id that is not this account.
-        assert!(allows(&list("dejavumoe, id:4242"), "other", 4242));
-        assert!(allows(&list("dejavumoe, id:4242"), "DejavuMoe", 7));
-        assert!(!allows(&list("dejavumoe, id:4242"), "other", 7));
-
-        // An empty list admits nobody; that is checked before this runs, but the
-        // matcher must not disagree with it.
-        assert!(!allows(&list(""), "dejavumoe", 1));
-        // A login that looks like a number is still compared as an id, so a
-        // numeric GitHub login cannot be admitted by an id entry that happens to
-        // read the same.
-        assert!(!allows(&list("4242"), "4242", 7));
-    }
-
-    /// Both ends of the same redirect: every form GitHub can send must parse,
-    /// or it never reaches the handler and can be neither logged nor explained,
-    /// and the reason sent back must survive its query string.
-    #[test]
-    fn every_callback_shape_parses_and_a_failure_reason_survives_the_round_trip() {
-        let parse = |q: &str| serde_urlencoded::from_str::<Callback>(q);
-
-        let ok = parse("code=abc&state=xyz").expect("the happy path");
-        assert_eq!(ok.code.as_deref(), Some("abc"));
-        assert_eq!(ok.state.as_deref(), Some("xyz"));
-
-        // GitHub reports a refusal with no code.
-        let denied = parse("error=access_denied&error_description=the+user+said+no&state=xyz")
-            .expect("a refusal must parse, not 400");
-        assert_eq!(denied.error.as_deref(), Some("access_denied"));
-        assert_eq!(denied.error_description.as_deref(), Some("the user said no"));
-        assert!(denied.code.is_none());
-
-        // Truncated or empty callbacks must still reach the handler.
-        assert!(parse("state=xyz").is_ok());
-        assert!(parse("").is_ok());
-
-        // Anything that would escape the query string must be encoded, or the
-        // reason arrives truncated at the first stray separator.
-        assert_eq!(urlencode("a&b=c#d"), "a%26b%3Dc%23d");
-        assert_eq!(urlencode("用户"), "%E7%94%A8%E6%88%B7");
-        let reason = "no allowed GitHub users configured (a&b=c)";
-        let back = parse(&format!("error={}", urlencode(reason))).expect("a reason must parse");
-        assert_eq!(back.error.as_deref(), Some(reason), "the whole reason comes back");
-    }
-
     /// A session cookie's round trip: the flags it is issued with, sharing a
     /// response with a second cookie, and being extracted from the single header
     /// the browser returns them in.
@@ -609,7 +354,7 @@ mod tests {
 
         // axum applies an array of header tuples with insert(), keeping only the
         // last Set-Cookie; this helper appends instead.
-        let response = with_cookies(StatusCode::OK, [session, set_cookie(STATE_COOKIE, "s", 0, true)]);
+        let response = with_cookies(StatusCode::OK, [session, set_cookie("theme", "dark", 0, true)]);
         let set: Vec<_> = response.headers().get_all(header::SET_COOKIE).iter().collect();
         assert_eq!(set.len(), 2, "both cookies must reach the browser");
         // Empty entries are skipped rather than emitting a blank header.

@@ -16,7 +16,7 @@ test('revoking the current session returns an open panel to login', async ({ pag
 })
 
 for (const [section, loaded] of [
-  ['设置', '保存站点设置'], ['通知', '保存事件设置'], ['安全', '保存 GitHub 设置'],
+  ['设置', '保存站点设置'], ['通知', '保存事件设置'], ['安全', '修改密码'],
 ]) {
   test(`${section} recovers from a failed settings request`, async ({ page }) => {
     await signIn(page)

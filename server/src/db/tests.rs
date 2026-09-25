@@ -2030,3 +2030,45 @@ fn v2_upgrade_preserves_private_nodes_and_old_history() {
     assert!(metrics[0]["zram_used"].is_null());
     std::fs::remove_file(copy).unwrap();
 }
+
+/// The withdrawn GitHub sign-in's settings, its client secret among them, are
+/// gone after an upgrade and stay gone through a restore of an older backup --
+/// by either activation path -- while every other setting survives both.
+#[test]
+fn retired_settings_are_cleared_on_open_and_on_restore() {
+    let retired = crate::db::schema::RETIRED_SETTINGS;
+    let seed = |db: &Db| {
+        for key in retired {
+            db.set(key, "left-behind").unwrap();
+        }
+        db.set("site_name", "kept").unwrap();
+    };
+
+    // An upgrade: the rows an older build wrote are there until the next open.
+    let scratch = Scratch::new();
+    let copy = scratch.copy(".copy");
+    {
+        let old = Db::open(&scratch.0).unwrap();
+        seed(&old);
+        // The archive an older build would have produced: taken before this
+        // build ever opened the file.
+        old.backup_into(&copy).unwrap();
+    }
+    let upgraded = Db::open(&scratch.0).unwrap();
+    for key in retired {
+        assert_eq!(upgraded.get(key), None, "{key} survived an open");
+    }
+    assert_eq!(upgraded.get("site_name").as_deref(), Some("kept"));
+
+    // A restore of that archive, into a file and into memory.
+    upgraded.restore_from(&copy).map_err(|e| format!("{e:#}")).unwrap();
+    let memory = db();
+    memory.restore_from(&copy).map_err(|e| format!("{e:#}")).unwrap();
+    for restored in [&upgraded, &memory] {
+        for key in retired {
+            assert_eq!(restored.get(key), None, "{key} came back with a restore");
+        }
+        assert_eq!(restored.get("site_name").as_deref(), Some("kept"));
+    }
+    let _ = std::fs::remove_file(&copy);
+}

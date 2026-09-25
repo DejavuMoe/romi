@@ -397,6 +397,25 @@ ALTER TABLE metric_hour ADD COLUMN IF NOT EXISTS swap_partition_used_sum DECIMAL
     Ok(())
 }
 
+/// Settings of features this build no longer has.
+///
+/// The GitHub sign-in's three keys include its client secret. Nothing reads or
+/// shows them any more, so left in place that secret would sit in the database
+/// and in every backup taken from it with no way for the operator to see or
+/// clear it.
+pub const RETIRED_SETTINGS: [&str; 3] = ["github_client_id", "github_client_secret", "github_allowed_users"];
+
+/// Deletes [`RETIRED_SETTINGS`]. Run on every open and on every restore rather
+/// than as a schema step: it changes no shape, so it needs no version -- and a
+/// version bump would stop an older build from opening the file, which a data
+/// cleanup has no business doing. Idempotent; an older build that meets the
+/// result simply finds the feature unconfigured.
+pub fn retire_settings(conn: &Connection) -> Result<()> {
+    let keys = RETIRED_SETTINGS.map(|k| format!("'{k}'")).join(", ");
+    conn.execute(&format!("DELETE FROM setting WHERE key IN ({keys})"), [])?;
+    Ok(())
+}
+
 /// Moves an identity source past every id a restore brought in.
 ///
 /// Only ever forward: the counter becomes the highest id present in the table

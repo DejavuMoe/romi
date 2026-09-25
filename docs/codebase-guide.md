@@ -55,7 +55,7 @@ Hub 的 `App` 持有数据库、连接中的 Agent、按公开/管理受众分�
 
 ### 2.2 管理后台
 
-`/admin/` 规范化为 `/admin/nodes`；后台各区有独立路径，可刷新或直接打开。未登录时显示账号密码表单及已配置时的 GitHub 登录入口；登录成功后停留在原先请求的路径，GitHub 登录经回调返回后也会恢复该路径（仅限 `/admin/` 内）。桌面侧栏与移动端弹窗导航指向节点、监测、通知、数据、安全、设置；顶部提供公开页、明暗切换、退出登录。表单有忙态和错误提示，删除、令牌换发、维护、恢复使用确认弹窗；节点弹窗关闭后把焦点还给触发控件或主内容。
+`/admin/` 规范化为 `/admin/nodes`；后台各区有独立路径，可刷新或直接打开。未登录时显示账号密码表单，这是唯一的登录方式；登录成功后停留在原先请求的路径。桌面侧栏与移动端弹窗导航指向节点、监测、通知、数据、安全、设置；顶部提供公开页、明暗切换、退出登录。表单有忙态和错误提示，删除、令牌换发、维护、恢复使用确认弹窗；节点弹窗关闭后把焦点还给触发控件或主内容。
 
 | 页面 | 当前操作与行为 | 源码 |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ Hub 的 `App` 持有数据库、连接中的 Agent、按公开/管理受众分�
 | 监测 `/admin/ping` | 创建/编辑/删除 TCP `host:port` 任务、设置 5–3600 秒间隔和执行节点；删除时连历史结果一起清除 | `Ping` |
 | 通知 `/admin/notify` | Telegram/Webhook 凭据与模板、预览、分别测试、显式清除；批量开关节点离线通知；设置离线宽限、流量阈值、到期天数和登录提醒 | `Notify`、`OfflineNodes` |
 | 数据 `/admin/data` | 文件/WAL/可复用空间与历史统计、周期维护、手动维护、下载备份、分片上传恢复及取消 | `Data` |
-| 安全 `/admin/security` | 查看/撤销其他会话、配置 GitHub OAuth 与允许名单、修改本地账号和密码（需验证当前密码） | `Security`、`Sessions` |
+| 安全 `/admin/security` | 修改账号和密码（需验证当前密码）、查看/撤销其他会话；会话列表读取失败时在卡片内提示并可重试 | `Security`、`Sessions` |
 | 设置 `/admin/settings` | 站点名称、分钟保留天数、连续在线重置阈值、公开页开关与默认视图、GeoLite Country 下载/取消 | `SettingsTab`、`GeoSettings` |
 
 节点编辑只提交改动过的字段。额度按 GB/TB 输入并转换为字节，`0` 表示不限；流量修正区的未改字段不会覆盖累计量。价格、币种、付款周期与到期日期在独立账单表单中编辑。优先级为 `0–999999`，数字越大越靠前；当前后台以数值输入调整它。API 仍有整表 `PUT /api/nodes/order`，可一次写入排序及优先级。节点级 `public` 由编辑弹窗的「公开状态页」选择控制，管理列表仍显示「私有」标记。以上按当前组件代码记录，不能把 API 能力当作已有界面入口。
@@ -82,7 +82,7 @@ Hub 的 `App` 持有数据库、连接中的 Agent、按公开/管理受众分�
 ### 3.1 首次启动、认证与节点接入
 
 1. Hub 打开/初始化数据库并在首次启动生成本地管理员密码；交互式运行显示一次，服务安装可写入权限 `0600` 的文件。管理员密码以 Argon2 摘要保存于 `setting`，修改后清除引导凭据文件。
-2. 本地登录同时核对账号与密码。GitHub OAuth 校验回调 `state`，且允许名单为空时拒绝所有人；名单条目按用户名或数字账号 ID 匹配，接受时两者都记入日志。登录发放 14 天会话：Cookie 为 HttpOnly、SameSite=Lax，HTTPS 条件满足时标记 Secure；`session` 表只存令牌 SHA-256 摘要。注销、撤销、账号/密码修改会使对应会话失效。
+2. 登录同时核对账号与密码，这是唯一的登录方式。登录发放 14 天会话：Cookie 为 HttpOnly、SameSite=Lax，HTTPS 条件满足时标记 Secure；`session` 表只存令牌 SHA-256 摘要。注销、撤销、账号/密码修改会使对应会话失效。
 3. 添加节点需在经 Hub 校验的 HTTPS 域名入口操作。Hub 原子创建 `node` 与 `traffic` 行，按分配器取得 ID，返回只显示一次的长期令牌；安装命令不把长期令牌放进 shell 命令行，安装器在节点本机读取它。注册窗口是另一入口：一小时有效、最多 100 个新节点，短期 key 换取各自长期令牌。
 4. Hub 仅在启动时载入通过版本、大小、SHA-256、ELF 架构及路径检查的本地 Agent 分发。`/install.sh` 与版本化 `/agent/v{version}/{target}` 服务于精确工件；未配置时安装入口不可用。安装器下载元数据和二进制后再次核对哈希，可安装 systemd 或 OpenRC 服务。
 5. Agent 使用 `Authorization: Bearer` 建立 `/api/agent/ws`。Hub 再查摘要并激活唯一节点会话；连接时即视为在线。轮换令牌、删除节点或恢复数据库会退休旧会话，等待在途报告完成，避免旧连接继续写入。
@@ -115,7 +115,7 @@ GeoLite Country 下载由管理员指定 HTTPS 直链，限制 32 MiB，并验�
 | --- | --- | --- |
 | 浏览器访客 / 管理员 | `GET /api/me`、`GET /api/nodes`、`WS /api/ws` | 身份、可见节点和实时快照；公开页关闭时匿名列表/流拒绝，管理会话失效时流断开 |
 | 浏览器访客 / 管理员 | `GET /api/nodes/{id}/metrics` | 逐节点历史；匿名只能读公开节点，窗口与并发受限 |
-| 登录 | `POST /api/auth/login`、`POST /api/auth/logout`、`GET /api/auth/github[/callback]` | 本地凭据、注销与 OAuth 会话 |
+| 登录 | `POST /api/auth/login`、`POST /api/auth/logout` | 账号密码登录与注销 |
 | 管理员 | `POST /api/nodes`、`PUT/DELETE /api/nodes/{id}`、`PUT /api/nodes/order`、`POST /api/nodes/{id}/token`、`PUT /api/nodes/{id}/traffic` | 节点、排序、令牌与流量校正；添加节点另需 HTTPS 域名入口 |
 | 管理员 | `POST/DELETE /api/register-window`、`GET/POST /api/ping-tasks`、`DELETE /api/ping-tasks/{id}` | 注册窗口及探测任务 |
 | 管理员 | `GET/PUT /api/settings`、`GET /api/sessions`、`DELETE /api/sessions/{id}`、`POST /api/notify/test`、`GET/POST/DELETE /api/geolite` | 设置、会话、渠道测试和国家库 |
@@ -132,7 +132,7 @@ Hub 通常限制 HTTP 请求体为 64 KiB，恢复分片单独放宽。浏览器
 
 | 表 | 主键 / 关键字段 | 作用与关系 |
 | --- | --- | --- |
-| `setting` | `key`、`value` | 站点、账号密码摘要、GitHub、通知、保留与注册窗口等键值设置；部分值属于凭据，应保护数据库文件 |
+| `setting` | `key`、`value` | 站点、账号密码摘要、通知、保留与注册窗口等键值设置；部分值属于凭据，应保护数据库文件。已撤销功能的旧设置（GitHub 登录的三个键）在每次打开数据库和恢复备份时删除 |
 | `romi_id` | `name`、`next` | 为 `node`、`ping_task` 分配 ID；每次打开和恢复数据库时按现存最大 ID 重同步 |
 | `romi_schema` | 固定 `id=1`、`version`、`engine`、`written_by` | 应用 schema 元数据和写入版本 |
 | `node` | `id`、唯一 `token_hash`；配置、账单、硬件事实、地址、`last_seen`、`online_since` | 节点主表；长期令牌只存 SHA-256 摘要，地址和备注只供管理态 |

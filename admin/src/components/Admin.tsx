@@ -1189,15 +1189,20 @@ function Notify({ nodes, refresh }: { nodes: Node[]; refresh: () => void }) {
   )
 }
 
-// The two ways into this panel, on their own page: the GitHub identity it trusts
-// and the password that works when GitHub does not.
 type Session = { id: string; current: boolean; created_at: number }
 
 function Sessions() {
   const [rows, setRows] = useState<Session[] | null>(null)
   const [busy, setBusy] = useState("")
+  // The list fails on its own while the rest of the page works. The card used
+  // to vanish with only a toast, which reads as "no other sessions" -- the one
+  // thing a failed read cannot tell.
+  const [failed, setFailed] = useState(false)
 
-  const load = () => api<Session[]>("/sessions").then(setRows).catch((e: Error) => toast.error(e.message))
+  const load = () =>
+    api<Session[]>("/sessions")
+      .then((next) => { setRows(next); setFailed(false) })
+      .catch(() => { setRows(null); setFailed(true) })
   useEffect(() => { load() }, [])
 
   async function remove(id: string) {
@@ -1213,7 +1218,7 @@ function Sessions() {
     }
   }
 
-  if (!rows) return null
+  if (!rows && !failed) return null
   return (
     <Card className="gap-4 p-5">
       <div>
@@ -1222,6 +1227,13 @@ function Sessions() {
           每次登录一条，14 天后过期。删除后该设备下一次请求就被登出。
         </p>
       </div>
+      {!rows ? (
+        <div role="alert" className="flex flex-col items-center gap-2 rounded-md border px-4 py-8 text-center">
+          <p className="text-sm font-medium">会话列表加载失败</p>
+          <p className="text-xs text-muted-foreground">暂时无法确认其他设备的登录状态。</p>
+          <Button variant="outline" size="sm" onClick={load}>重试</Button>
+        </div>
+      ) : (
       <div className="divide-y">
         {rows.map((s) => (
           <div key={s.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
@@ -1239,68 +1251,21 @@ function Sessions() {
           </div>
         ))}
       </div>
+      )}
     </Card>
   )
 }
 
-function Security({ site }: { site: string }) {
+function Security() {
   const { s, set, save, error, retry } = useSettings()
   const [password, setPassword] = useState("")
   const [current, setCurrent] = useState("")
   const [currentError, setCurrentError] = useState("")
   if (!s) return <LoadState error={error} retry={retry} />
-  const callback = `${site}/api/auth/github/callback`
 
   return (
+    // The approved order: the account form, then the sessions it governs.
     <div className="space-y-4">{error && <p role="alert" className="field-error">{error}</p>}
-      <Sessions />
-
-      <Card className="gap-4 p-5">
-        <div>
-          <h3 className="text-sm font-medium">GitHub 单点登录</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            OAuth App 回调地址 <code className="break-all rounded bg-muted px-1">{callback}</code>
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Client ID">
-            <Input value={String(s.github_client_id ?? "")} onChange={(e) => set("github_client_id", e.target.value)} />
-          </Field>
-          <Field label="Client Secret" hint={s.github_secret_set ? "已设置，留空不变" : "未设置"}>
-            {/* Controlled, so that saving empties it. The hub answers with a
-                `github_secret_set` flag and never the secret itself, so an
-                uncontrolled field kept the typed value on screen after a save
-                that had already stored it. */}
-            <Input type="password" value={String(s.github_client_secret ?? "")} placeholder={s.github_secret_set ? "••••••••" : ""} onChange={(e) => set("github_client_secret", e.target.value)} />
-          </Field>
-        </div>
-        {String(s.github_client_id ?? "") !== "" && String(s.github_allowed_users ?? "").trim() === "" && (
-          <p className="rounded-md bg-secondary px-3 py-2 text-sm text-destructive">
-            白名单为空，GitHub 登录拒绝所有人。填入用户名并保存后生效。
-          </p>
-        )}
-        <Field label="允许登录的 GitHub 用户名" hint="逗号分隔。留空 = 拒绝所有人，不是放行所有人">
-          <Input value={String(s.github_allowed_users ?? "")} onChange={(e) => set("github_allowed_users", e.target.value)} placeholder="GitHub 用户名" />
-        </Field>
-        <div>
-          <Button
-            size="sm"
-            onClick={() => {
-              const patch: Record<string, string> = {
-                github_client_id: String(s.github_client_id ?? ""),
-                github_allowed_users: String(s.github_allowed_users ?? ""),
-              }
-              if (typeof s.github_client_secret === "string" && s.github_client_secret) {
-                patch.github_client_secret = s.github_client_secret
-              }
-              save(patch)
-            }}
-          >
-            保存 GitHub 设置
-          </Button>
-        </div>
-      </Card>
-
       <Card className="gap-4 p-5">
         <div>
           <h3 className="text-sm font-medium">账号与密码</h3>
@@ -1345,6 +1310,8 @@ function Security({ site }: { site: string }) {
           </Button>
         </div>
       </Card>
+
+      <Sessions />
     </div>
   )
 }
@@ -1580,7 +1547,7 @@ export function Admin({
           <Data />
 
         ) : path === "/admin/security" ? (
-          <Security site={site} />
+          <Security />
         ) : path === "/admin/settings" ? (
           <SettingsTab />
         ) : (

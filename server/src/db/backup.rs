@@ -297,7 +297,7 @@ fn write_archive_inner(conn: &Connection, dest: &str, work: &str) -> Result<Back
         tar.into_inner()?.finish()?;
     }
     // The archive is the credential store: password hash, node token digests, the
-    // GitHub client secret.
+    // notification tokens and webhook headers.
     own_only(&partial);
     std::fs::rename(&partial, dest)?;
     own_only(dest);
@@ -586,6 +586,10 @@ fn build_staging(inner: &Arc<Inner>, src: &str, dest: &str, floor: &[(String, i6
         // this is still a scratch database. The format carries no session rows,
         // and this makes the empty state deliberate rather than incidental.
         conn.execute("DELETE FROM session", [])?;
+        // An archive from before a feature was withdrawn carries its settings --
+        // the GitHub client secret among them -- and restoring it must not bring
+        // them back into a database that can no longer show or clear them.
+        schema::retire_settings(&conn)?;
         verify_relationships(&conn)?;
         schema::resync_ids(&conn)?;
         schema::raise_ids(&conn, floor)?;

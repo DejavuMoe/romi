@@ -10,13 +10,13 @@
 | --- | --- | --- | --- |
 | public | `/` | 查看汇总、卡片/列表切换、站点默认视图、明暗切换、进入详情/登录 | `web/src/App.tsx`、`Summary.tsx`、`NodeCard.tsx`、`NodeList.tsx` |
 | node-detail | `/node/{id}`、`/admin/node/{id}` | CPU、RAM/ZRAM/Swap、磁盘、进程、网络与 TCP/UDP 历史、时间窗、返回/深链 | `web/src/components/NodeDetail.tsx` |
-| login | `/admin/` 未登录态 | 账号密码、可选 GitHub 登录、错误提示 | `admin/src/components/Login.tsx`、`auth.rs` |
+| login | `/admin/` 未登录态 | 账号密码（唯一登录方式）、错误提示 | `admin/src/components/Login.tsx`、`auth.rs` |
 | nodes | `/admin/nodes` | 名称/IP/标识搜索、状态筛选、管理列表、双栈 IP 复制、Agent 版本、优先级、新建/编辑/删除、带宽/协议可用性、安装、轮换、流量修正、账单 | `Admin.tsx` 的 Nodes/CreateNode/NodeForm/BillingForm/InstallDialog |
 | registration | 节点页弹窗 | 开启/关闭注册窗口、复制短期命令、有效期 | `useRegisterWindow`、`RegisterDialog` |
 | probes | `/admin/ping` | 新增/编辑/删除 host:port、间隔、节点指派 | `Admin.tsx` 的 Ping；`api::save_ping_task` |
 | notifications | `/admin/notify` | Telegram/Webhook、模板预览、按渠道测试、未保存禁用测试、阈值、节点离线开关 | `Admin.tsx` 的 Notify/OfflineNodes；`notify.rs` |
 | data | `/admin/data` | 数据统计、下载备份、上传恢复、取消、维护确认与周期配置 | `Admin.tsx` 的 Data；`api::db_*` |
-| security | `/admin/security` | GitHub 配置/允许名单、修改账号/密码（需当前密码）、会话撤销 | `Admin.tsx` 的 Security/Sessions；`auth.rs` |
+| security | `/admin/security` | 修改账号/密码（需当前密码）、会话撤销；会话列表读取失败在卡片内提示并可重试 | `Admin.tsx` 的 Security/Sessions；`auth.rs` |
 | settings | `/admin/settings` | 站点名、分钟保留期、公开页及默认视图、连续在线阈值、本地 GeoLite Country 更新 | `Admin.tsx` 的 SettingsTab/GeoSettings；`api::save_settings`、`geo.rs` |
 
 ## 领域对象与权限
@@ -33,7 +33,7 @@ IP/主机名/备注和凭据相关管理字段不向匿名快照公开。公开�
 | --- | --- | --- | --- | --- |
 | 节点/公开页 | 首次加载、节点列表、无节点 | 请求错误与轮询回退 | 未连接/离线；匿名不可见节点不可直链读取 | WS 关闭后重连 |
 | 节点详情 | 骨架、历史图、无历史 | 首次失败重试；刷新失败保留旧图 | 节点不存在或未公开 | 切页停止轮询 |
-| 登录/会话 | 登录中、已登录 | 密码/网络错误 | 会话撤销退出；GitHub 未配置不可使用 | 提交按钮忙态 |
+| 登录/会话 | 登录中、已登录 | 密码/网络错误 | 会话撤销退出 | 提交按钮忙态 |
 | 节点创建/安装 | 创建、一次性令牌、安装命令 | 保存/复制错误 | 非 HTTPS 域名或分发缺失时禁止 provisioning | 弹窗取消；令牌轮换确认 |
 | 探测 | 加载、任务、无任务 | 失败不可伪装成空表；重试 | 管理员权限；节点可选 | 保存忙态、删除确认 |
 | 通知/设置/安全 | 加载与已配置值 | 加载重试、保存/测试错误 | 秘密脱敏、允许用户空则拒绝 | 保存/发送中 |

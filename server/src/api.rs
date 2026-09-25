@@ -650,13 +650,12 @@ fn node_limits(reset_day: Option<u32>, price: Option<f64>, limit: Option<i64>) -
 pub async fn me(State(app): State<Shared>, headers: HeaderMap) -> Json<Value> {
     Json(json!({
         "authed": authed(&app, &headers),
-        "github": app.db.get("github_client_id").is_some_and(|v| !v.is_empty()),
         "site_name": app.db.get("site_name").unwrap_or_else(|| "Monitor".into()),
         "public_page": app.public_page(),
         "public_default_view": app.db.get("public_default_view").filter(|v| v == "list").unwrap_or_else(|| "cards".into()),
         "can_provision": provisioning_allowed(&app, &headers),
         // The hub's own public URL when one was given, which is what belongs in an
-        // install command and in the OAuth callback -- not whichever address this
+        // install command -- not whichever address this
         // browser used, which behind a proxy may be a loopback port. Empty by
         // default, in which case the browser's address is the only one available
         // and the panel falls back to its own origin.
@@ -1202,8 +1201,6 @@ const READABLE_SETTINGS: &[&str] = &[
     "maintenance_days",
     "online_grace_minutes",
     "geolite_url",
-    "github_client_id",
-    "github_allowed_users",
     "retention_days",
 ];
 
@@ -1547,10 +1544,6 @@ pub async fn settings(_: Admin, State(app): State<Shared>) -> Json<Value> {
     // `retention_days()` already holds the default `prune` and the data page read,
     // so it answers here as well.
     out.insert("retention_days".into(), json!(app.db.retention_days().to_string()));
-    out.insert(
-        "github_secret_set".into(),
-        json!(app.db.get("github_client_secret").is_some_and(|v| !v.is_empty())),
-    );
     // Read-only here. A window is opened and closed through its own route, so the
     // key is always one the hub generated, and `save_settings` continues to refuse
     // both names.
@@ -1608,7 +1601,7 @@ fn setting_error(_app: &App, key: &str, value: &Value) -> Option<String> {
         CURRENT_PASSWORD if value.is_empty() => Some("current password is required".into()),
         CURRENT_PASSWORD => None,
         k if k.starts_with("notify_") => crate::notify::setting_error(k, value),
-        k if READABLE_SETTINGS.contains(&k) || k == "github_client_secret" => None,
+        k if READABLE_SETTINGS.contains(&k) => None,
         _ => Some(format!("unknown setting: {key}")),
     }
 }
@@ -3118,18 +3111,15 @@ mod tests {
     #[tokio::test]
     async fn settings_never_hand_back_a_secret() {
         let app = app();
-        app.db.set("github_client_secret", "super-secret").unwrap();
-        app.db.set("github_client_id", "public-id").unwrap();
         app.db.set("notify_telegram_token", "123:bot-secret").unwrap();
         app.db.set("notify_webhook_url", "https://hooks.example/url-secret").unwrap();
         app.db.set("notify_webhook_headers", "Authorization: header-secret").unwrap();
 
         let Json(body) = settings(Admin, axum::extract::State(std::sync::Arc::new(app))).await;
-        assert_eq!(body["github_client_id"], "public-id");
-        assert_eq!(body["github_secret_set"], true);
+        assert_eq!(body["notify_telegram_token_set"], true);
         assert_eq!(body["notify_webhook_url_set"], true);
-        assert!(body.get("github_client_secret").is_none());
-        for secret in ["super-secret", "bot-secret", "url-secret", "header-secret"] {
+        assert!(body.get("notify_telegram_token").is_none());
+        for secret in ["bot-secret", "url-secret", "header-secret"] {
             assert!(!body.to_string().contains(secret), "{secret}");
         }
     }

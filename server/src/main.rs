@@ -424,8 +424,6 @@ async fn main() -> Result<()> {
         // Sign-in.
         .route("/api/auth/login", post(auth::login))
         .route("/api/auth/logout", post(auth::logout))
-        .route("/api/auth/github", get(auth::github_start))
-        .route("/api/auth/github/callback", get(auth::github_callback))
         // Panel.
         .route("/api/nodes", post(api::create_node))
         .route("/api/register-window", post(api::open_register).delete(api::close_register))
@@ -790,8 +788,11 @@ mod tests {
         let app = Arc::new(app("http://localhost:8080"));
         let spa = |p: &str| frontend::serve(State(app.clone()), HeaderMap::new(), p.parse::<Uri>().unwrap());
 
-        // The case that would conceal a misconfigured OAuth callback.
-        assert_eq!(spa("/api/oauth_callback?code=x").await.status(), StatusCode::NOT_FOUND);
+        // A route that no longer exists answers 404 rather than the app shell --
+        // the withdrawn GitHub sign-in included, so a stale bookmark or an OAuth
+        // app still pointing here fails visibly.
+        assert_eq!(spa("/api/auth/github").await.status(), StatusCode::NOT_FOUND);
+        assert_eq!(spa("/api/auth/github/callback?code=x").await.status(), StatusCode::NOT_FOUND);
         assert_eq!(spa("/api/nope").await.status(), StatusCode::NOT_FOUND);
         assert_eq!(spa("/api").await.status(), StatusCode::NOT_FOUND);
 

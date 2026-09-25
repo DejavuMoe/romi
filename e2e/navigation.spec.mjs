@@ -16,20 +16,57 @@ test('signing in lands on the page that asked for it', async ({ page }) => {
   await expect(page).toHaveURL(/\/admin\/security$/)
 })
 
-test('a GitHub return path is resumed once, and only within the panel', async ({ page }) => {
-  await signIn(page)
-  // The callback lands on /admin; the stored path is where it should resume.
-  await page.evaluate(() => sessionStorage.setItem('romi-admin-return', '/admin/security'))
-  await page.goto('/admin')
-  await expect(page).toHaveURL(/\/admin\/security$/)
-  // Consumed: the next visit is not redirected again.
-  await page.goto('/admin')
-  await expect(page).toHaveURL(/\/admin\/nodes$/)
+test('the account password is the only way in', async ({ page }) => {
+  await page.goto('/admin/')
+  // One button on the sign-in screen, and no trace of the withdrawn GitHub path.
+  const login = page.locator('.login-screen')
+  await expect(login.getByRole('button')).toHaveText(['登录'])
+  await expect(login).not.toContainText(/github/i)
 
-  // Anything outside the panel is ignored rather than followed.
-  await page.evaluate(() => sessionStorage.setItem('romi-admin-return', '//example.com/admin/x'))
-  await page.goto('/admin')
-  await expect(page).toHaveURL(/\/admin\/nodes$/)
+  // The hub no longer serves it either, and no longer advertises it.
+  for (const route of ['/api/auth/github', '/api/auth/github/callback?code=x&state=y']) {
+    const response = await page.request.get(route, { maxRedirects: 0 })
+    expect(response.status(), route).toBe(404)
+  }
+  const me = await (await page.request.get('/api/me')).json()
+  expect(me).not.toHaveProperty('github')
+
+  // Its settings are unknown now, not silently accepted.
+  await page.getByLabel('账号', { exact: true }).fill('admin')
+  await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '节点管理', exact: true })).toBeVisible()
+  for (const key of ['github_client_id', 'github_client_secret', 'github_allowed_users']) {
+    const response = await page.request.put('/api/settings', { data: { [key]: 'x' } })
+    expect(response.status(), key).toBe(400)
+  }
+  const settings = await (await page.request.get('/api/settings')).json()
+  expect(Object.keys(settings).filter((key) => key.startsWith('github'))).toEqual([])
+
+  // The security page opens on the account form, with the sessions after it.
+  await navigateAdmin(page, '安全')
+  await expect(page.locator('main h3')).toHaveText(['账号与密码', '登录会话'])
+  await expect(page.locator('main')).not.toContainText(/github/i)
+})
+
+test('a failed session list says so in its card and recovers on retry', async ({ page }) => {
+  await signIn(page)
+  let requests = 0
+  await page.route('**/api/sessions', (route) => ++requests === 1
+    ? route.fulfill({ status: 503, body: 'Temporary sessions failure' })
+    : route.continue())
+  await navigateAdmin(page, '安全')
+
+  const card = page.locator('[data-slot="card"]', { has: page.getByRole('heading', { name: '登录会话' }) })
+  const alert = card.getByRole('alert')
+  await expect(alert).toContainText('会话列表加载失败')
+  await expect(alert).toContainText('暂时无法确认其他设备的登录状态。')
+  // The rest of the page is not held hostage by the list.
+  await expect(page.getByRole('heading', { name: '账号与密码' })).toBeVisible()
+
+  await card.getByRole('button', { name: '重试', exact: true }).click()
+  await expect(alert).toHaveCount(0)
+  await expect(card.getByText('当前设备', { exact: true })).toBeVisible()
 })
 
 test('leaving the data section stops an unfinished restore', async ({ page }) => {
