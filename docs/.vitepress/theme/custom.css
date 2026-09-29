@@ -1,0 +1,78 @@
+:root {
+  --vp-font-family-base: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
+  --vp-font-family-mono: "Cascadia Code", ui-monospace, monospace;
+  --vp-c-bg: #fffcf0;
+  --vp-c-bg-alt: #fffcf0;
+  --vp-c-bg-soft: #f2efe4;
+  --vp-c-bg-elv: #fffcf0;
+  --vp-c-text-1: #100f0f;
+  --vp-c-text-2: #6f6e69;
+  --vp-c-divider: #cecdc3;
+  --vp-c-border: #cecdc3;
+  --vp-c-brand-1: #205ea6;
+  --vp-c-brand-2: #205ea6;
+  --vp-c-brand-3: #205ea6;
+  --vp-c-brand-soft: #f2efe4;
+  --vp-button-brand-text: #fffcf0;
+  --vp-button-brand-bg: #205ea6;
+  --vp-button-brand-hover-bg: #205ea6;
+  --vp-button-alt-bg: #fffcf0;
+  --vp-button-alt-hover-bg: #f2efe4;
+  --vp-home-hero-name-color: #100f0f;
+}
+
+.dark {
+  --vp-c-bg: #14171c;
+  --vp-c-bg-alt: #14171c;
+  --vp-c-bg-soft: #1d2229;
+  --vp-c-bg-elv: #1d2229;
+  --vp-c-text-1: #e6e8ec;
+  --vp-c-text-2: #aeb7c2;
+  --vp-c-divider: #39424d;
+  --vp-c-border: #39424d;
+  --vp-c-brand-1: #99b9dd;
+  --vp-c-brand-2: #99b9dd;
+  --vp-c-brand-3: #99b9dd;
+  --vp-c-brand-soft: #28313c;
+  --vp-button-brand-text: #14171c;
+  --vp-button-brand-bg: #99b9dd;
+  --vp-button-brand-hover-bg: #99b9dd;
+  --vp-button-alt-bg: #1d2229;
+  --vp-button-alt-hover-bg: #28313c;
+  --vp-home-hero-name-color: #e6e8ec;
+}
+
+.VPButton,
+.VPButton.brand,
+.VPButton.alt,
+.VPFeature,
+.VPHome .VPFeature,
+.VPLocalSearchBox .shell,
+.VPDoc .custom-block {
+  border-radius: 0 !important;
+}
+
+.VPHome .VPFeature {
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg);
+}
+
+.VPHomeHero .name {
+  letter-spacing: -.06em;
+}
+
+.VPHomeHero .text {
+  font-size: clamp(22px, 3vw, 31px);
+  font-weight: 400;
+  line-height: 1.4;
+  max-width: 760px;
+}
+
+.VPHomeHero .tagline {
+  font-size: 15px;
+  max-width: 600px;
+}
+
+.VPDoc .content-container {
+  max-width: 760px;
+}

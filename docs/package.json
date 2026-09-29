@@ -1,0 +1,14 @@
+{
+  "name": "@romi/docs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev . --host 127.0.0.1 --port 4312",
+    "build": "vitepress build .",
+    "preview": "vitepress preview . --host 127.0.0.1 --port 4312"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}
