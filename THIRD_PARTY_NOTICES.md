@@ -1,7 +1,6 @@
 # Third-party notices
 
 romi is independently maintained by Dejavu Moe under the MIT license in [LICENSE](LICENSE).
-These notices do not define a development baseline or an update policy.
 
 ## In the release binaries
 
@@ -22,7 +21,8 @@ The interface uses system fonts only; no font files are distributed.
 ## In the repository only
 
 - Prototype vendor provenance and notices: `designs/romi-next/vendor/`.
-- The GeoLite2 Country test fixture and its notice: `server/testdata/maxmind/`. It is used by tests and not shipped.
+- The MaxMind GeoIP2 Country test database (`GeoIP2-Country-Test.mmdb`, MIT) and its notice: `server/testdata/maxmind/`.
+  It is used by tests and not shipped.
 - Local development skills under `.agents/skills/` keep their own licenses: `baoyu-design` (MIT),
   `prototype-first-ui` (Apache-2.0) and `security-audit` (MIT, Cloudflare).
 
