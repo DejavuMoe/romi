@@ -1,0 +1,137 @@
+name: Linux platforms
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Native ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+          - { target: x86_64-unknown-linux-musl, runner: ubuntu-24.04 }
+          - { target: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: node pnpm python
+      - name: Build embedded frontends
+        run: pnpm install --frozen-lockfile && make frontend
+      - name: Restore native compiler output
+        id: native-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/platform
+          key: platform-v1-${{ matrix.target }}-${{ hashFiles('scripts/platform_build.py', 'deploy/build/Dockerfile', 'rust-toolchain.toml', 'server/Cargo.toml', 'server/Cargo.lock', 'agent/Cargo.toml', 'agent/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            platform-v1-${{ matrix.target }}-${{ hashFiles('scripts/platform_build.py', 'deploy/build/Dockerfile', 'rust-toolchain.toml', 'server/Cargo.toml', 'server/Cargo.lock', 'agent/Cargo.toml', 'agent/Cargo.lock') }}-
+      - name: Compile and run native binaries
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python3 scripts/platform_build.py --target "$TARGET"
+      - name: Validate static musl Hub and native hourly backup semantics
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ "$TARGET" == *musl ]]; then
+            if readelf -l "target/platform/$TARGET/bin/romi-hub" | grep -q 'Requesting program interpreter'; then
+              echo 'musl Hub must be static' >&2
+              exit 1
+            fi
+          fi
+          docker run --rm --init --cpus=2 --memory=8g -v "$PWD:/workspace" -w /workspace \
+            -e CARGO_HOME=/workspace/target/platform/cargo-home \
+            -e "CARGO_TARGET_DIR=/workspace/target/platform/$TARGET/cargo" \
+            -e CARGO_BUILD_JOBS=2 -e RUSTUP_TOOLCHAIN=1.98.0 \
+            "romi-builder:$TARGET" cargo test --locked --release --manifest-path server/Cargo.toml \
+            db::tests::hourly_ -- --test-threads=1
+      - name: Identify completed compilation independently of runtime acceptance
+        if: always()
+        id: compiled
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          stamp="target/platform/$TARGET/compiled-source"
+          if test -f "$stamp" && test "$(cat "$stamp")" = "$GITHUB_SHA"; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Cache compiler output; runtime failures still block acceptance
+        if: always() && steps.compiled.outputs.ready == 'true' && steps.native-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/platform
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
+      - name: Preserve verified binaries and their source identity
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: platform-${{ matrix.target }}
+          path: target/platform/${{ matrix.target }}/bin/*
+          if-no-files-found: error
+          retention-days: 7
+
+  container:
+    name: Docker Agent ${{ matrix.arch }}
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: platform-${{ matrix.arch }}-unknown-linux-*
+          path: target/platform-binaries
+      - name: Verify host metrics, restart and export the tested image
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          chmod +x target/platform-binaries/*/romi-*
+          python3 scripts/container_rehearsal.py \
+            --gnu "target/platform-binaries/platform-$ARCH-unknown-linux-gnu" \
+            --musl "target/platform-binaries/platform-$ARCH-unknown-linux-musl" \
+            --output target/container
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-${{ matrix.arch }}
+          path: target/container/*
+          if-no-files-found: error
+          retention-days: 7
+
+  accept:
+    name: Platform acceptance
+    if: always()
+    needs: [build, container]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every native target
+        env:
+          RESULT: ${{ needs.build.result }}
+          CONTAINER_RESULT: ${{ needs.container.result }}
+        run: test "$RESULT" = success && test "$CONTAINER_RESULT" = success

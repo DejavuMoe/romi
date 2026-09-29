@@ -1,0 +1,118 @@
+name: Release Rehearsal
+
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: release-rehearsal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Select the exact prepared candidate
+    runs-on: ubuntu-24.04
+    outputs:
+      release_run: ${{ steps.identity.outputs.release_run }}
+      matrix_sha256: ${{ steps.identity.outputs.matrix_sha256 }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch and verify the non-publishing Release result
+        run: python3 scripts/release_matrix.py fetch-release
+      - name: Bind every rehearsal to one artifact set
+        id: identity
+        run: |
+          python3 -c 'import json,os; d=json.load(open("dist/release-input.json")); open(os.environ["GITHUB_OUTPUT"],"a").write("release_run="+str(d["release_run_id"])+"\nmatrix_sha256="+d["matrix_sha256"]+"\n")'
+
+  rehearsal:
+    name: Systemd ${{ matrix.arch }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    env:
+      ROMI_RELEASE_TARGET: ${{ matrix.arch }}-unknown-linux-gnu
+      ARCH: ${{ matrix.arch }}
+      MATRIX_SHA256: ${{ needs.prepare.outputs.matrix_sha256 }}
+      RELEASE_RUN: ${{ needs.prepare.outputs.release_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: 2026.9.7
+          install_args: python
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: romi-release-${{ github.sha }}
+          run-id: ${{ needs.prepare.outputs.release_run }}
+          github-token: ${{ github.token }}
+          path: dist/release
+      - name: Verify bytes and select the native GNU package
+        run: |
+          python3 scripts/release_matrix.py verify
+          python3 scripts/release_matrix.py extract-target --target "$ROMI_RELEASE_TARGET" --output dist/native-release
+      - name: Install disposable reverse-proxy test infrastructure
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx openssl ca-certificates curl
+      - name: Run real systemd, bootstrap, Agent and TLS acceptance
+        run: |
+          # Fresh hosted VMs may still be booting; the driver checks the final state.
+          sudo timeout 60s systemctl is-system-running --wait || test "$?" -eq 1
+          rehearsal_python="$(python3 -c 'import sys; print(sys.executable)')"
+          sudo "$rehearsal_python" scripts/systemd_rehearsal.py --release-dir dist/native-release --cleanup
+      - name: Record the exact bytes accepted on this native CPU
+        run: |
+          mkdir -p evidence
+          python3 -c 'import hashlib,json,os; from pathlib import Path; h=hashlib.sha256(Path("dist/release/SHA256SUMS").read_bytes()).hexdigest(); assert h==os.environ["MATRIX_SHA256"]; d=dict(source_commit=os.environ["GITHUB_SHA"],matrix_sha256=h,architecture=os.environ["ARCH"],release_run_id=int(os.environ["RELEASE_RUN"])); Path("evidence/"+d["architecture"]+".json").write_text(json.dumps(d))'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: systemd-evidence-${{ matrix.arch }}-${{ github.sha }}
+          path: evidence/*.json
+          if-no-files-found: error
+      - name: Clean only claimed disposable installation state
+        if: always()
+        run: |
+          if sudo test -f /run/romi-systemd-rehearsal/owner.json; then
+            sudo python3 scripts/systemd_rehearsal.py --cleanup-only
+          fi
+
+  accept:
+    name: Public shape and real systemd rehearsal
+    if: always()
+    needs: [prepare, rehearsal]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require both native service rehearsals
+        env:
+          PREPARED: ${{ needs.prepare.result }}
+          REHEARSED: ${{ needs.rehearsal.result }}
+        run: test "$PREPARED" = success && test "$REHEARSED" = success
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: systemd-evidence-*-${{ github.sha }}
+          merge-multiple: true
+          path: evidence
+      - name: Bind successful acceptance to the artifact digest
+        env:
+          MATRIX_SHA256: ${{ needs.prepare.outputs.matrix_sha256 }}
+        run: |
+          python3 -c 'import json,os; from pathlib import Path; arches=["x86_64","aarch64"]; records=[json.loads(Path("evidence/"+a+".json").read_text()) for a in arches]; assert all(r["source_commit"]==os.environ["GITHUB_SHA"] and r["matrix_sha256"]==os.environ["MATRIX_SHA256"] and r["architecture"]==a for a,r in zip(arches,records)); Path("acceptance.json").write_text(json.dumps(dict(source_commit=os.environ["GITHUB_SHA"],matrix_sha256=os.environ["MATRIX_SHA256"],architectures=arches,records=records),indent=2))'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rehearsal-evidence-${{ github.sha }}
+          path: acceptance.json
+          if-no-files-found: error
+          retention-days: 7
