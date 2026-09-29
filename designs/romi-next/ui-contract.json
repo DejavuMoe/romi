@@ -186,34 +186,28 @@
         ]
       },
       "production": {
-        "routeOrWindow": "/ and /node/{id}",
+        "routeOrWindow": "/node/{id}",
         "files": [
-          "web/src/App.tsx",
           "web/src/components/NodeDetail.tsx",
-          "styles/theme.css",
+          "web/src/components/ui/button.tsx",
+          "web/src/components/ui/skeleton.tsx",
           "styles/layout.css",
-          "web/src/components/NodeCard.tsx",
-          "shared/nodes.ts",
           "shared/format.ts",
           "server/src/api.rs",
           "server/src/db/schema.rs",
           "server/src/db/queries.rs",
-          "agent/src/collect.rs",
-          "web/src/components/NodeList.tsx",
-          "web/src/components/Meter.tsx"
+          "agent/src/collect.rs"
         ],
         "interfaces": [
-          "GET /api/me",
           "GET /api/nodes",
           "WS /api/ws",
           "GET /api/nodes/{id}/metrics"
         ],
         "tests": [
           "e2e/public.spec.mjs",
-          "e2e/visual-contract.spec.mjs",
-          "e2e/approved-v12.spec.mjs",
           "e2e/approved-v13.spec.mjs",
-          "e2e/approved-v14.spec.mjs"
+          "e2e/approved-v14.spec.mjs",
+          "e2e/hardening.spec.mjs"
         ]
       },
       "views": [
@@ -223,56 +217,6 @@
           "interface": "GET /api/nodes/{id}/metrics"
         }
       ],
-      "status": "implemented"
-    },
-    {
-      "id": "design-system-v14",
-      "contentProfile": "operational-strict",
-      "prototype": {
-        "entry": "revision-v14/system.html",
-        "assetPath": "revision-v14/system.html",
-        "files": [
-          "revision-v14/system.html",
-          "revision-v14/system.jsx",
-          "revision-v14/system.css",
-          "revision-v14/styles.css",
-          "revision-v14/components.jsx",
-          "revision-v14/fixtures.js"
-        ],
-        "states": [
-          "ready",
-          "empty",
-          "error",
-          "offline",
-          "loading"
-        ],
-        "stableIds": [
-          "system"
-        ]
-      },
-      "production": {
-        "routeOrWindow": "shared tokens for / and /admin/*",
-        "files": [
-          "styles/theme.css",
-          "styles/layout.css",
-          "admin/src/components/ui/button.tsx",
-          "admin/src/components/ui/input.tsx",
-          "admin/src/components/ui/select.tsx",
-          "web/src/components/ui/button.tsx",
-          "web/src/components/Meter.tsx",
-          "admin/src/components/ui/card.tsx",
-          "admin/src/components/ui/field.tsx",
-          "admin/src/components/ui/table.tsx",
-          "admin/src/components/ui/dialog.tsx",
-          "admin/src/components/ui/textarea.tsx"
-        ],
-        "interfaces": [],
-        "tests": [
-          "e2e/visual-contract.spec.mjs",
-          "e2e/approved-v14.spec.mjs"
-        ]
-      },
-      "views": [],
       "status": "implemented"
     },
     {
@@ -476,18 +420,25 @@
         "routeOrWindow": "/ and /node/{id}",
         "files": [
           "web/src/App.tsx",
+          "web/src/components/Fleet.tsx",
+          "web/src/components/Globe.tsx",
+          "web/src/components/DayMap.tsx",
+          "web/src/components/Palette.tsx",
+          "web/src/components/Shell.tsx",
           "web/src/components/NodeDetail.tsx",
-          "styles/theme.css",
-          "styles/layout.css",
-          "web/src/components/NodeCard.tsx",
+          "web/src/lib/api.ts",
+          "web/src/lib/format.ts",
+          "web/src/lib/hooks.ts",
+          "web/src/lib/globe.ts",
+          "shared/geo.ts",
+          "shared/land.ts",
           "shared/nodes.ts",
           "shared/format.ts",
+          "styles/public.css",
           "server/src/api.rs",
           "server/src/db/schema.rs",
           "server/src/db/queries.rs",
-          "agent/src/collect.rs",
-          "web/src/components/NodeList.tsx",
-          "web/src/components/Meter.tsx"
+          "agent/src/collect.rs"
         ],
         "interfaces": [
           "GET /api/me",
@@ -496,11 +447,11 @@
           "GET /api/nodes/{id}/metrics"
         ],
         "tests": [
+          "e2e/approved-v15.spec.mjs",
           "e2e/public.spec.mjs",
           "e2e/visual-contract.spec.mjs",
           "e2e/approved-v12.spec.mjs",
-          "e2e/approved-v13.spec.mjs",
-          "e2e/approved-v14.spec.mjs"
+          "e2e/approved-v13.spec.mjs"
         ]
       },
       "views": [
@@ -553,12 +504,22 @@
         "routeOrWindow": "shared tokens for / and /admin/*",
         "files": [
           "styles/theme.css",
+          "styles/controls.css",
+          "styles/public.css",
           "styles/layout.css",
+          "shared/i18n.ts",
+          "shared/locale-en.ts",
+          "shared/gutter.ts",
+          "web/src/components/ui/controls.tsx",
+          "web/src/components/ui/overlay.tsx",
+          "web/src/components/ui/feedback.tsx",
+          "web/src/components/ui/status.tsx",
+          "web/src/components/ui/icon.tsx",
+          "web/src/components/ui/brand.tsx",
+          "web/src/components/charts.tsx",
           "admin/src/components/ui/button.tsx",
           "admin/src/components/ui/input.tsx",
           "admin/src/components/ui/select.tsx",
-          "web/src/components/ui/button.tsx",
-          "web/src/components/Meter.tsx",
           "admin/src/components/ui/card.tsx",
           "admin/src/components/ui/field.tsx",
           "admin/src/components/ui/table.tsx",
@@ -567,8 +528,9 @@
         ],
         "interfaces": [],
         "tests": [
+          "e2e/approved-v15.spec.mjs",
           "e2e/visual-contract.spec.mjs",
-          "e2e/approved-v14.spec.mjs"
+          "shared/i18n.test.ts"
         ]
       },
       "views": [],
