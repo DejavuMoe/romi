@@ -1,0 +1,21 @@
+{
+  "name": "romi",
+  "private": true,
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "docs:dev": "pnpm --filter @romi/docs dev",
+    "docs:build": "pnpm --filter @romi/docs build",
+    "docs:preview": "pnpm --filter @romi/docs preview",
+    "docs:test": "node scripts/check_docs_site.mjs"
+  },
+  "author": "Dejavu Moe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DejavuMoe/romi.git"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
