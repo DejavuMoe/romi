@@ -5,11 +5,10 @@
 ## 记录规则
 
 - 每次发版在本页新增一个 `## vX.Y.Z` 小节，新版本在上，旧版本的小节保留不改。
-  `scripts/version.py check` 在 CI 和打标签时都要求当前 `VERSION` 的小节存在且非空，漏写会让门禁失败，见[发布](release.md)。
+  当前 `VERSION` 的小节缺失或为空会让版本门禁失败，见[发布](release.md)。
 - 小节记录发版前在本地实际执行的检查、结果和未覆盖的范围，不写未执行的检查，也不预填结果。
 - 小节随候选提交一起提交，因此不写候选提交自身的 SHA：版本标签指向的提交就是它适用的源树。
-- CI、Linux platforms、Release 与 Release Rehearsal 的结果以 GitHub 上同一提交的运行记录为准，
-  用 `python3 scripts/release_gate.py --repo DejavuMoe/romi --sha <完整提交>` 查询，不复制到本页。
+- CI、Linux platforms、Release 与 Release Rehearsal 的结果以 GitHub 上同一提交的运行记录为准（查询方法见[发布](release.md)），不复制到本页。
 
 ## v0.1.0
 
