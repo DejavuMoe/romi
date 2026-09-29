@@ -1,8 +1,8 @@
 # v12 界面契约
 
-状态：已被 `revision-v14` 取代。v12 连同其后的 v13 修订（节点可见性、当前密码、无障碍、移除 GitHub 登录与会话列表失败状态）曾是生产依据；v14 在其内容上收敛了视觉，现行契约见 `ui-contract.json`。
+状态：已被 `revision-v14` 取代。v12 含 v13 修订：节点可见性、当前密码确认、无障碍、只用账号密码登录与会话列表的失败状态；v14 在其内容上收敛了视觉。
 
-`node designs/romi-next/revision-v12/exercise-v13.cjs` 在浏览器中实际操作这两个控件，
+`node designs/romi-next/revision-v12/exercise-v13.cjs` 在浏览器中实际操作节点可见性与当前密码两个控件，
 并按 collector 格式采集两个界面的 DOM 文案到 `captures/v13-*.json`。
 
 后台仅管理列表：ID/优先级、名称、两种 IP、Agent 版本、接入标识与编辑菜单。
@@ -12,6 +12,6 @@ IP 和标识整块可复制；图标紧邻值，桌面悬浮/聚焦显示，触�
 入口为 `index.html` 与 `public.html`，使用 HTTP 预览；登录可用 admin/admin，仅检查非空。
 服务端权限、凭据和安装行为不由原型模拟证明。
 
-`node designs/romi-next/revision-v12/verify.cjs` 校验语法及保留的几何记录；该记录采集于 v12，未随本次修订重采。
+`node designs/romi-next/revision-v12/verify.cjs` 校验语法及保留的几何记录；几何记录采集于 v12。
 截图在 `screenshots/`，观测在 `responsive-checks.json`、`interaction-checks.json`，文案清单位于上层目录。
 旧浏览器记录只对应采集时的条件，修改后应重新验证。
