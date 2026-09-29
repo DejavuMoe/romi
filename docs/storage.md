@@ -8,27 +8,28 @@ romi 的生产持久化只有一种引擎：内嵌 DuckDB。服务端通过 crat
 
 分钟明细默认保留 30 天（后台可设 1–3650 天），较老的完整小时转入 `metric_hour` / `ping_hour`，
 小时数据固定保留 365 天。汇总、删除明细和清理过期小时在同一事务内执行；重复维护不会重复计数。
+汇总只覆盖最近一年：保留期超过 365 天时，更老的分钟明细到期后直接删除，在此之前也超出历史查询窗口。
 累计流量独立保存，不随历史过期而减少。
 
 指标保存样本数与加权和，避免把缺样小时当成完整小时平均。整数和采用 `DECIMAL(38,0)`，
 因为 DuckDB 的 `HUGEINT` 导出 Parquet 会变成 DOUBLE，不能用于精确备份往返。
 TCP 每小时保存整数延迟的计数分布，查询以计数计算中位数、范围和丢包率，不计算“中位数的中位数”。
-分钟和小时数据在查询时组合，管理员最大窗口为一年；公开查询仍限制为七天。
+分钟和小时数据在查询时组合，管理员最大窗口为一年，公开查询限制为七天。
 
 备份格式 3 包含九张持久表（不包含 session），另加 manifest。后台维护在阻塞线程执行，不占用 Tokio
-异步工作线程。默认 DuckDB 引擎预算不是整个 Hub 的 RSS 上限。
+异步工作线程。DuckDB 的内存参数只限制引擎预算，不是整个 Hub 的 RSS 上限。
 
 ## Schema
 
 当前 schema 为 3。节点保存优先级、双向可用带宽、IP 协议可用性、额度输入单位与连续在线起点。
-分钟历史的 ZRAM/普通 Swap/Swapfile/交换分区字段可为空；小时历史按各字段的有效样本数加权，并包含进程数、TCP/UDP 连接数。
-读取不到的字段保留 null；读取端使用返回的桶宽断开缺失区间，不补零或跨空值连线。
-schema 变更在打开数据库时于事务内执行；较新 schema 的数据库不能交给较旧的 Hub，回退应恢复升级前的备份。
+分钟历史中只有 ZRAM、普通 Swap、Swapfile、交换分区四个字段可为空，读取不到时保留 null；其余分钟指标缺失时按 0 保存。
+小时历史按各字段的有效样本数加权，并包含进程数、TCP/UDP 连接数。读取端使用返回的桶宽断开缺失区间，不补零或跨空值连线。
+schema 变更在打开数据库时于事务内执行；较新 schema 的数据库或备份不能交给较旧的 Hub，回退方式见[部署](deployment.md#升级与备份)。
 本地 GeoLite Country 文件位于数据库同目录的 `GeoLite2-Country.mmdb`，不进入 DuckDB 备份；恢复后可重新下载。
 
 ## 文件与启动
 
-数据保存在 `--db` 指定的单个文件中（默认 `romi.db`）。
+数据保存在 `--db` 指定的单个文件中（默认 `romi.db`）；`--db :memory:` 只用于测试，重启即丢失全部数据。
 
 - 路径不存在：创建新的 romi DuckDB 数据库。
 - 路径存在且是有效的 romi DuckDB 数据库：直接打开。
@@ -36,51 +37,59 @@ schema 变更在打开数据库时于事务内执行；较新 schema 的数据�
 - 是 DuckDB 文件但含有表、却没有 `romi_schema` 记录：打开后拒绝，不写入任何 schema；不含任何表的 DuckDB 文件按新库初始化。
 
 DuckDB 只允许一个进程读写同一数据库文件。romi 另外持有 `<db>.lock` 排他锁，
-以便用明确的中文错误拒绝第二个 Hub 进程，而不是转述引擎错误。数据库文件、
-`<db>.wal`、spill 目录 `<db>.tmp` 与锁文件都限制为当前用户可读写（0600/0700）。
+用明确的中文错误拒绝第二个 Hub 进程，也拒绝同一进程重复打开同一路径（POSIX 锁按进程生效，引擎自己的锁拦不住后者）。
+数据库文件、`<db>.wal`、spill 目录与锁文件都限制为当前用户可读写（0600/0700）。
+上传中的备份、导出、恢复 staging 与压缩副本都写在数据库同目录，需要同一文件系统有足够空间。
 
-引擎在打开时显式关闭扩展自动安装/自动加载，并设置内存、线程、临时目录和
-临时空间上限（默认线程数取机器核心数与 8 的较小值，实测这比固定 4 更适合
-大历史扫描）；Parquet 备份格式静态编入二进制，运行时不需要联网获取扩展。
+引擎在打开时关闭扩展自动安装/自动加载以及社区与未签名扩展，并设置：
+
+| 参数 | 默认值 |
+| --- | --- |
+| `--db-memory`（`memory_limit`） | 512MB |
+| `--db-threads` | 机器核心数与 8 的较小值，可设 1–64 |
+| `--db-temp`（spill 目录） | `<db>.tmp`，上限 2GB |
+
+Parquet 备份格式静态编入二进制，运行时不需要联网获取扩展。
 
 ## 写入队列与 group commit
 
 所有写操作通过一个有界通道提交给唯一的 writer 线程：
 
 - 通道容量为 512。调用方在队列满时阻塞，而不是让内存中的未提交窗口无限增长。
-- writer 每取一个 telemetry 任务后，继续取走已经排队的同类任务，最多 256 个，
-  在**一个事务**中提交，然后逐条答复调用方。这就是 group commit。
-- 调用方只有在 `COMMIT` 返回后才收到成功；事务失败会向该批每一条任务返回失败。
-  已接受但未提交的写入只存在于进程队列中，断电丢失窗口有界：累计流量可由 Agent 下一份
-  绝对值计数报告补回，未提交的分钟指标与探测结果不会重发。
+- writer 取到一个遥测任务后，继续取走紧随其后的遥测任务（连同首个最多 256 个），在**一个事务**中提交，
+  然后逐条答复调用方。这就是 group commit。遇到非遥测任务即停止合批，该任务随后单独执行。
+- 调用方只有在 `COMMIT` 返回后才收到成功。已接受但未提交的写入只存在于进程队列中，断电丢失窗口有界：
+  累计流量可由 Agent 下一份绝对值计数报告补回，未提交的分钟指标与探测结果不会重发。
 
 操作分成四类语义：
 
 | 类别 | 例子 | 行为 |
 | --- | --- | --- |
-| Batch | Agent 的 metric / last_seen | 与其他 telemetry 共享 group commit；单条失败时整批回滚后逐条重放，只有出错的那条失败 |
+| Batch | Agent 的流量累计、分钟指标、探测结果与 last_seen | 与其他遥测共享 group commit；失败处理见下 |
 | Solo | 设置、节点、会话及保留期清理 | 单独事务，错误不会连累其他写入 |
 | Maintenance | CHECKPOINT、测量可复用空间 | 不推进 generation，不清空/拒绝排队写入 |
-| Replace | 恢复备份、真正值得做的压缩 | 排空并拒绝旧 generation 的排队写入、在换文件的瞬间停止 reader、推进 generation |
+| Replace | 恢复备份、真正值得做的压缩 | 排空并拒绝旧 generation 的排队写入、在换文件的瞬间停止 reader；无论成败都推进 generation |
 
 DuckDB 没有 savepoint，一条语句失败会污染整个事务。因此一批遥测里若有一条失败，
 writer 先回滚该事务，再把这一批逐条放进各自的事务重放：只有出错的那条得到失败答复，
 同批其他节点的分钟行和探测结果照常提交。`COMMIT` 本身失败时无法归咎于某一条，整批都报告失败。
 
 备份快照不是 Replace。它不经过 writer 队列，而是在 reader 连接的事务中读取；
-因此下载备份不会拒绝任何已接受的 telemetry，也不会断开 Agent 或增加 generation。
+因此下载备份不会拒绝任何已接受的遥测，也不会断开 Agent 或增加 generation。
 
 替换栅栏只覆盖换文件本身。恢复构建 staging 库、压缩复制整个数据库都可能持续数分钟，
 这两段期间只读请求（会话校验、Agent 令牌鉴权、页面与历史读取）不受影响；
-但它们占用唯一的 writer，任何写入（包括登录创建会话、Agent 遥测）会在队列中等待，
+但它们占用唯一的 writer，任何写入（包括登录创建会话）会在队列中等待，
 替换完成后因 generation 已推进而被拒绝，需要重试。只有重命名加重新打开这一步需要排除 reader。
+恢复另在开始时退休全部 Agent 会话：恢复期间节点显示为离线，上报被丢弃而不排队，完成后连接关闭，Agent 重新连接。
 
 ## 读取与快照
 
-短元数据读取使用原有 prototype 连接，历史扫描和备份使用三个分析 reader。
-这样历史连接全部繁忙时，Agent 鉴权、会话与节点列表仍可读取；不额外增加连接。
+短元数据读取使用 prototype 连接，历史扫描和备份使用三个分析 reader。
+这样历史连接全部繁忙时，Agent 鉴权、会话与节点列表仍可读取。
 实时视图读取 Agent 最近发布的指标副本，不等待它正在进行的数据库写入。写入顺序与
-令牌撤销仍受原有 Agent 状态锁保护。
+令牌撤销由单会话状态锁保护。每条语句按次 prepare：`duckdb` 1.10505.0 的 `prepare_cached`
+在其他连接提交后可能返回陈旧结果，复现保存在 `server/tests/duckdb_engine.rs`。
 
 三个 reader 连接共享一个池。历史查询在连接池上执行，并带 30 秒中断上限；
 一个慢查询不会堵住 writer。备份导出同样使用 reader 连接和单个只读事务，
@@ -106,11 +115,12 @@ ping_node、ping_record 和 ping_hour 记录，保留探测任务本身；删除
 备份是一个 gzip tar，包含：
 
 - 每张持久表一个 Parquet 成员；
-- 一个 `manifest.json`，记录应用 schema 版本、写入引擎、每张表的行数和 SHA-256。
+- 一个 `manifest.json`，记录格式与类型（`romi-duckdb-backup`）、应用 schema 版本、写入引擎、创建时间，以及每张表的行数、字节数和 SHA-256。
 
 `session` 表**不在备份中**。它是运行时安全状态，不是业务数据：恢复后的数据库
 始终从当前 schema 创建一张空的 `session` 表，因此恢复不会复活管理员已经注销的登录。
 
+导出不设大小上限；超过 256 MiB 的备份在报告中标记为 `restorable: false`，同一版本无法恢复它，应缩短保留期或先维护。
 读取备份时同时执行四个明确上限：压缩文件 ≤ 256 MiB、成员数 ≤ 10（9 张持久表加
 manifest）、单个成员展开 ≤ 256 MiB、全部成员展开总量 ≤ 1 GiB。解压采用固定 64 KiB
 缓冲流式写入磁盘，不会把大成员整体读进内存；manifest 是唯一允许驻留内存的成员，
@@ -128,7 +138,7 @@ DuckDB memory limit，并在主机内存预算不足时返回明确错误，而�
 
 1. 校验归档（成员、路径、数量、展开大小、类型、摘要）。
 2. 在 scratch 文件中构建完整的新数据库，逐表导入并校验行数、列名和类型。
-3. 在同一 staging 数据库中执行恢复变换：构建延迟的主键（重复行即失败）、清除 session 表、校验关系、重置并抬高 id 分配器。
+3. 在同一 staging 数据库中执行恢复变换：构建延迟的主键（重复行即失败）、清空 session 表、清除已下线功能的设置、校验关系，再按现存最大 id 与当前库计数器抬高 id 分配器。
 4. CHECKPOINT 并关闭 staging 数据库。
 5. 在替换栅栏内激活：关闭旧库所有连接，原文件改名为 `.replaced`，staging 改名到正式路径。
 6. 重新打开全部读写连接后返回成功。激活成功后恢复不再需要任何数据库变更。
@@ -145,30 +155,26 @@ DuckDB memory limit，并在主机内存预算不足时返回明确错误，而�
 2. 执行 `CHECKPOINT`，把 WAL 折入主文件。
 3. 读取 `pragma_database_size()` 的可复用空间。
 4. 仅当可复用空间不少于 4 MiB 时，复制到新文件并切换（Replace 语义）。
-5. 报告实测 `freed`（磁盘字节差）、`reusable`、`compacted` 和文件大小。
+5. 报告清理的行数 `pruned`、实测 `freed`（磁盘字节差）、`reusable`、`compacted` 和文件大小。
 
-DuckDB 没有面向磁盘回收的收缩语义，因此接口和文案不使用其他数据库的重量级回收名称。
-
-## 历史查询与容量
+## 历史查询
 
 历史查询（`Db::metrics` / `Db::ping_records`）在同一节点 id 上过滤后按时间分桶。
-DuckDB 默认的 `index_scan_percentage = 0.001`、`index_scan_max_count = 2048` 使
-每节点返回超过约两千行的窗口不走 ART 索引，而是走顺序扫描并靠 ts zone map 剪裁
-时间范围。测量方法见 [容量基准](bench.md)。
-
-DuckDB worker 默认不超过机器核心数与 8 的较小值。查询布局、线程数和读写并发的调整需要在同一输入上测量；历史性能数字不替代当前候选验收。
+按 DuckDB 默认参数（`index_scan_percentage = 0.001`、`index_scan_max_count = 2048`），匹配行数超过
+2048 与表行数 0.1% 中的较大者时不走 ART 索引，而是顺序扫描并靠 ts zone map 剪裁时间范围。
+测量方法见[容量基准](bench.md)。
 
 ## 监控与关闭
 
 `GET /api/db` 的 `queue` 字段暴露 writer 队列诊断：
 
-- `queued_ops_current` / `queue_capacity`
-- `accepted_ops_total` / `committed_ops_total` / `refused_ops_total` / `failed_ops_total`
+- `queued_ops_current` / `queue_capacity` / `batch_capacity`
+- `accepted_ops_total` / `committed_ops_total` / `completed_ops_total` / `refused_ops_total` / `failed_ops_total` / `submit_failed_ops_total`
 - `transactions_total` / `batch_transactions_total` / `batch_ops_total`
 - `max_batch_size` / `average_batch_size`
 - `queue_wait_us_*` 与 `transaction_us_*`
 
-`committed_ops_total` 按操作计数，不按事务计数；一个包含 N 条 telemetry 的 group commit
+`committed_ops_total` 按操作计数，不按事务计数；一个包含 N 条遥测的 group commit
 同时贡献 N 个 committed operation 和 1 个 batch transaction。被 generation 失效拒绝或
 执行失败的任务不会计入已提交。
 
