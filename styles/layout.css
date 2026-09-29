@@ -288,3 +288,59 @@ a { text-underline-offset:4px; text-decoration-thickness:1px; }
 .load-state p:not(.load-state-title) { max-width:36em; color:var(--muted-foreground); overflow-wrap:anywhere; }
 .load-state [data-slot="button"] { margin-top:8px; }
 .load-state-mark.is-empty { color:var(--muted-foreground); }
+
+/* ---- earlier components ------------------------------------------------------
+   Rules the panels built on the earlier primitives still need until they move
+   to controls.css. Element rules are wrapped in :where() so they never outrank
+   a v15 control. */
+[data-sonner-toast][data-styled="true"] {
+  background: var(--text);
+  color: var(--bg);
+  border: 0;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  font-family: var(--font-sans);
+}
+:where(input[type="checkbox"]) {
+  appearance: none; display: inline-grid; place-content: center; flex-shrink: 0;
+  width: 16px; height: 16px; margin: 0; border: 1.5px solid var(--line-3); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--text); vertical-align: middle;
+}
+:where(input[type="checkbox"]):checked { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:where(input[type="checkbox"]):checked::before {
+  content: ""; width: 8px; height: 4px; border: solid currentColor;
+  border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg);
+}
+:where(input[type="checkbox"]):disabled { opacity: .5; cursor: not-allowed; }
+:where(input[type="checkbox"]):focus-visible { outline: none; }
+:where(summary) { list-style: none; }
+:where(summary)::-webkit-details-marker { display: none; }
+:where(summary)::marker { content: ""; }
+[data-slot="card"], [data-slot="dialog-content"] { min-width: 0; overflow-wrap: anywhere; }
+[data-slot="dialog-content"] { overscroll-behavior: contain; }
+[data-slot="dialog-title"] { line-height: 1.5; overflow-wrap: anywhere; }
+[data-slot="table-container"] { overscroll-behavior-x: contain; }
+label:has(> input[type="checkbox"]) { min-height: 32px; }
+@media (max-width: 767px), (pointer: coarse) {
+  [data-slot="input"], [data-slot="select-trigger"] { font-size: 16px; }
+  [data-slot="button"]:not([data-size="icon-xs"]):not([data-size="xs"]),
+  [data-slot="input"], [data-slot="select-trigger"] { min-height: 44px; }
+  [data-slot="button"][data-size^="icon"] { min-width: 44px; }
+  label:has(>input[type="checkbox"]), label:has(>[data-slot="switch"]) { min-height: 44px; }
+  .node-name-link { display: inline-flex; align-items: center; min-height: 44px; }
+  button[draggable] { min-width: 44px; min-height: 44px; }
+}
+@media (forced-colors: active) {
+  :where(input[type="checkbox"]) { appearance: auto; }
+}
+.recharts-tooltip-wrapper { max-width: calc(100vw - 32px); }
+.recharts-tooltip-item { white-space: normal; overflow-wrap: anywhere; }
+.recharts-brush-slide { fill: var(--accent-soft); fill-opacity: 1; }
+.recharts-brush-traveller line { stroke: var(--on-accent); }
+.recharts-brush-texts text { fill: var(--text); }
+[data-tone="normal"] { --usage-color: var(--ok-ink); }
+[data-tone="warning"] { --usage-color: var(--warn-ink); }
+[data-tone="critical"] { --usage-color: var(--bad-ink); }
+[data-tone="unknown"] { --usage-color: var(--text-3); }
+.usage-number { color: var(--usage-color); }
+.usage-fill { background: var(--usage-color); }

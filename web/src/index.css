@@ -17,6 +17,9 @@
 @import "tw-animate-css";
 
 @import "../../styles/theme.css";
+/* The detail page still uses the earlier layout until it moves to public.css. */
 @import "../../styles/layout.css";
+@import "../../styles/controls.css";
+@import "../../styles/public.css";
 
 @custom-variant dark (&:is(.dark *));

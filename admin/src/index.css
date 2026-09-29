@@ -12,6 +12,8 @@
 
 @import "../../styles/theme.css";
 @import "../../styles/layout.css";
+@import "../../styles/controls.css";
+@import "../../styles/public.css";
 
 @custom-variant dark (&:is(.dark *));
 
