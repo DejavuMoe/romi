@@ -277,7 +277,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-[ -n "$SERVER" ] || die "--server is required (or set ROMI_SERVER)"
+[ -n "$SERVER" ] || die "--server is required"
 case "$INTERVAL" in
     ''|*[!0-9]*) die "--interval must be a whole number from 3 to 60" ;;
 esac

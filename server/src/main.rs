@@ -444,7 +444,7 @@ async fn main() -> Result<()> {
         .fallback(frontend::serve)
         // A report is a few hundred bytes; anything larger is not a report.
         .layer(tower_http::limit::RequestBodyLimitLayer::new(64 * 1024))
-        // The two chunked uploads, merged after that layer rather than beneath
+        // The chunked restore upload, merged after that layer rather than beneath
         // it. They raise the ceiling on a single request -- one 4 MiB piece --
         // not on the file behind it: a 256 MiB backup arrives as 64 such
         // requests, so no reverse proxy needs to know the database size. The

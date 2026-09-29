@@ -227,8 +227,8 @@ fn default_hours() -> i64 {
 /// closing the same gap the password-verification gate closes on the anonymous
 /// login path. DuckDB history reads now use the dedicated reader pool rather than
 /// the writer connection, but large windows still scan enough rows to compete for
-/// CPU and memory bandwidth. The measured capacity work in `docs/bench.md` keeps
-/// four requests as the admission ceiling while the reader pool remains three.
+/// CPU and memory bandwidth. Four requests are admitted while the reader pool
+/// holds three connections.
 ///
 /// Refused rather than queued: admitting an unbounded backlog would preserve the
 /// same expensive work and only move the overload later.
@@ -569,7 +569,7 @@ async fn stream_live(app: Shared, mut socket: WebSocket, session: Option<String>
 /// from an otherwise valid https domain entry. `main` warns about that at
 /// startup; this is for whoever reads the panel rather than the journal.
 const PROVISIONING_DENIED: &str = "请通过 HTTPS 域名访问面板后添加或安装节点；\
-     如果已经是域名访问，检查反向代理是否透传了 Host 与 X-Forwarded-Proto（见 README 的反代配置）；\
+     如果已经是域名访问，检查反向代理是否透传了 Host 与 X-Forwarded-Proto（见部署文档的反向代理一节）；\
      两者都没问题就检查 hub 的启动参数 --site，它必须是 https:// 加域名，不能是 IP、不能带路径";
 
 pub(crate) fn https_domain(site: &str) -> Option<reqwest::Url> {
@@ -1206,17 +1206,17 @@ const READABLE_SETTINGS: &[&str] = &[
 
 // ---- the database itself ----
 
-/// The largest single request the two upload routes accept, and the reason they
-/// sit outside the router's 64 KiB body limit. It is twice the 4 MiB the panel
+/// The largest single request the restore upload accepts, and the reason it
+/// sits outside the router's 64 KiB body limit. It is twice the 4 MiB the panel
 /// sends, so the chunk size remains the panel's concern alone and requires no
 /// negotiated handshake.
 ///
-/// **This, not the two ceilings below, is what a reverse proxy must pass.** A
+/// **This, not the whole-file ceiling below, is what a reverse proxy must pass.** A
 /// backup of any size arrives 4 MiB at a time, so `client_max_body_size` no
 /// longer tracks the size of the database.
 pub const MAX_CHUNK: usize = 8 * 1024 * 1024;
 
-/// Whole-file ceilings, one per route, checked against the declared `total` on
+/// The whole-file ceiling, checked against the declared `total` on
 /// the first request rather than by counting bytes as they arrive, so an
 /// oversized upload is refused before a byte is sent.
 ///

@@ -58,8 +58,8 @@
 //! Reproduced with the crate alone -- a reader holding a cached
 //! `SELECT id, flag, n FROM t` sees `n = 232` after a writer sets `n = 999400`,
 //! and keeps seeing it while a freshly prepared statement returns the committed
-//! value. Every statement here is therefore prepared per use; the cost is one
-//! plan per statement, which `docs/storage.md` measures.
+//! value. Every statement here is therefore prepared per use, at the cost of one
+//! plan per statement.
 //! `server/tests/duckdb_engine.rs` keeps the reproduction.
 
 use std::any::Any;

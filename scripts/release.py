@@ -5,8 +5,9 @@ This is deliberately separate from ``scripts/package.py``. That tool produces a
 ``local-snapshot`` of whatever source tree is present; this tool refuses a dirty
 worktree and ties every public artifact to one strict ``vX.Y.Z`` tag and one
 full Git commit. A manual ``--candidate`` run has the same artifact shape but a
-``release-candidate`` manifest and no tag, which is what the GitHub Actions
-dry-run mode builds.
+``release-candidate`` manifest and no tag. The GitHub Actions dry run instead
+assembles a public-shaped candidate through ``scripts/release_matrix.py
+prepare``.
 
 Nothing here signs or publishes. SHA-256 proves integrity only; provenance is
 created by the release workflow in a separate least-privilege job.

@@ -6,10 +6,9 @@
 //! stopping its rounding/truncation contract, a primary key ceasing to reject
 //! duplicates, or an `INTEGER` column coming back as a 32-bit value.
 //!
-//! `scripts/bench.py` and `docs/bench.md` record the versions this was
-//! verified against; `db::tests` asserts the same version at runtime, so a
-//! dependency bump that changes it fails `make check` rather than an operator's
-//! first backup.
+//! `db::tests` asserts the engine version these facts were checked against, so
+//! a dependency bump that changes it fails `make check` rather than an
+//! operator's first backup.
 
 use duckdb::{params, Connection};
 
@@ -168,9 +167,8 @@ fn cloned_connections_share_one_database_and_read_a_stable_snapshot() {
 }
 
 /// The conflict paths are correct but expensive, which is why the ingest path
-/// does not use them. Measured here rather than asserted as a timing: what the
-/// hub depends on is that a plain insert and an explicit replace are *available*,
-/// and `docs/bench.md` records their measured cost.
+/// does not use them. Not asserted as a timing: what the hub depends on is that a
+/// plain insert and an explicit replace are *available*.
 #[test]
 fn an_insert_can_be_guarded_by_a_subquery_and_replace_explicitly() {
     let conn = Connection::open_in_memory().unwrap();

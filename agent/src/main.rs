@@ -215,10 +215,10 @@ async fn run() -> Result<()> {
     let args = parse_args()?;
     let url = ws_url(&args.server, args.insecure)?;
     collect::init_host_root()?;
-    // Reported once at startup. The future native unit is expected to harden
-    // the service with ProtectHome=yes, which mounts a tmpfs over /home; where
-    // /home is its own filesystem the totals then omit it. The unit file owns
-    // that decision, but the discrepancy must not go unreported.
+    // Reported once at startup. A service sandbox can cover a mount point --
+    // ProtectHome=yes mounts a tmpfs over /home, which is why the installed unit
+    // uses read-only -- and the totals then omit that filesystem. The unit file
+    // owns that decision, but the discrepancy must not go unreported.
     for mount in collect::shadowed_mounts(&collect::mount_table()) {
         eprintln!("{mount} is covered by another mount and is not counted toward disk totals");
     }

@@ -57,7 +57,7 @@ package: release
 
 # A public-release-shaped candidate: exact VERSION, exact HEAD commit, clean
 # worktree, but no Git tag is created and nothing is published. The release
-# workflow's manual dry-run uses the same candidate path.
+# workflow's manual dry run uses scripts/release_matrix.py prepare instead.
 release-candidate: release
 	python3 scripts/release.py package --candidate
 
