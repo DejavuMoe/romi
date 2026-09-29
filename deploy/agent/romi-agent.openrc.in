@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+description="romi monitoring Agent"
+supervisor="supervise-daemon"
+command="@ROMI_AGENT_BIN@"
+command_user="romi-agent:romi-agent"
+pidfile="/run/romi-agent.pid"
+respawn_delay=5
+respawn_max=0
+retry="TERM/15/KILL/5"
+output_log="/var/log/romi-agent.log"
+error_log="/var/log/romi-agent.log"
+umask=0077
+
+depend() { need net; }
+start_pre() {
+    checkpath -f -m 0600 -o "$command_user" "$output_log" || return 1
+    while IFS= read -r line; do
+        case "$line" in
+            ROMI_SERVER=*|ROMI_TOKEN=*|ROMI_INTERVAL=*|ROMI_IFACE=*) export "$line" ;;
+        esac
+    done < "@ROMI_AGENT_ENV@"
+}
