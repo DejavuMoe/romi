@@ -11,6 +11,9 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     browserName: 'chromium',
+    // The interface follows the browser language; the tests read its Chinese
+    // source text, so they state the language rather than inherit the runner's.
+    locale: 'zh-CN',
     screenshot: 'only-on-failure',
     // Traces contain session cookies. Publish screenshots and redacted Hub logs
     // instead of recording credentials in network traces or storage state.

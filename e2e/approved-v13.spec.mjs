@@ -158,17 +158,21 @@ test('a public card is announced by its own content', async ({ page, hub }) => {
   await hub.request('/api/settings', { method: 'PUT', body: { public_page: 'on' } })
   await page.goto('/')
 
-  const card = page.locator('a.public-node-card').first()
+  const card = page.locator('.node-card').first()
   await expect(card).toBeVisible()
-  // An aria-label here would replace everything inside, leaving the status,
-  // billing and resource figures unreadable to assistive technology.
-  expect(await card.getAttribute('aria-label')).toBeNull()
+  // The link is the node's name only; the status, billing and resource figures
+  // stay in the card as their own text rather than hidden behind a label.
+  const link = card.getByRole('link')
+  await expect(link).toHaveCount(1)
+  expect(await link.getAttribute('aria-label')).toBeNull()
+  await expect(link).toHaveAccessibleName('自述卡片节点')
 
   const announced = await card.evaluate((element) => element.innerText.replace(/\s+/g, ' ').trim())
-  for (const expected of ['自述卡片节点', 'CPU', 'RAM']) {
+  for (const expected of ['自述卡片节点', 'CPU', '内存', '磁盘', '未连接']) {
     expect(announced, 'the card still announces its own content').toContain(expected)
   }
-  // And it is still the link that opens the node.
-  await card.click()
+  // The whole card opens the node, not just its name.
+  const box = await card.boundingBox()
+  await card.click({ position: { x: box.width / 2, y: box.height - 12 } })
   await expect(page).toHaveURL(/\/node\/\d+$/)
 })

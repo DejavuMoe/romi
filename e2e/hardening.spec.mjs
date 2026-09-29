@@ -116,8 +116,7 @@ test('the public range picker is styled by the stylesheet this app ships', async
       height: element.getBoundingClientRect().height,
     }
   })
-  // An unstyled trigger is a block with no border. Corners are not a signal
-  // here: this design system sets every radius to zero on purpose.
+  // An unstyled trigger is a block with no border.
   expect(style.display).toBe('flex')
   expect(style.border).toBe('solid')
   // The canary: `data-[size=default]:h-8` exists only in the borrowed

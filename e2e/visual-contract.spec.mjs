@@ -71,7 +71,7 @@ test('solid light/dark surfaces and operational copy hold across navigation', as
       })
       expect(observed.overflow, `${theme}: ${section}`).toBe(false)
       expect(observed.blurred).toBe(false)
-      expect(observed.primary).toBe(theme === 'dark' ? '#99b9dd' : '#205ea6')
+      expect(observed.primary).toBe(theme === 'dark' ? '#8e7dff' : '#5a44ee')
       expect(observed.text).not.toMatch(/AI Slop|提示词|草绿色|米白|Hackerman|Flexoki|CONTROL PANEL|OVERVIEW \/ NODES/i)
       if (['节点','监测','通知'].includes(section)) await visualReference(page, `${theme}-${section}`)
     }

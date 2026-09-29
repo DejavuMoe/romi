@@ -1,21 +1,20 @@
-// The approved v14 visual system, measured on the real Hub: the same checks
-// exercise-v14.cjs makes against the prototype, taken from the production pages
-// in both themes.
+// The approved v14 layout of the admin panel and the node detail, measured on
+// the real Hub: the checks exercise-v14.cjs makes against the prototype. The
+// status page and the shared tokens (corners, type face) have moved to v15 and
+// are measured in approved-v15.spec.mjs; these pages follow in later slices.
 import { test, expect, signIn } from './fixtures.mjs'
 
 const PAGES = [
-  ['public cards', () => '/'],
-  ['public list', () => '/', async (page) => page.getByRole('button', { name: '列表', exact: true }).click()],
   ['public detail', (hub) => `/node/${hub.first}`],
   // Before the admin pages: once signed in, /admin/ shows the panel instead.
   ['admin login', () => '/admin/'],
-  ['admin nodes', () => '/admin/nodes', null, true],
-  ['admin detail', (hub) => `/admin/node/${hub.first}`, null, true],
-  ['admin probes', () => '/admin/ping', null, true],
-  ['admin notifications', () => '/admin/notify', null, true],
-  ['admin data', () => '/admin/data', null, true],
-  ['admin security', () => '/admin/security', null, true],
-  ['admin settings', () => '/admin/settings', null, true],
+  ['admin nodes', () => '/admin/nodes', true],
+  ['admin detail', (hub) => `/admin/node/${hub.first}`, true],
+  ['admin probes', () => '/admin/ping', true],
+  ['admin notifications', () => '/admin/notify', true],
+  ['admin data', () => '/admin/data', true],
+  ['admin security', () => '/admin/security', true],
+  ['admin settings', () => '/admin/settings', true],
 ]
 const named = (name) => PAGES.find(([label]) => label === name)
 
@@ -27,7 +26,7 @@ async function seed(hub) {
   await hub.request('/api/ping-tasks', { method: 'POST', body: { name: '主站 HTTPS', target: 'status.example.invalid:443', interval: 60, nodes: [hub.first] } })
 }
 
-async function visit(page, hub, [, path, step, admin], theme) {
+async function visit(page, hub, [, path, admin], theme) {
   await page.addInitScript((value) => localStorage.setItem('theme', value), theme)
   // Once per page: a second sign-in would find the panel, not the form.
   if (admin && !page.signedIn) {
@@ -36,41 +35,11 @@ async function visit(page, hub, [, path, step, admin], theme) {
   }
   await page.goto(path(hub))
   await page.locator('main, .login-screen').first().waitFor()
-  if (step) await step(page)
   await page.waitForLoadState('networkidle')
 }
 
-test('square and flat in both themes, with one monospace face and one focus ring', async ({ page, hub }) => {
-  test.slow()
+test('one focus treatment: a 2px solid ring', async ({ page, hub }) => {
   await seed(hub)
-  for (const entry of PAGES) {
-    for (const theme of ['light', 'dark']) {
-      await visit(page, hub, entry, theme)
-      const offenders = await page.evaluate(() => {
-        const out = []
-        for (const el of document.querySelectorAll('body *')) {
-          const s = getComputedStyle(el)
-          if (!el.getClientRects().length) continue
-          const rounded = ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius']
-            .some((k) => parseFloat(s[k]) > 0)
-          if (rounded || s.boxShadow !== 'none') out.push(`${el.tagName}.${el.className}: ${rounded ? 'radius' : s.boxShadow}`)
-        }
-        return out
-      })
-      expect(offenders, `${entry[0]} / ${theme}`).toEqual([])
-    }
-  }
-
-  // The whole interface is set in the monospace face; figures in tabular digits.
-  await visit(page, hub, named('public cards'), 'light')
-  const faces = await page.evaluate(() => ({
-    body: getComputedStyle(document.body).fontFamily,
-    figure: getComputedStyle(document.querySelector('.usage-number')).fontVariantNumeric,
-  }))
-  expect(faces.body.split(',')[0]).toMatch(/Mono/)
-  expect(faces.figure).toContain('tabular-nums')
-
-  // One focus treatment: a 2px solid ring.
   await visit(page, hub, named('admin nodes'), 'light')
   await page.getByLabel('搜索节点').focus()
   for (const target of [page.getByLabel('搜索节点'), page.getByRole('button', { name: '全部', exact: true })]) {
@@ -109,7 +78,7 @@ test('every control on a phone is at least 44px tall', async ({ page, hub }, tes
       [...document.querySelectorAll('button, a[href], input, [role="combobox"], [role="tab"]')]
         .filter((el) => {
           const r = el.getBoundingClientRect()
-          return r.width && r.height && getComputedStyle(el).visibility !== 'hidden' && !el.matches('.public-node-card, .skip-link')
+          return r.width && r.height && getComputedStyle(el).visibility !== 'hidden' && !el.matches('.skip-link, .skip')
         })
         // A checkbox or switch is pressed through the row that labels it.
         .map((el) => (el.matches('input[type="checkbox"], [role="switch"]') && el.closest('label')) || el)
