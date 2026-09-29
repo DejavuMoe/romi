@@ -12,7 +12,7 @@
 
 ## 快速开始
 
-1. 从 [Releases](https://github.com/DejavuMoe/romi/releases) 下载对应平台的 Hub 归档，用 `gh attestation verify` 与 `SHA256SUMS` 验证；
+1. 从 [Releases](https://github.com/DejavuMoe/romi/releases) 下载对应平台的 Hub 归档，用 `gh attestation verify` 与 `SHA256SUMS-<target>` 验证；
 2. 解压后运行 `sudo sh deploy/hub/install.sh --site https://hub.example.com`；
 3. 用 Nginx 等反向代理为该域名提供 HTTPS（需要公共 CA 证书），代理到 `127.0.0.1:28080`；
 4. 打开 `/admin/` 登录，添加节点，在被监测的主机上运行面板给出的安装命令。
@@ -38,7 +38,7 @@
 ```sh
 make setup        # 安装锁定的前端依赖并获取 Rust 依赖
 make check-linux  # 构建、lint、单元测试、fmt、Clippy、Rust 测试与脚本自测
-make e2e          # 桌面/移动 Chromium 端到端测试（先运行 pnpm exec playwright install chromium）
+make e2e          # 桌面/移动 Chromium 端到端测试（先运行 pnpm exec playwright install --with-deps chromium）
 ```
 
 开发服务器：`make dev-server`、`make dev-admin`、`make dev-web`，分别监听回环的 9911、5173、5174 端口。

@@ -4,7 +4,7 @@
 
 ## 准备
 
-- 一台运行 Hub 的 Linux 主机：x86_64 或 ARM64；Debian 12 这类 glibc ≥ 2.36 的 systemd 发行版，或 Alpine（OpenRC）。建议从 1 GiB 内存起步。
+- 一台运行 Hub 的 Linux 主机（平台要求见[发布](release.md)），建议从 1 GiB 内存起步。
 - 一个解析到该主机的域名，以及公共 CA 签发的证书（例如 Let's Encrypt）。Agent 只信任公共 CA；面板也只在 HTTPS 域名下允许添加节点。
 - 一个反向代理，下文以 Nginx 为例。Hub 只监听回环地址，不要把它的端口直接暴露到公网。
 - `curl`、`sha256sum`；验证来源时还需要 [GitHub CLI](https://cli.github.com/)。
@@ -31,12 +31,12 @@ tar -xzf romi-hub-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz -C romi-hub
 sudo sh romi-hub/deploy/hub/install.sh --site https://hub.example.com
 ```
 
-`--site` 是用户访问面板的 HTTPS 地址。安装器创建 `romi` 服务账号、安装服务，并等 `/healthz` 返回健康后才结束。
+`--site` 是用户访问面板的地址：`https://` 加域名，不能是 IP、localhost，也不能带路径。安装器创建 `romi` 服务账号、安装服务，并等 `/healthz` 返回健康后才结束。
 安装器自动识别 systemd 或 OpenRC，也可用 `--init` 显式指定。
 
 ## 3. 配置 HTTPS 反向代理
 
-把域名的 443 端口代理到 `127.0.0.1:28080`，保留 `Host`、传递 `X-Forwarded-Proto`，并允许 WebSocket 升级。
+把域名的 443 端口代理到 `127.0.0.1:28080`，保留 `Host`，传递 `X-Forwarded-Proto` 与 `X-Forwarded-For`，允许 WebSocket 升级和至少 8 MiB 的请求体。
 完整的 Nginx 配置与要求见[部署 · 反向代理](deployment.md#反向代理-nginx)。
 
 ## 4. 登录
@@ -60,5 +60,5 @@ sudo cat /var/lib/romi/bootstrap-password
 
 - 公开状态页默认关闭，在「设置」中开放，并选择默认的卡片或列表视图。
 - 在「通知」中配置 Telegram 或 Webhook，按节点打开离线提醒。
-- 在「数据」中下载一次备份；升级前同样先备份，见[部署 · 升级与备份](deployment.md#升级与备份-回滚)。
+- 在「数据」中下载一次备份；升级前同样先备份，见[部署 · 升级与备份](deployment.md#升级与备份)。
 - 遇到问题请先看[部署](deployment.md)，再到 [Issues](https://github.com/DejavuMoe/romi/issues) 反馈；安全问题见[安全策略](https://github.com/DejavuMoe/romi/blob/master/SECURITY.md)。
