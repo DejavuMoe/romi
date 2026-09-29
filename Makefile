@@ -118,6 +118,7 @@ check-licenses:
 
 check-frontends:
 	node shared/contract.test.ts
+	node shared/i18n.test.ts
 	./admin/node_modules/.bin/oxlint shared
 	pnpm --dir admin run lint
 	./admin/node_modules/.bin/oxlint e2e playwright.config.mjs
