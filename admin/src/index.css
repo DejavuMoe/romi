@@ -1,0 +1,34 @@
+/* Scan this app's own source and nothing else. Tailwind's automatic detection
+   walks the whole repository, turning a word in a Rust file or a document into a
+   utility class in the shipped stylesheet: `.filter` and `.transform` appeared
+   because api.rs calls `.filter(...)`. Beyond the wasted bytes, it made the build
+   depend on unrelated files -- adding an
+   unrelated workflow changed the CSS, and with it the content hash of every
+   asset. */
+@import "tailwindcss" source(none);
+@source "../index.html";
+@source "../src";
+@import "tw-animate-css";
+
+@import "../../styles/theme.css";
+@import "../../styles/layout.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Reordering animates the rows themselves; the rest of the page swaps. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(*) {
+  animation-duration: 150ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) {
+    animation: none;
+  }
+}
+
+@source "../../web/src/components";
