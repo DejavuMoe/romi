@@ -151,7 +151,7 @@
           "interface": "POST /api/auth/login"
         }
       ],
-      "status": "needs-review"
+      "status": "approved"
     },
     {
       "id": "public-status-v14",
@@ -223,7 +223,7 @@
           "interface": "GET /api/nodes/{id}/metrics"
         }
       ],
-      "status": "needs-review"
+      "status": "approved"
     },
     {
       "id": "design-system-v14",
@@ -273,7 +273,7 @@
         ]
       },
       "views": [],
-      "status": "needs-review"
+      "status": "approved"
     }
   ]
 }
