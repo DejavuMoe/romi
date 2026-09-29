@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "generator": "prototype-first-ui/collect_dom_content.js",
+  "capturedAt": "2026-09-29T13:19:37.710Z",
+  "page": {
+    "url": "http://127.0.0.1:4311/romi-next/revision-v15/public.html",
+    "title": "romi",
+    "language": "en",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "devicePixelRatio": 1
+    }
+  },
+  "options": {
+    "includeComments": true,
+    "includeDataAttributes": true,
+    "includePseudoContent": true,
+    "includeClientJson": true,
+    "includeMetaContent": true,
+    "includeSameOriginFrames": true,
+    "redactPatterns": 0
+  },
+  "items": [
+    {
+      "id": "dom-5b459106",
+      "text": "public",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "html",
+      "visibility": "visible",
+      "attribute": "data-app",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-963d1965",
+      "text": "light",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "html",
+      "visibility": "visible",
+      "attribute": "data-theme",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-027d8264",
+      "text": "romi",
+      "kind": "text",
+      "channel": "text",
+      "location": "html > head > title",
+      "visibility": "hidden",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-124171c6",
+      "text": "ok",
+      "kind": "data-attribute",
+      "channel": "data-*",
+      "location": "div#root > div.closed-page > div.closed-card:nth-of-type(2) > svg.mark",
+      "visibility": "accessibility-hidden",
+      "attribute": "data-tone",
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-8c742c48",
+      "text": "Sign-in required",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.closed-page > div.closed-card:nth-of-type(2) > h1",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-565c8d86",
+      "text": "This site's status page isn't public. Sign in to see its nodes.",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.closed-page > div.closed-card:nth-of-type(2) > p",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    },
+    {
+      "id": "dom-71154267",
+      "text": "Go to sign-in",
+      "kind": "text",
+      "channel": "text",
+      "location": "div#root > div.closed-page > div.closed-card:nth-of-type(2) > a.btn.btn-primary",
+      "visibility": "visible",
+      "attribute": null,
+      "reference": null,
+      "jsonPath": null,
+      "redacted": false
+    }
+  ],
+  "limitations": [
+    "Closed shadow roots cannot be inspected.",
+    "Canvas/WebGL text, cross-origin frame content, native browser chrome, and OS-native dialogs are not captured.",
+    "Ordinary input values and sensitive-looking attributes/JSON keys are deliberately omitted.",
+    "Only the currently rendered state is captured; exercise other states separately.",
+    "Use sanitized test data: arbitrary text nodes or data attributes can still contain private product data."
+  ]
+}

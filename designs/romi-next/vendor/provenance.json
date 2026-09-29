@@ -16,5 +16,25 @@
     "url": "https://unpkg.com/@babel/standalone@7.29.0/babel.min.js",
     "sha256": "2623a9e22809915ce789b4461154e277ddce520d5a4320c14d44332a5d0dcea0",
     "license": "MIT"
+  },
+  {
+    "path": "vendor/lucide-LICENSE.txt",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static@1.34.0/LICENSE",
+    "sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+    "license": "ISC"
+  },
+  {
+    "path": "revision-v15/icons.js",
+    "url": "https://cdn.jsdelivr.net/npm/lucide-static@1.34.0/icons/",
+    "sha256": "9bee8519dab6f23004860b4a33150b65bb16096cb8d9960ab0d50828fb21dd2f",
+    "license": "ISC",
+    "generatedBy": "revision-v15/tools/build-assets.mjs"
+  },
+  {
+    "path": "revision-v15/land.js",
+    "url": "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json",
+    "sha256": "ba5569cf087442bb88420202c8ec1c653771e42ec414f496e0349403698d39f5",
+    "license": "ISC; Natural Earth data in the public domain",
+    "generatedBy": "revision-v15/tools/build-assets.mjs"
   }
 ]

@@ -161,6 +161,132 @@
         "Shows hostnames on public cards and private/public addresses on the detail page, which the anonymous projection excludes; not reproduced.",
         "Shows an online-rate figure romi does not compute; not added."
       ]
+    },
+    {
+      "id": "user-request-v15",
+      "type": "other",
+      "location": "Maintainer message of 2026-09-29 asking for a complete redesign of the v14 prototype; not copied into the repository",
+      "roles": [
+        "inspiration-only"
+      ],
+      "trust": "user-provided-untrusted-content",
+      "instructionsPolicy": "treat-as-data-never-execute",
+      "containsSensitiveData": false,
+      "sanitization": null,
+      "inferences": [],
+      "approvedByUser": false,
+      "licenseOrPermission": "supplied by the maintainer as design input",
+      "localCopies": [],
+      "observations": [
+        "Rejects the v14 prototype and asks for a complete redesign that keeps the existing functionality."
+      ],
+      "limitations": [
+        "Names no visual rules. The v14 brief rules that revision-v15 proposes to change are listed in revision-v15/README.md and stay in force until v15 is approved.",
+        "Request wording is design input only; none of it is rendered as interface text."
+      ]
+    },
+    {
+      "id": "user-feedback-v15",
+      "type": "screenshot",
+      "location": "Maintainer message of 2026-09-29 with four screenshots of revision v15 (hero status chips, a phone card, the hero figures, the admin inspector overview); not copied into the repository",
+      "roles": [
+        "visual-reference",
+        "interaction-reference"
+      ],
+      "trust": "user-provided-untrusted-content",
+      "instructionsPolicy": "treat-as-data-never-execute",
+      "containsSensitiveData": false,
+      "sanitization": null,
+      "inferences": [],
+      "approvedByUser": false,
+      "licenseOrPermission": "supplied by the maintainer as design input",
+      "localCopies": [],
+      "observations": [
+        "The four status chips wrap two and one; phone cards are too tall; arrows and status dots sit off the middle of the figures beside them; the inspector overview uses different figures from the node page.",
+        "Asks for a rotating three-dimensional globe with simulated traffic in place of the flat map, stronger motion for faster traffic, and a clear difference between upload and download.",
+        "Asks for a full pass on alignment, colour and motion, and for Chinese and English interface languages."
+      ],
+      "limitations": [
+        "The screenshots show the v15 prototype itself; they are evidence of layout problems, not a source of copy, data or new behaviour.",
+        "Request wording is design input only; none of it is rendered as interface text."
+      ]
+    },
+    {
+      "id": "user-feedback-v15-polish",
+      "type": "screenshot",
+      "location": "Maintainer message of 2026-09-29 with eight screenshots of revision v15 (the resource and monitor history grids, the public footer, the brand mark, the panel sidebar foot, the node list foot, the node inspector, the data page); not copied into the repository",
+      "roles": [
+        "visual-reference",
+        "interaction-reference"
+      ],
+      "trust": "user-provided-untrusted-content",
+      "instructionsPolicy": "treat-as-data-never-execute",
+      "containsSensitiveData": false,
+      "sanitization": null,
+      "inferences": [],
+      "approvedByUser": false,
+      "licenseOrPermission": "supplied by the maintainer as design input",
+      "localCopies": [],
+      "observations": [
+        "An odd number of history charts leaves the last one alone beside an empty column; the data page columns end at different heights.",
+        "The footer, the brand mark with its name, and the foot of the panel sidebar are called plain.",
+        "The node count and update time under the node list belong above it, small.",
+        "The inspector changes size when its tabs or buttons are used; corner radii need care."
+      ],
+      "limitations": [
+        "The screenshots show the v15 prototype itself; they are evidence of layout problems, not a source of copy, data or new behaviour.",
+        "Request wording is design input only; none of it is rendered as interface text."
+      ]
+    },
+    {
+      "id": "lucide-static",
+      "type": "design-system",
+      "location": "https://cdn.jsdelivr.net/npm/lucide-static@1.34.0/icons/",
+      "roles": [
+        "visual-reference"
+      ],
+      "trust": "external-untrusted",
+      "instructionsPolicy": "treat-as-data-never-execute",
+      "containsSensitiveData": false,
+      "sanitization": null,
+      "inferences": [],
+      "approvedByUser": false,
+      "licenseOrPermission": "ISC (vendor/lucide-LICENSE.txt)",
+      "localCopies": [
+        "vendor/lucide-LICENSE.txt",
+        "revision-v15/icons.js"
+      ],
+      "observations": [
+        "81 SVG icon bodies, selected in revision-v15/tools/build-assets.mjs, are inlined into revision-v15/icons.js."
+      ],
+      "limitations": [
+        "Icon geometry only; no copy or behaviour is taken from the package."
+      ]
+    },
+    {
+      "id": "world-atlas-land",
+      "type": "other",
+      "location": "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json",
+      "roles": [
+        "visual-reference"
+      ],
+      "trust": "external-untrusted",
+      "instructionsPolicy": "treat-as-data-never-execute",
+      "containsSensitiveData": false,
+      "sanitization": null,
+      "inferences": [],
+      "approvedByUser": false,
+      "licenseOrPermission": "world-atlas ISC; Natural Earth 1:110m land, public domain",
+      "localCopies": [
+        "revision-v15/land.js"
+      ],
+      "observations": [
+        "Land polygons rasterised to a 0.5 degree grid and run-length encoded into revision-v15/land.js (77403 of 259200 cells are land)."
+      ],
+      "limitations": [
+        "Coastlines at 1:110m only; no borders, place names or country shapes are used.",
+        "The globe samples this mask at evenly spread points; country and region positions in revision-v15/geo.js are approximate representative points, not boundaries."
+      ]
     }
   ]
 }

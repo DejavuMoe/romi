@@ -24,6 +24,16 @@
             "width": 1440,
             "height": 900
           }
+        },
+        {
+          "path": "revision-v15/index.html",
+          "createdAt": "2026-09-29T04:07:34.563Z",
+          "status": "needs-review",
+          "subtitle": "v15 晨昏 · globe flows, zh/en, paired layouts",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
         }
       ]
     },
@@ -48,6 +58,16 @@
             "width": 1440,
             "height": 900
           }
+        },
+        {
+          "path": "revision-v15/public.html",
+          "createdAt": "2026-09-29T04:07:34.816Z",
+          "status": "needs-review",
+          "subtitle": "v15 晨昏 · globe flows, zh/en, day map footer",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
         }
       ]
     },
@@ -62,11 +82,21 @@
             "width": 1440,
             "height": 900
           }
+        },
+        {
+          "path": "revision-v15/system.html",
+          "createdAt": "2026-09-29T04:07:35.070Z",
+          "status": "needs-review",
+          "subtitle": "v15 tokens, components, brand and globe",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
         }
       ]
     }
   },
   "createdAt": "2026-09-21T21:13:42.952Z",
-  "updatedAt": "2026-09-25T03:04:31.912Z",
+  "updatedAt": "2026-09-29T13:02:47.666Z",
   "title": "romi 下一版界面原型"
 }
