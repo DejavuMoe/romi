@@ -14,6 +14,9 @@ license, followed by the license texts. It is generated from the lockfiles by `s
 and shipped in every release archive and in the Agent image under `/licenses/`.
 License texts that the published packages do not carry themselves are kept in [licenses/](licenses/README.md).
 
+The status page draws its globe and day map from land cells in `shared/land.ts`, rasterised from world-atlas 2.0.2
+`land-110m.json` (ISC, Michael Bostock), which packages Natural Earth 1:110m land data (public domain).
+
 The interface uses system fonts only; no font files are distributed.
 
 ## In the repository only

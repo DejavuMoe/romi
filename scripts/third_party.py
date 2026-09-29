@@ -11,9 +11,10 @@ image carry this file.
 Inputs are the lockfiles resolved in a prepared build environment: crate
 sources from the cargo registry (`cargo metadata --locked`), bundled npm
 packages from `pnpm licenses list --prod`, and the license files in
-`licenses/`, which DuckDB's crate and the copied shadcn/ui components do not
-ship themselves. `check` regenerates the file and fails on any difference, so
-a dependency change cannot leave it behind.
+`licenses/`, which DuckDB's crate, the copied shadcn/ui components and the
+map data derived from world-atlas do not ship themselves. `check` regenerates
+the file and fails on any difference, so a dependency change cannot leave it
+behind.
 """
 import argparse
 import json
@@ -163,13 +164,16 @@ def static_components():
         component = path.stem.removesuffix("-NOTICES")
         entry = duckdb.setdefault(component, [])
         entry.append((path.name, normalized(path.read_text(encoding="utf-8"))))
-    shadcn = [("shadcn-ui.txt", normalized((LICENSES / "shadcn-ui.txt").read_text(encoding="utf-8")))]
-    return duckdb, shadcn
+    copied = {
+        name: [(file, normalized((LICENSES / file).read_text(encoding="utf-8")))]
+        for name, file in (("shadcn", "shadcn-ui.txt"), ("world-atlas", "world-atlas.txt"))
+    }
+    return duckdb, copied
 
 
 def render():
     crates, packages = rust_crates(), npm_packages()
-    duckdb, shadcn = static_components()
+    duckdb, copied = static_components()
     lines = [
         "romi third-party licenses",
         "=========================",
@@ -207,8 +211,13 @@ def render():
         rows.append((f"{name} {version}", entry["license"], ", ".join(sorted(entry["used_by"])),
                      entry["source"], entry["texts"]))
         collect(f"{name} {version}", entry["texts"])
-    rows.append(("shadcn/ui components", "MIT", "admin panel", "https://github.com/shadcn-ui/ui", shadcn))
-    collect("shadcn/ui components", shadcn)
+    rows.append(("shadcn/ui components", "MIT", "admin panel", "https://github.com/shadcn-ui/ui", copied["shadcn"]))
+    collect("shadcn/ui components", copied["shadcn"])
+    # shared/land.ts rasterises land-110m.json, itself Natural Earth's public
+    # domain 1:110m land; the ISC notice travels with the derived cells.
+    rows.append(("world-atlas 2.0.2 land-110m", "ISC", "status page",
+                 "https://github.com/topojson/world-atlas", copied["world-atlas"]))
+    collect("world-atlas 2.0.2 land-110m", copied["world-atlas"])
     section("JavaScript embedded in the Hub's admin panel and status page", rows)
 
     rows = []
