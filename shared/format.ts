@@ -1,4 +1,5 @@
 import type { Node } from "./nodes.ts"
+import { T } from "./i18n.ts"
 export const UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
 
 export const unitOf = (n: number) => Math.min(Math.floor(Math.log(n) / Math.log(1024)), UNITS.length - 1)
@@ -21,7 +22,7 @@ export function uptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
   const h = Math.floor((seconds % 86400) / 3600)
   const m = Math.floor((seconds % 3600) / 60)
-  return d > 0 ? `${d} 天 ${h} 小时` : h > 0 ? `${h} 小时 ${m} 分` : `${m} 分`
+  return d > 0 ? T("{d} 天 {h} 小时", { d, h }) : h > 0 ? T("{h} 小时 {m} 分", { h, m }) : T("{m} 分", { m })
 }
 
 export const FOREVER = "永不到期"
@@ -59,8 +60,8 @@ export function monthUsage(node: { month_rx: number; month_tx: number; traffic_m
   }
 }
 
-export function continuousUptime(node:Pick<Node,"online"|"last_seen"|"online_since"|"online_grace_minutes">,now=Date.now()/1000):string {
-  if(!node.last_seen)return "尚未接入"
-  if(node.online)return node.online_since ? uptime(Math.max(0,now-node.online_since)) : "待上报"
-  return now-node.last_seen<=(node.online_grace_minutes??5)*60 ? "等待恢复" : "已中断"
+export function continuousUptime(node: Pick<Node, "online" | "last_seen" | "online_since" | "online_grace_minutes">, now = Date.now() / 1000): string {
+  if (!node.last_seen) return T("尚未接入")
+  if (node.online) return node.online_since ? uptime(Math.max(0, now - node.online_since)) : T("待上报")
+  return now - node.last_seen <= (node.online_grace_minutes ?? 5) * 60 ? T("等待恢复") : T("已中断")
 }

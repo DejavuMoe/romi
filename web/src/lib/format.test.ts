@@ -4,7 +4,7 @@ import assert from "node:assert/strict"
 // requires no runner, framework or dependency.
 //
 // Nothing imports it, so the bundle never includes it.
-import { axisBytes, bytes, daysUntil, osName, pair, timeTicks, uptime } from "./format.ts"
+import { axisBytes, bandwidth, bytes, daysUntil, expiry, niceMax, nextReset, osName, pair, periodStart, projection, timeTicks, uptime } from "./format.ts"
 
 let failed = 0
 function eq(got: unknown, want: unknown, what: string) {
@@ -75,6 +75,32 @@ eq(uptime(3 * 3600 + 25 * 60), "3 小时 25 分", "不足一天")
 eq(uptime(2 * 86400 + 5 * 3600), "2 天 5 小时", "超过一天不再写分钟")
 
 eq(osName("Debian GNU/Linux 12 (bookworm)"), "Debian 12", "发行版名去掉代号")
+
+// The billing period: a reset day past the end of a short month falls on its
+// last day, and the reset day itself already belongs to the next period.
+{
+  const day = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+  eq(day(nextReset(31, new Date(2026, 1, 10))), "2026-2-28", "31 日重置在二月落到月末")
+  eq(day(nextReset(1, new Date(2026, 8, 1, 12))), "2026-10-1", "重置当天已属下一期")
+  eq(day(nextReset(15, new Date(2026, 11, 20))), "2027-1-15", "跨年")
+  eq(day(periodStart(31, new Date(2026, 2, 10))), "2026-2-28", "本期从上个月的重置日开始")
+  const node = { traffic_reset_day: 1, traffic_mode: "sum", month_rx: 30 * 1024 ** 3, month_tx: 0 }
+  eq(projection(node, new Date(2026, 8, 2)), null, "开头几天不外推")
+  eq(projection({ ...node, month_rx: 0 }, new Date(2026, 8, 20)), null, "没有用量不外推")
+  eq(Math.round(projection(node, new Date(2026, 8, 16))!.value / 1024 ** 3), 60, "过半时按当前速度翻倍")
+}
+
+eq(expiry({ expires_at: null }).tone, "muted", "无到期日不提醒")
+{
+  const at = (days: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  }
+  eq([expiry({ expires_at: at(30) }).tone, expiry({ expires_at: at(5) }).tone, expiry({ expires_at: at(0) }).tone, expiry({ expires_at: at(-2) }).tone], ["muted", "warn", "warn", "bad"], "到期提醒随剩余天数加重")
+}
+eq([bandwidth(0), bandwidth(500), bandwidth(2500)], ["未设置", "500 Mbps", "2.5 Gbps"], "带宽按十进制写")
+eq([niceMax(0), niceMax(73), niceMax(3 * 1024 ** 2, "bytes")], [1, 80, 4 * 1024 ** 2], "坐标轴顶取整")
 
 if (failed) {
   console.error(`\n${failed} 项不通过`)

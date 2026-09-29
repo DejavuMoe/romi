@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { Node } from "../../../shared/nodes.ts"
 import { api, ApiError } from "../../../shared/http.ts"
@@ -17,6 +17,29 @@ export function safeNodes(nodes: Node[]): Node[] {
   })
 }
 
+/** One live sample of a node, as the hub pushed it. */
+export type Spark = { t: number; cpu: number | null; rx: number | null; tx: number | null }
+
+// The last three minutes of pushes per node, newest last, for the traces on the
+// cards and the fleet band. Kept outside React: every render reads the same
+// buffers, and a remount does not lose them.
+const SPARK = 90
+const sparks = new Map<number, Spark[]>()
+const EMPTY: Spark[] = Array.from({ length: SPARK }, () => ({ t: 0, cpu: null, rx: null, tx: null }))
+
+function record(list: Node[]) {
+  const t = Date.now() / 1000
+  for (const n of list) {
+    const m = n.online ? n.metrics : null
+    const buffer = sparks.get(n.id) ?? EMPTY.slice()
+    buffer.push({ t, cpu: m?.cpu ?? null, rx: m?.net_rx ?? null, tx: m?.net_tx ?? null })
+    sparks.set(n.id, buffer.slice(-SPARK))
+  }
+}
+
+/** A node's recent samples, always the same length, empty slots first. */
+export const spark = (id: number): Spark[] => sparks.get(id) ?? EMPTY
+
 /**
  * Live node list. Uses the WebSocket the hub pushes every two seconds, falling
  * back to polling if it cannot be established.
@@ -29,6 +52,10 @@ export function useNodes() {
   // on the fallback fetch the reconnect starts; a close allows a client to
   // re-query its state but cannot compel it.
   const [closed, setClosed] = useState(false)
+  // One more on every list received, for the marks that pulse with the stream.
+  const [tick, setTick] = useState(0)
+
+  const again = useRef<() => void>(() => {})
 
   useEffect(() => {
     let socket: WebSocket | null = null
@@ -38,7 +65,9 @@ export function useNodes() {
 
     const receive = (list: Node[]) => {
       const safe = safeNodes(list)
+      record(safe)
       setNodes(safe)
+      setTick((n) => n + 1)
       setError(null)
       setClosed(false)
     }
@@ -52,6 +81,7 @@ export function useNodes() {
         })
 
     fetchOnce()
+    again.current = fetchOnce
 
     const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`
     // A hub restart closes every stream. Without reconnecting, a page that
@@ -89,5 +119,7 @@ export function useNodes() {
     }
   }, [])
 
-  return { nodes, error, closed }
+  // Live while lists keep arriving, by stream or by the fallback poll; a failed
+  // request is what ends it.
+  return { nodes, error, closed, tick, connected: !error, retry: () => again.current() }
 }

@@ -1,3 +1,5 @@
+import { T } from "./i18n.ts"
+
 export type Metrics = {
   uptime: number
   cpu: number
@@ -78,8 +80,17 @@ export type Node = {
 }
 
 
-export function connectionLabel(node: Pick<Node,"online"|"last_seen"|"online_grace_minutes">, now=Date.now()/1000):string {
-  if(node.online)return "在线"
-  if(!node.last_seen)return "未连接"
-  return now-node.last_seen<=(node.online_grace_minutes??5)*60 ? "重连中" : "离线"
+export type Connection = "online" | "reconnecting" | "offline" | "never"
+
+/** Where a node's link stands: reporting, just gone quiet, gone, or never seen. */
+export function connection(node: Pick<Node, "online" | "last_seen" | "online_grace_minutes">, now = Date.now() / 1000): Connection {
+  if (node.online) return "online"
+  if (!node.last_seen) return "never"
+  return now - node.last_seen <= (node.online_grace_minutes ?? 5) * 60 ? "reconnecting" : "offline"
+}
+
+export const CONNECTION: Record<Connection, string> = { online: "在线", reconnecting: "重连中", offline: "离线", never: "未连接" }
+
+export function connectionLabel(node: Pick<Node, "online" | "last_seen" | "online_grace_minutes">, now = Date.now() / 1000): string {
+  return T(CONNECTION[connection(node, now)])
 }

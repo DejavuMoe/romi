@@ -9,7 +9,7 @@ import { usageTone } from "../../../shared/usage"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../admin/src/components/ui/select"
 import { Button } from "./ui/button"
 import { Skeleton } from "./ui/skeleton"
-import { Country, Status } from "./NodeCard"
+import { Region, StatusBadge } from "./ui/status"
 import { api, type Node } from "../lib/api"
 import {
   axisBytes, continuousUptime, bytes, clockFor, monthUsage, percent, uptime, osName, timeTicks, withHistoryGaps,
@@ -345,7 +345,7 @@ export function NodeDetail({ node, authed = false }: { node: Node; authed?: bool
 
   return (
     <div className="node-detail space-y-4">
-      <div className="flex flex-wrap items-center gap-2"><h2 className="min-w-0 break-words text-xl font-semibold">{node.name}</h2><Country node={node}/><span className="ml-auto"><Status node={node}/></span></div>
+      <div className="flex flex-wrap items-center gap-2"><h2 className="min-w-0 break-words text-xl font-semibold">{node.name}</h2><Region code={node.country}/><span className="ml-auto"><StatusBadge node={node}/></span></div>
       {/* One list, one separator: a node that has not reported its system
           would otherwise open the line with a stray "·". */}
       <p className="text-xs text-muted-foreground">{[osName(node.os), node.arch, `连续在线 ${continuousUptime(node)}`, `本次启动 ${m ? uptime(m.uptime) : "—"}`].filter(Boolean).join(" · ")}</p>

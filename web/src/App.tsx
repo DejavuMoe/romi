@@ -1,18 +1,21 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react"
-import { Moon, Sun } from "lucide-react"
 
-import { NodeList } from "@/components/NodeList"
-import { NodeCard } from "@/components/NodeCard"
-import { Summary } from "@/components/Summary"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
+import { T } from "../../shared/i18n.ts"
+import { FleetView } from "@/components/Fleet"
+import { Globe } from "@/components/Globe"
+import { nodeItems, Palette } from "@/components/Palette"
+import { Footer, LangButton, ThemeButton } from "@/components/Shell"
+import { Brand, fleetTone, Mark, useFavicon } from "@/components/ui/brand"
+import { IconButton, Kbd } from "@/components/ui/controls"
+import { Empty, Skeleton, toast, Toasts } from "@/components/ui/feedback"
+import { Icon } from "@/components/ui/icon"
 import { api, useNodes, type Node } from "@/lib/api"
+import { transition, useHotkey, useLocale, useTheme } from "@/lib/hooks"
 
 type Me = { authed: boolean; site_name: string; public_page: boolean; public_default_view: "cards" | "list" }
 
-// Split out because recharts is most of this bundle and the list page draws no
-// chart. The landing page is 242 kB rather than 629 kB (77 kB gzipped against
-// 188 kB), with the rest fetched immediately after it paints.
+// Split out because the history charts are most of this bundle and the list
+// page draws none; the rest is fetched immediately after the list paints.
 const loadDetail = () => import("@/components/NodeDetail").then((m) => ({ default: m.NodeDetail }))
 const NodeDetail = lazy(loadDetail)
 
@@ -32,54 +35,35 @@ function useNodeRoute() {
   }, [])
   return [
     id,
-    (next: number | null) => {
-      history.pushState({}, "", next === null ? "/" : `/node/${next}`)
-      setId(next)
-      scrollTo(0, 0)
-    },
-  ] as const
-}
-
-function useTheme() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem("theme")
-    return saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches
-  })
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark)
-  }, [dark])
-  // Written on the toggle rather than on every render of it: storing the
-  // resolved value at mount pins whatever the system preferred at the first
-  // visit, and the visitor who never touched the switch stops following their
-  // own system from then on.
-  return [
-    dark,
-    () => {
-      const next = !dark
-      localStorage.setItem("theme", next ? "dark" : "light")
-      setDark(next)
-    },
+    (next: number | null) =>
+      transition(() => {
+        history.pushState({}, "", next === null ? "/" : `/node/${next}`)
+        setId(next)
+        scrollTo({ top: 0 })
+      }),
   ] as const
 }
 
 export default function App() {
-  const [dark, toggleTheme] = useTheme()
+  const [theme, toggleTheme] = useTheme()
+  const locale = useLocale()
   const [me, setMe] = useState<Me | null>(null)
   const [meError, setMeError] = useState("")
   const siteName = me?.site_name?.trim() && me.site_name !== "Monitor" ? me.site_name.trim() : "romi"
-  const { nodes, error, closed } = useNodes()
+  const { nodes, error, closed, tick, connected, retry } = useNodes()
   const [open, go] = useNodeRoute()
   const [view, setView] = useState<"cards" | "list" | null>(null)
   const currentView = view ?? (me?.public_default_view === "list" ? "list" : "cards")
+  const [palette, setPalette] = useState(false)
 
   const loadMe = useCallback(() => {
     // `|| "..."` because an empty message reads as no error: api() falls back to
     // res.statusText, which HTTP/2 and HTTP/3 removed, so a bodiless 502 from a
-    // proxy arrives as "". The check below would then take the loading branch and
-    // the retry button would never render.
+    // proxy arrives as "". The page would then stay on its loading state and the
+    // retry button would never render.
     return api<Me>("/me")
       .then((next) => { setMe(next); setMeError("") })
-      .catch((e: Error) => setMeError(e.message || "网络错误"))
+      .catch((e: Error) => setMeError(e.message || T("网络错误")))
   }, [])
 
   useEffect(() => {
@@ -87,105 +71,117 @@ export default function App() {
     // Warmed here rather than left to Suspense, which requests the chunk only
     // once a render reaches the detail view, itself waiting on /me. Without this
     // the split trades its first paint for a full-page skeleton over the first
-    // node opened: 2.6s click-to-chart on 4G against 1.4s unsplit, 1.7s warm.
+    // node opened.
     void loadDetail()
   }, [loadMe])
 
   // The status page was closed while this tab was open. `me` holds whatever it
-  // reported at load, so it is re-queried; the effect below then directs an
-  // anonymous visitor to the panel rather than leaving them on a list that
-  // stopped updating with only a red line to explain it.
+  // reported at load, so it is re-queried and the page turns to the sign-in
+  // notice rather than a list that stopped updating.
   useEffect(() => {
     if (closed) void loadMe()
   }, [closed, loadMe])
 
-  useEffect(() => {
-    if (me && !me.public_page && !me.authed) location.href = "/admin/"
-  }, [me])
-
   const sorted = [...(nodes ?? [])].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.sort - b.sort || a.id - b.id)
   const selected = sorted.find((n) => n.id === open)
+  const tone = fleetTone(sorted)
+  useFavicon(tone)
+  const openNode = (n: Node) => go(n.id)
+  useHotkey((e, typing) => !typing && (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")), () => setPalette(true))
 
   // `/node/{id}` is a page people bookmark and share, so the tab needs the node's
   // name. The site name rather than a fixed string, since the hub lets an operator
   // rename the site.
   useEffect(() => {
     document.title = [selected?.name, siteName].filter(Boolean).join(" · ")
-  }, [selected?.name, siteName])
+  }, [selected?.name, siteName, locale])
 
-  // Only while there is nothing else to show. Once `me` has loaded, a later
+  // The status page is closed and nobody is signed in.
+  if (me && !me.public_page && !me.authed)
+    return (
+      <div className="closed-page">
+        <Globe variant="backdrop" theme={theme} />
+        <div className="closed-card">
+          <Mark size={40} />
+          <h1>{T("需要登录")}</h1>
+          <p>{T("此站点的状态页未公开，登录后查看节点。")}</p>
+          <a className="btn btn-primary" href="/admin/">{T("前往登录")}</a>
+        </div>
+      </div>
+    )
+
+  // Only while there is nothing else to show; once `me` has loaded, a later
   // failure belongs beside the page rather than over it.
-  if (!me) return (
-    <div className="grid min-h-svh place-items-center p-6 text-sm text-muted-foreground">
-      {meError ? <div className="space-y-3 text-center"><p role="alert">加载失败：{meError}</p><Button variant="outline" onClick={loadMe}>重试</Button></div> : "加载中…"}
-    </div>
-  )
+  const state = !me ? (meError ? "error" : "loading") : !nodes ? (error ? "error" : "loading") : "ready"
+  const reload = () => {
+    if (!me) void loadMe()
+    retry()
+    toast(T("已重新加载"))
+  }
 
-  // The status page is closed and nobody is signed in: redirect to the panel.
-  if (!me.public_page && !me.authed) return null
+  let content
+  if (open !== null && me) {
+    content = !nodes ? (
+      <Skeleton className="hero-skeleton" label={T("正在加载")} />
+    ) : selected ? (
+      <div className="detail">
+        <a className="back-link" href="/" onClick={(e) => { e.preventDefault(); go(null) }}>
+          <Icon name="arrow-left" />
+          {T("全部节点")}
+        </a>
+        <Suspense fallback={<Skeleton className="hero-skeleton" label={T("正在加载")} />}>
+          <NodeDetail node={selected} authed={me.authed} />
+        </Suspense>
+      </div>
+    ) : (
+      <Empty icon="map-pin" title={T("节点不存在")} detail={T("它可能未公开或已被删除。")} action={T("返回全部节点")} onAction={() => go(null)} />
+    )
+  } else {
+    content = (
+      <FleetView
+        nodes={sorted}
+        beat={tick}
+        theme={theme}
+        onOpen={openNode}
+        view={currentView}
+        setView={setView}
+        state={state}
+        error={!me ? meError : error}
+        connected={connected}
+        onRetry={reload}
+      />
+    )
+  }
 
   return (
-    <div className="min-h-svh">
-      <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="app-shell flex min-h-14 items-center gap-2 py-2 sm:gap-3">
-          {/* The site name is the way back to the list, so a node page needs
-              no back button of its own. */}
-          <button className="brand-button flex min-w-0 items-center transition-colors hover:text-primary" onClick={() => go(null)}>
-            <span className="site-brand truncate">{siteName}</span>
-          </button>
-          <div className="flex-1" />
-          {/* The panel is a separate app built into the hub, not part of this
-              theme, so this is a navigation rather than a route. */}
-          <Button variant="ghost" size="sm" asChild>
-            <a href="/admin/">
-              {me.authed ? "进入后台" : "登录"}
-            </a>
-          </Button>
-          <Button variant="ghost" size="icon" onClick={toggleTheme} title={dark ? "切换浅色主题" : "切换深色主题"} aria-label="切换主题">
-            {dark ? <Sun /> : <Moon />}
-          </Button>
+    <>
+      <a className="skip" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus() }}>{T("跳到主要内容")}</a>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <a className="brand" href="/" onClick={(e) => { e.preventDefault(); go(null) }}>
+            <Brand name={siteName} tone={tone} beat={connected ? tick : undefined} />
+          </a>
+          <div className="topbar-actions">
+            <button type="button" className="search-trigger" onClick={() => setPalette(true)}>
+              <Icon name="search" />
+              <span>{T("搜索节点")}</span>
+              <Kbd>/</Kbd>
+            </button>
+            <IconButton className="search-trigger-icon" label={T("搜索节点")} icon="search" onClick={() => setPalette(true)} />
+            <LangButton />
+            <ThemeButton theme={theme} onToggle={toggleTheme} />
+            {/* The panel is a separate app built into the hub, not part of
+                this page, so this is a navigation rather than a route. */}
+            <a className="btn btn-ghost" href="/admin/">{me?.authed ? T("进入后台") : T("登录")}</a>
+          </div>
         </div>
       </header>
-
-      <main id="main" tabIndex={-1} className="app-shell flex flex-col gap-6 py-7">
-        {open === null && <div className="public-heading"><h1>节点状态</h1><span className="text-xs text-muted-foreground">{nodes ? `${nodes.length} 个节点` : "加载中…"}</span></div>}
-        {open !== null && <div><Button variant="ghost" size="sm" onClick={() => go(null)}>返回</Button></div>}
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        {open !== null ? (
-          !nodes ? (
-            <Skeleton className="h-96" />
-          ) : selected ? (
-            <Suspense fallback={<Skeleton className="h-96" />}>
-              <NodeDetail node={selected} authed={me?.authed ?? false} />
-            </Suspense>
-          ) : (
-            <p className="py-16 text-center text-sm text-muted-foreground">
-              节点不存在或未公开。<button className="underline" onClick={() => go(null)}>返回列表</button>
-            </p>
-          )
-        ) : !nodes ? (
-          <div className="grid gap-3 md:grid-cols-2 min-[56.25rem]:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-64" />
-            ))}
-          </div>
-        ) : (
-          <>
-            <Summary nodes={sorted} />
-            <div className="public-view-toolbar"><div className="view-switch" role="group" aria-label="显示方式">{([["list", "列表"], ["cards", "卡片"]] as const).map(([value, label]) => <Button key={value} variant="ghost" aria-pressed={currentView === value} onClick={() => setView(value)}>{label}</Button>)}</div></div>
-            <div className="public-results">{sorted.length === 0 ? (
-              <div className="load-state" role="status"><span className="load-state-mark is-empty" aria-hidden="true">[ — ]</span><p className="load-state-title">还没有节点</p></div>
-            ) : currentView === "list" ? <NodeList nodes={sorted} onOpen={go}/> : (
-              <div className="public-node-grid">
-                {sorted.map((n: Node) => (
-                  <NodeCard key={n.id} node={n} onOpen={() => go(n.id)} />
-                ))}
-              </div>
-            )}</div>
-          </>
-        )}
+      <main id="main" className="page" tabIndex={-1}>
+        {content}
       </main>
-    </div>
+      <Footer nodes={sorted} connected={connected} theme={theme} tone={tone} />
+      {palette && <Palette items={nodeItems(sorted, openNode)} onClose={() => setPalette(false)} />}
+      <Toasts />
+    </>
   )
 }

@@ -121,7 +121,9 @@ export default function App() {
 
   async function signOut() {
     await api("/auth/logout", { method: "POST" }).catch(() => {})
-    location.href = "/"
+    // Back to the sign-in form, as a fresh load so nothing the session read
+    // stays in memory. The status page may be closed to anonymous visitors.
+    location.href = "/admin/"
   }
 
   const detailId=Number(path.match(/^\/admin\/node\/(\d+)$/)?.[1] || 0)
