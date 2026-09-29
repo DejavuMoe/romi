@@ -11,7 +11,7 @@
 | 并发和资源边界 | [架构](architecture.md) |
 | 字段、权限、计费和状态语义 | [领域规则](domain.md) |
 | 数据库、历史、备份和迁移 | [存储](storage.md) |
-| 界面能力与实现映射 | [UI 能力](ui/capabilities.md)、[产品约束](product/constraints.md)、[UI 契约](ui/implementation.md) |
+| 界面能力与实现映射 | [UI 能力](ui/capabilities.md)、[产品约束](product/constraints.md)、[界面实现](ui/implementation.md) |
 | 如何分阶段实施和提交 | [工程流程](engineering.md) |
 | 改动后跑什么检查 | [测试](testing.md) |
 | 如何安装、升级和恢复 | [部署](deployment.md) |
@@ -21,4 +21,4 @@
 | 如何做容量实验 | [基准方法](bench.md) |
 | 验证记录与适用范围 | [验收状态](readiness.md) |
 
-代码和测试是行为依据，当前已批准设计在 `designs/romi-next/`。旧任务过程和淘汰方案不作为开发入口。
+代码和测试是行为依据，当前已批准设计在 `designs/romi-next/`。

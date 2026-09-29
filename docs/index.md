@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: 实时与历史
-    details: CPU、负载、RAM/ZRAM/Swap、磁盘、网络、连接与进程。分钟明细默认保留 30 天，小时历史 365 天，缺样留空而不画成 0。
+    details: CPU、负载、RAM/ZRAM/Swap、磁盘、网络、连接与进程。分钟明细与小时历史两级保留，缺样留空而不画成 0。
     link: /requirements
   - title: TCP 监测与通知
     details: 由指定节点探测 host:port 的延迟与丢包；离线与恢复、流量阈值、到期和登录通过 Telegram 或 Webhook 提醒。
@@ -30,7 +30,7 @@ features:
     details: GNU/musl、x86_64/ARM64，systemd 或 OpenRC，另有 Agent Docker 镜像。发布包带 GitHub attestation 与 SHA-256，Agent 从你的 Hub 按精确版本安装。
     link: /deployment
   - title: 有界的资源与数据
-    details: 请求、连接、队列与归档都有上限；备份与恢复先完整校验再替换数据库，失败保留原库。
+    details: 请求、连接、队列与归档都有上限；恢复先完整校验归档再替换数据库，失败保留原库。
     link: /storage
   - title: 安全边界清楚
     details: Hub 只监听回环，由 HTTPS 反向代理对外；Agent 只采集和探测，不执行远程命令。

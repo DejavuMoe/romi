@@ -2,6 +2,8 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'zh-CN',
+  // Repository navigation and per-tag release notes are not site pages.
+  srcExclude: ['README.md', 'release-v*.md'],
   title: 'romi 文档',
   description: 'romi：自托管的 Linux 主机监测。安装、运维与开发文档。',
   head: [['meta', { name: 'theme-color', content: '#205ea6' }]],
@@ -34,7 +36,7 @@ export default defineConfig({
         { text: '代码导览', link: '/codebase-guide' },
         { text: '界面能力', link: '/ui/capabilities' },
         { text: '界面约束', link: '/product/constraints' },
-        { text: '界面契约', link: '/ui/implementation' },
+        { text: '界面实现', link: '/ui/implementation' },
         { text: '发布流程', link: '/release' },
         { text: '本地快照', link: '/local-release' }
       ] },
