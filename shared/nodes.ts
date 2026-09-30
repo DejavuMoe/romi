@@ -72,6 +72,7 @@ export type Node = {
   day_tx: number
   /** Panel only. */
   hostname?: string
+  created_at?: number
   ip?: string
   ipv4?: string
   ipv6?: string

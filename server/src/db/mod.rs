@@ -2417,6 +2417,7 @@ fn row_to_node(r: &duckdb::Row<'_>) -> Node {
         last_seen: n(28),
         notify: r.get::<_, bool>(29).unwrap_or(false),
         down_since: n(30),
+        created_at: n(31),
         priority: n(32),
         bandwidth_up: r.get(33).unwrap_or(0.0),
         bandwidth_down: r.get(34).unwrap_or(0.0),
@@ -2583,6 +2584,8 @@ fn bytes_of(file: &str) -> i64 {
 /// One node's stored configuration and last known facts.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Node {
+    #[serde(default)]
+    pub created_at: i64,
     #[serde(default = "gb")]
     pub traffic_unit: String,
     #[serde(default)]

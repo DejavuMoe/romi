@@ -157,6 +157,7 @@ fn node_view(node: &Node, current: Option<&Agent>, traffic: &Traffic, full: bool
     }
     // Private fields stay in the panel; credentials are absent from both views.
     if full {
+        view["created_at"] = json!(node.created_at);
         view["hostname"] = json!(node.hostname);
         view["ip"] = json!(node.ip);
         view["ipv4"] = json!(node.ipv4);
@@ -953,12 +954,18 @@ pub async fn open_register(_: Admin, State(app): State<Shared>, headers: HeaderM
     let until = (Utc::now().timestamp() + REGISTER_WINDOW).to_string();
     let (written_key, written_until) = (key.clone(), until.clone());
     match storage(&app, move |db| {
+        let since = db.nodes()?.iter().map(|node| node.id).max().unwrap_or(0);
         db.set("register_key", &written_key)?;
-        db.set("register_until", &written_until)
+        db.set("register_since_id", &since.to_string())?;
+        db.set("register_until", &written_until)?;
+        Ok(since)
     })
     .await
     {
-        Ok(()) => Json(json!({"register_key": key, "register_until": until})).into_response(),
+        Ok(since) => Json(
+            json!({"register_key": key, "register_until": until, "register_since_id": since.to_string()}),
+        )
+        .into_response(),
         Err(e) => fail(e),
     }
 }
@@ -1546,8 +1553,8 @@ pub async fn settings(_: Admin, State(app): State<Shared>) -> Json<Value> {
     out.insert("retention_days".into(), json!(app.db.retention_days().to_string()));
     // Read-only here. A window is opened and closed through its own route, so the
     // key is always one the hub generated, and `save_settings` continues to refuse
-    // both names.
-    for key in ["register_key", "register_until"] {
+    // these names.
+    for key in ["register_key", "register_until", "register_since_id"] {
         out.insert(key.into(), json!(app.db.get(key).unwrap_or_default()));
     }
     crate::notify::settings(&app, &mut out);
@@ -2384,6 +2391,9 @@ mod tests {
         assert!(!public.as_str().contains("198.51.100.9"), "the public frame must carry no address");
         assert!(!public.as_str().contains("hidden"), "the public frame must carry no private node");
         assert!(admin.as_str().contains("198.51.100.9") && admin.as_str().contains("hidden"));
+        assert!(!public.as_str().contains("created_at"));
+        assert!(admin.as_str().contains("created_at"));
+        assert!(app.db.nodes().unwrap().iter().all(|node| node.created_at > 0));
 
         // Two reads over unchanged data prove nothing, since a rebuild returns the
         // same bytes, so the data is modified first.
@@ -2484,6 +2494,21 @@ mod tests {
         assert_eq!(close_register(Admin, State(app.clone())).await.status(), StatusCode::NO_CONTENT);
         assert_eq!(register(Some(&key), "c").await.status(), StatusCode::FORBIDDEN);
         assert_eq!(app.db.nodes().unwrap().len(), 1);
+    }
+
+    /// Window membership can distinguish pre-existing nodes in the opening second.
+    #[tokio::test]
+    async fn registration_window_records_the_existing_id_boundary() {
+        let app = std::sync::Arc::new(app());
+        let before = node(&app, "before", true);
+        let opened = open_register(Admin, State(app.clone()), domain_headers()).await;
+        let body = axum::body::to_bytes(opened.into_body(), 4096).await.unwrap();
+        let window: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(window["register_since_id"], before.to_string());
+        assert_eq!(app.db.get("register_since_id"), Some(before.to_string()));
+        let after = node(&app, "after", true);
+        assert!(after > before);
+        assert!(app.db.nodes().unwrap().iter().all(|node| node.created_at > 0));
     }
 
     /// The ceiling on the anonymous route: a leaked key cannot fill the table.
