@@ -1,6 +1,6 @@
 services:
   romi-agent:
-    image: ghcr.io/dejavumoe/romi-agent:0.1.0
+    image: ghcr.io/dejavumoe/romi-agent:0.2.0
     restart: unless-stopped
     network_mode: host
     pid: host
