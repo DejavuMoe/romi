@@ -1,10 +1,10 @@
 # 测试
 
-验证必须对应实际源树与构建产物；历史记录不能替代修改后的检查。
+按改动范围选择下面的检查。命令在仓库根执行，浏览器测试需要 Playwright Chromium。
 
 ## Linux 检查
 
-在 Linux 上安装锁定依赖并运行广谱检查：
+在 Linux 上安装锁定依赖并运行完整检查：
 
 ```sh
 make setup && make check-linux
@@ -13,7 +13,7 @@ make setup && make check-linux
 `make check-linux` 包含两端构建、lint/单测、Rust fmt/Clippy/测试、安装器和演练驱动离线检查，
 以及版本同步（含[验收状态](readiness.md)中当前版本的小节）与第三方许可清单核对。
 依赖变化后运行 `python3 scripts/third_party.py generate` 重新生成 `THIRD_PARTY_LICENSES.txt`，否则 `make check-licenses` 失败。
-它不需要 Git 元数据。`make check` 还运行修改临时 Git 仓库的发布检查（`make check-release-scripts`），只在带 Git 元数据的检出或一次性 CI 中运行；维护者机器上的 Windows/WSL 分工见 `AGENTS.md`。
+它不需要 Git 元数据。`make check` 还运行修改临时 Git 仓库的发布检查（`make check-release-scripts`），需要完整 Git 检出或一次性 CI 环境。
 `documentation_audit.py check` 用 `git ls-files` 检查 `docs/`、根 README 与 AGENTS、组件 README、`THIRD_PARTY_NOTICES.md` 与设计 README 的本地链接，
 也需在带 Git 元数据的检出中运行：
 
@@ -26,7 +26,7 @@ python3 scripts/documentation_audit.py check
 ```
 
 只改前端时运行 `make frontend check-frontends`；Rust 局部修改运行对应 Cargo 测试，按影响扩展到集成检查。
-文档站改动运行 `make check-docs`；它需要已安装的 Playwright Chromium，检查所有生成页面的站内链接、中文搜索，以及一个页面在 320/390/1360px 下无横向溢出。
+文档站改动运行 `make check-docs`；它检查生成页面、站内链接与锚点、标志资源、中文搜索、移动导航，以及所有页面在明暗主题、320/390/768/1360px 下的横向溢出。
 
 ## 浏览器和原生进程
 
