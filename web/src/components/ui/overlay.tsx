@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { Dialog as D } from "radix-ui"
 
 import { T } from "../../../../shared/i18n.ts"
@@ -23,6 +23,7 @@ export type DialogProps = {
   /** Focus the dialog itself rather than its first control. */
   focusPanel?: boolean
   label?: string
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 /**
@@ -31,7 +32,8 @@ export type DialogProps = {
  * shifts as its content grows or shrinks. Focus stays inside, Escape and the
  * scrim close it, and focus returns to what opened it.
  */
-export function Dialog({ title, subtitle, onClose, children, footer, size = "md", kind = "center", className, head, bar, focusPanel, label }: DialogProps) {
+export function Dialog({ title, subtitle, onClose, children, footer, size = "md", kind = "center", className, head, bar, focusPanel, label, onCloseAutoFocus }: DialogProps) {
+  const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null)
   return (
     <D.Root open onOpenChange={(open) => !open && onClose()}>
       <D.Portal>
@@ -40,6 +42,14 @@ export function Dialog({ title, subtitle, onClose, children, footer, size = "md"
             className={cx("dialog", `dialog-${kind}`, `dialog-${size}`, className)}
             aria-describedby={undefined}
             aria-label={label}
+            onCloseAutoFocus={event => {
+              onCloseAutoFocus?.(event)
+              if (!event.defaultPrevented) {
+                event.preventDefault()
+                const target = opener?.isConnected && opener !== document.body ? opener : document.getElementById("main")
+                requestAnimationFrame(() => target?.focus())
+              }
+            }}
             onOpenAutoFocus={(e) => {
               const panel = e.currentTarget as HTMLElement
               const first = focusPanel ? panel : panel.querySelector<HTMLElement>("[data-autofocus]") || panel.querySelector<HTMLElement>(FOCUSABLE)

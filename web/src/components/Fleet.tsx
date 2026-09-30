@@ -46,7 +46,7 @@ export function openNode(e: MouseEvent, node: Node, onOpen: (node: Node) => void
 
 // A resource line: name, used of total, the percentage and its bar -- or, for
 // CPU, the last three minutes in the bar's place.
-function MeterRow({ label, pct, detail, trend }: { label: ReactNode; pct: number | null; detail: ReactNode; trend?: ReactNode }) {
+export function MeterRow({ label, pct, detail, trend }: { label: ReactNode; pct: number | null; detail: ReactNode; trend?: ReactNode }) {
   return (
     <div className={cx("meter-row", trend && "has-trend")} data-tone={tone(pct)}>
       <span className="meter-row-label">{label}</span>

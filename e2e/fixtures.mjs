@@ -124,12 +124,12 @@ export async function signIn(page) {
   await page.getByLabel('账号', { exact: true }).fill('admin')
   await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await expect(page.getByRole('heading', { name: '节点管理', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '节点', exact: true })).toBeVisible()
 }
 
 export async function navigateAdmin(page, name) {
-  await expect(page.locator('main h1')).toBeVisible()
+  await expect(page.locator('.admin-title h1')).toBeVisible()
   const menu = page.getByRole('button', { name: '打开导航', exact: true })
   if (await menu.isVisible()) await menu.click()
-  await page.getByRole('navigation', { name: '后台导航' }).getByRole('button', { name, exact: true }).click()
+  await page.getByRole('navigation', { name: '后台导航' }).getByRole('link', { name: new RegExp('^' + name) }).click()
 }

@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { countryName, sky as skyAt, type Sky } from "../../../../shared/geo.ts"
 import { T } from "../../../../shared/i18n.ts"
 import { CONNECTION, connection, type Connection } from "../../../../shared/nodes.ts"
-import type { Node } from "../../lib/api"
+import type { Node, Spark } from "../../lib/api"
 import { rateParts, tone as toneOf } from "../../lib/format"
 import { cx, reduceMotion, useNow } from "../../lib/hooks"
-import { Icon } from "./icon"
+import { Icon, type IconName } from "./icon"
+import { Sparkline } from "../charts"
 
 export function StatusDot({ status, beat, size }: { status: Connection; beat?: number; size?: number }) {
   return (
@@ -152,5 +153,42 @@ export function Quantity({ value, unit, className, animate = true, parts }: { va
       {animate && typeof value === "number" ? <AnimatedNumber value={value} format={parts} /> : <span className="num">{value}</span>}
       {unit && <span className="unit">{unit}</span>}
     </span>
+  )
+}
+export function VitalTile({ icon, label, value, unit, sub, tone: level, trend, get, max, beat, color }: {
+  icon: IconName
+  label: string
+  value: number | ReactNode | null
+  unit?: string
+  sub: ReactNode
+  tone?: string
+  trend?: Spark[]
+  get?: (p: Spark) => number | null
+  max?: number
+  beat?: number
+  color?: string
+}) {
+  return (
+    <div className="vital" data-tone={level}>
+      <div className="vital-head">
+        <span className="vital-label"><Icon name={icon} size={14} />{label}</span>
+      </div>
+      <div className="vital-value num">
+        {value == null ? "—" : typeof value === "number" ? <AnimatedNumber value={value} format={(v) => (unit === "%" ? v.toFixed(0) : String(Math.round(v)))} /> : value}
+        {value != null && unit && <span className="unit">{unit}</span>}
+      </div>
+      <div className="vital-sub">{sub}</div>
+      {trend && get && <Sparkline points={trend} get={get} max={max} beat={beat} height={30} color={color} />}
+    </div>
+  )
+}
+
+export function Fact({ label, children, mono }: { label: string; children?: ReactNode; mono?: boolean }) {
+  if (children === null || children === undefined || children === "") return null
+  return (
+    <div className="fact">
+      <dt>{label}</dt>
+      <dd className={mono ? "mono" : undefined}>{children}</dd>
+    </div>
   )
 }

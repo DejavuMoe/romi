@@ -18,9 +18,9 @@ test('signing in lands on the page that asked for it', async ({ page }) => {
 
 test('the account password is the only way in', async ({ page }) => {
   await page.goto('/admin/')
-  // One button on the sign-in screen, and no trace of the withdrawn GitHub path.
-  const login = page.locator('.login-screen')
-  await expect(login.getByRole('button')).toHaveText(['登录'])
+  // The account form is the only sign-in path; the other buttons change presentation.
+  const login = page.locator('.login')
+  await expect(login.locator('button[type=submit]')).toHaveText(['登录'])
   await expect(login).not.toContainText(/github/i)
 
   // The hub no longer serves it either, and no longer advertises it.
@@ -35,7 +35,7 @@ test('the account password is the only way in', async ({ page }) => {
   await page.getByLabel('账号', { exact: true }).fill('admin')
   await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await expect(page.getByRole('heading', { name: '节点管理', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '节点', exact: true })).toBeVisible()
   for (const key of ['github_client_id', 'github_client_secret', 'github_allowed_users']) {
     const response = await page.request.put('/api/settings', { data: { [key]: 'x' } })
     expect(response.status(), key).toBe(400)
@@ -104,7 +104,7 @@ test('leaving the data section stops an unfinished restore', async ({ page }) =>
   await page.waitForTimeout(1_500)
   expect(chunks).toEqual(['0'])
   await expect(page).toHaveURL(/\/admin\/nodes$/)
-  await expect(page.getByRole('heading', { name: '节点管理', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '节点', exact: true })).toBeVisible()
 })
 
 test('a zoomed latency chart stays zoomed across a refresh', async ({ page, hub }) => {

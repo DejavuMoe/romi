@@ -1,24 +1,26 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react"
-import { LogOut, Moon, Sun } from "lucide-react"
 import { Toaster } from "sonner"
-
+import { T } from "../../shared/i18n.ts"
 import { Sidebar, MobileNavigation, SECTIONS } from "@/components/Navigation"
 import { Admin } from "@/components/Admin"
 import { Login } from "@/components/Login"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { api, provisioningSite, useNodes } from "@/lib/api"
+import { Nodes } from "@/components/sections/nodes"
+import { CreateNode, NodeInspector, RegisterDialog, useRegisterWindow, type InspectTab } from "@/components/sections/node-forms"
+import { api, provisioningSite, useNodes, type Node } from "@/lib/api"
+import { nodeItems, Palette, type PaletteItem } from "../../web/src/components/Palette"
+import { LangButton, ThemeButton } from "../../web/src/components/Shell"
+import { fleetTone, useFavicon } from "../../web/src/components/ui/brand"
+import { Kbd } from "../../web/src/components/ui/controls"
+import { Empty, Notice, Skeleton, Toasts } from "../../web/src/components/ui/feedback"
+import { Icon } from "../../web/src/components/ui/icon"
+import { useHotkey, useLocale, useTheme } from "../../web/src/lib/hooks"
 
-const NodeDetail=lazy(()=>import("../../web/src/components/NodeDetail").then(m=>({default:m.NodeDetail})))
-
+const NodeDetail = lazy(() => import("../../web/src/components/NodeDetail").then(m => ({ default: m.NodeDetail })))
 type Me = { authed: boolean; site_name: string; public_page: boolean; site: string; can_provision: boolean; distribution: { version: string; architecture: string } | null }
 
-// `/admin` alone is not a page; it is normalised to the first section so that a
-// bookmark resolves to a real route.
-function normalise(p: string) {
-  return p === "/admin" || p === "/admin/" ? "/admin/nodes" : p.replace(/\/$/, "") || "/admin/nodes"
+function normalise(path: string) {
+  return path === "/admin" || path === "/admin/" ? "/admin/nodes" : path.replace(/\/$/, "") || "/admin/nodes"
 }
-
 function usePath() {
   const [path, setPath] = useState(() => {
     const start = normalise(location.pathname)
@@ -30,133 +32,109 @@ function usePath() {
     addEventListener("popstate", sync)
     return () => removeEventListener("popstate", sync)
   }, [])
-  return [
-    path,
-    useCallback((next: string) => {
-      const to = normalise(next)
-      history.pushState({}, "", to)
-      setPath(to)
-    }, []),
-  ] as const
-}
-
-function useTheme() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem("theme")
-    return saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches
-  })
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark)
-  }, [dark])
-  // Written on the toggle rather than on every render of it: storing the
-  // resolved value at mount pins whatever the system preferred at the first
-  // visit, and the visitor who never touched the switch stops following their
-  // own system from then on.
-  return [
-    dark,
-    () => {
-      const next = !dark
-      localStorage.setItem("theme", next ? "dark" : "light")
-      setDark(next)
-    },
-  ] as const
+  const go = useCallback((next: string) => {
+    const to = normalise(next)
+    history.pushState({}, "", to)
+    setPath(to)
+    scrollTo({ top: 0 })
+  }, [])
+  return [path, go] as const
 }
 
 export default function App() {
   const [path, go] = usePath()
-  const [dark, toggleTheme] = useTheme()
+  const [theme, toggleTheme] = useTheme()
+  const locale = useLocale()
   const [me, setMe] = useState<Me | null>(null)
   const [meError, setMeError] = useState("")
+  const [palette, setPalette] = useState(false)
+  const [inspect, setInspect] = useState<{ id: number; tab: InspectTab } | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [registering, setRegistering] = useState(false)
+  const { nodes, admin, error, tick, updated, connected, refresh } = useNodes()
+  const reg = useRegisterWindow(!!me?.authed && admin !== false)
   const siteName = me?.site_name?.trim() && me.site_name !== "Monitor" ? me.site_name.trim() : "romi"
-  const { nodes, admin, error, tick, refresh } = useNodes()
-
-  const loadMe = useCallback(() => {
-    // `|| "..."` because an empty message reads as no error: api() falls back to
-    // res.statusText, which HTTP/2 and HTTP/3 removed, so a bodiless 502 from a
-    // proxy arrives as "". The check below would then take the loading branch and
-    // the retry button would never render.
-    return api<Me>("/me")
-      .then((next) => { setMe(next); setMeError("") })
-      .catch((e: Error) => setMeError(e.message || "网络错误"))
-  }, [])
-  useEffect(() => {
-    loadMe()
-  }, [loadMe])
-
-  useEffect(() => { document.title = `${siteName} · 管理` }, [siteName])
-
-  // Every frame declares its audience. The hub closes the stream when the session
-  // behind it is revoked -- signed out from another device, a password change, a
-  // restore -- and the reconnect returns as anonymous: the public list, with
-  // private nodes absent and every admin field empty, rendered inside a panel that
-  // still appears signed in. `authed` is read only at mount and after signing in,
-  // so nothing else detects this. /api/me already handles signing out.
-  useEffect(() => {
-    if (me?.authed && admin === false) loadMe()
-  }, [admin, me?.authed, loadMe])
-
-  // Only while there is nothing else to show. Login's onDone reloads /me, so a
-  // transient failure in the second after signing in would otherwise replace the
-  // entire signed-in panel with a full-page error while the node list streamed
-  // normally.
-  if (!me) return (
-    <div className="grid min-h-svh place-items-center p-6 text-sm text-muted-foreground">
-      {meError ? <div className="space-y-3 text-center"><p role="alert">加载失败：{meError}</p><Button variant="outline" onClick={loadMe}>重试</Button></div> : "加载中…"}
-    </div>
-  )
-
-  if (!me.authed) {
-    return (
-      <>
-        {/* No navigation on success: the address bar already holds the page
-            the operator asked for, a node detail or a section, and sending them
-            to the node list discarded it. */}
-        <Login onDone={() => { loadMe(); refresh() }} />
-        <Toaster position="top-center" theme={dark ? "dark" : "light"} />
-      </>
-    )
-  }
-
   const sorted = [...(nodes ?? [])].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.sort - b.sort || a.id - b.id)
+  const tone = fleetTone(sorted)
+  useFavicon(tone)
+  const loadMe = useCallback(() => api<Me>("/me")
+    .then(next => { setMe(next); setMeError("") })
+    .catch((e: Error) => setMeError(e.message || T("网络错误"))), [])
+  useEffect(() => { void loadMe() }, [loadMe])
+  useEffect(() => { document.title = siteName + " · " + T("管理") }, [siteName, locale])
+  useEffect(() => {
+    if (me?.authed && admin === false) {
+      void loadMe()
+    }
+  }, [admin, me?.authed, loadMe])
+  useHotkey((e, typing) => !!me?.authed && !typing && !document.querySelector('[role="dialog"]') &&
+    (e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")), () => setPalette(true))
 
+  if (!me) return <div className="closed-page">
+    {meError ? <Empty error title={T("加载失败")} detail={T(meError)} action={T("重试")} onAction={loadMe} /> : <Skeleton label={T("正在加载")} className="hero-skeleton" />}
+  </div>
+  if (!me.authed || admin === false) return <>
+    <Login onDone={() => { setInspect(null); setAdding(false); setRegistering(false); setPalette(false); void loadMe(); refresh() }} siteName={siteName} theme={theme} onTheme={toggleTheme} publicOpen={me.public_page} />
+    <Toaster position="top-center" theme={theme} /><Toasts />
+  </>
+
+  const site = me.site || location.origin
+  const canProvision = me.can_provision && !!provisioningSite(location.origin) && !!provisioningSite(site)
+  const distributionAvailable = !!me.distribution
+  const access = { site, canProvision, distributionAvailable }
+  const detailId = Number(path.match(/^\/admin\/node\/(\d+)$/)?.[1] || 0)
+  const detail = sorted.find(n => n.id === detailId)
+  const section = SECTIONS.find(item => item.path === path) ?? SECTIONS[0]
+  const managed = sorted.find(n => n.id === inspect?.id)
+  const open = (node: Node) => { setInspect(null); go("/admin/node/" + node.id) }
+  const manage = (node: Node) => setInspect({ id: node.id, tab: "overview" })
+  const navigate = (next: string) => { setInspect(null); setAdding(false); setRegistering(false); go(next) }
   async function signOut() {
     await api("/auth/logout", { method: "POST" }).catch(() => {})
-    // Back to the sign-in form, as a fresh load so nothing the session read
-    // stays in memory. The status page may be closed to anonymous visitors.
-    location.href = "/admin/"
+    location.assign("/admin/")
   }
-
-  const detailId=Number(path.match(/^\/admin\/node\/(\d+)$/)?.[1] || 0)
-  const detail=sorted.find(n=>n.id===detailId)
-  const section = SECTIONS.find((item) => item.path === path) ?? SECTIONS[0]
-  return (
-    <div className="admin-layout">
-      <a className="skip-link" href="#main" onClick={(event) => { event.preventDefault(); document.getElementById("main")?.focus() }}>跳转到内容</a>
-      <Sidebar path={path} go={go} siteName={siteName} />
-      <div className="admin-workspace">
-        <header className="admin-topbar">
-          <MobileNavigation path={path} go={go} />
-          <span className="admin-breadcrumb">管理后台<span aria-hidden="true"> / </span>{section.label}</span>
-          <div className="flex-1" />
-          <Button variant="ghost" size="sm" asChild><a href="/">状态面板</a></Button>
-          <Button variant="ghost" size="icon" onClick={toggleTheme} title={dark ? "切换浅色主题" : "切换深色主题"} aria-label="切换主题">
-            {dark ? <Sun /> : <Moon />}
-          </Button>
-          <Button variant="ghost" size="icon" onClick={signOut} title="退出登录" aria-label="退出登录"><LogOut /></Button>
+  const navigation = { path, go: navigate, siteName, account: String(reg.settings?.admin_username || T("管理员")),
+    count: sorted.length, connected, tone, beat: tick, onLogout: signOut }
+  const items: PaletteItem[] = [
+    ...nodeItems(sorted, open),
+    ...SECTIONS.map(item => ({ id: item.path, group: T("页面"), label: T(item.label), icon: item.icon, run: () => navigate(item.path) })),
+    ...(canProvision ? [{ id: "add", group: T("操作"), label: T("添加节点"), icon: "plus" as const, run: () => setAdding(true) }] : []),
+    ...(canProvision && distributionAvailable ? [{ id: "register", group: T("操作"), label: T("批量注册"), icon: "ticket" as const, run: () => setRegistering(true) }] : []),
+    { id: "theme", group: T("操作"), label: theme === "dark" ? T("切换浅色主题") : T("切换深色主题"), icon: theme === "dark" ? "sun" : "moon", run: toggleTheme },
+    { id: "logout", group: T("操作"), label: T("退出登录"), icon: "log-out", run: signOut },
+  ]
+  return <>
+    <a className="skip" href="#main" onClick={e => { e.preventDefault(); document.getElementById("main")?.focus() }}>{T("跳到主要内容")}</a>
+    <div className="admin">
+      <aside className="sidebar"><Sidebar {...navigation} /></aside>
+      <div className="admin-main">
+        <header className="admin-top">
+          <MobileNavigation {...navigation} />
+          <div className="admin-title"><h1>{detailId ? detail?.name || T("节点") : T(section.title)}</h1>
+            {!detailId && section.path === "/admin/nodes" && <span className="admin-subtitle num">{T("{n} 个节点", { n: sorted.length })} · {T("{n} 在线", { n: sorted.filter(n => n.online).length })}</span>}
+          </div>
+          <div className="topbar-actions">
+            <button type="button" className="search-trigger" onClick={() => setPalette(true)} aria-label={T("搜索或跳转")}>
+              <Icon name="search" /><span>{T("搜索或跳转")}</span><Kbd>⌘K</Kbd>
+            </button>
+            <LangButton /><ThemeButton theme={theme} onToggle={toggleTheme} />
+          </div>
         </header>
         <main id="main" tabIndex={-1} className="admin-content">
-          {/* A node's detail is headed by the node's own name. */}
-          {path !== "/admin/nodes" && path !== "/admin/ping" && !detailId && <div className="page-heading"><h1>{section.title}</h1></div>}
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          {!nodes ? <Skeleton className="h-64" /> : detailId ? (detail ? <Suspense fallback={<Skeleton className="h-64"/>}><NodeDetail node={detail} beat={tick} admin theme={dark ? "dark" : "light"} backLabel="节点" backHref="/admin/nodes" onBack={()=>go("/admin/nodes")}/></Suspense> : <><Button variant="ghost" onClick={()=>go("/admin/nodes")}>返回</Button><p>节点不存在</p></>) : <Admin
-            onOpen={id=>go(`/admin/node/${id}`)} path={path} nodes={sorted} refresh={refresh}
-            site={me.site || location.origin}
-            canProvision={me.can_provision && !!provisioningSite(location.origin) && !!provisioningSite(me.site || location.origin)}
-            distributionAvailable={!!me.distribution}
-          />}
+          {error && nodes && <Notice tone="warn">{T(error)}</Notice>}
+          {!nodes ? (error ? <Empty error title={T("节点加载失败")} detail={T(error)} action={T("重试")} onAction={refresh} /> : <Skeleton label={T("正在加载节点")} className="hero-skeleton" />) :
+            detailId ? (detail ? <Suspense fallback={<Skeleton label={T("正在加载")} className="hero-skeleton" />}>
+              <NodeDetail node={detail} beat={tick} admin theme={theme} backLabel={T("节点")} backHref="/admin/nodes" onBack={() => navigate("/admin/nodes")} onManage={manage} threshold={Number(reg.settings?.notify_traffic) || 80} />
+            </Suspense> : <Empty title={T("节点不存在")} action={T("返回节点")} onAction={() => navigate("/admin/nodes")} />) :
+            section.path === "/admin/nodes" ? <Nodes nodes={sorted} beat={tick} updated={updated} connected={connected} settings={reg.settings} settingsError={reg.error} onRetrySettings={reg.retry} onInspect={manage} onOpen={open} onAdd={() => setAdding(true)} onRegister={() => setRegistering(true)} {...access} /> :
+            <Admin path={path} nodes={sorted} refresh={refresh} />}
         </main>
       </div>
-      <Toaster position="top-center" theme={dark ? "dark" : "light"} />
     </div>
-  )
+    {managed && inspect && <NodeInspector key={managed.id} node={managed} beat={tick} initialTab={inspect.tab} onClose={() => setInspect(null)} onOpen={open} onSaved={refresh} onDeleted={() => { setInspect(null); if (detailId === managed.id) navigate("/admin/nodes"); refresh() }} {...access} />}
+    {adding && <CreateNode nodes={sorted} beat={tick} onClose={() => setAdding(false)} onOpen={open} onSaved={refresh} {...access} />}
+    {registering && <RegisterDialog nodes={sorted} beat={tick} reg={reg} onClose={() => setRegistering(false)} {...access} />}
+    {palette && <Palette items={items} placeholder={T("搜索节点、页面或操作")} onClose={() => setPalette(false)} />}
+    <Toaster position="top-center" theme={theme} /><Toasts />
+  </>
 }

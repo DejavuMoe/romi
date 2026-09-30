@@ -1,6 +1,5 @@
 import { type Node } from "@/lib/api"
 
-import { Nodes } from "./sections/nodes"
 import { Ping } from "./sections/probes"
 import { SettingsTab } from "./sections/settings"
 import { Notify } from "./sections/notify"
@@ -13,18 +12,10 @@ export function Admin({
   path,
   nodes,
   refresh,
-  site,
-  canProvision,
-  distributionAvailable,
-  onOpen,
 }: {
   path: string
   nodes: Node[]
   refresh: () => void
-  site: string
-  canProvision: boolean
-  distributionAvailable: boolean
-  onOpen:(id:number)=>void
 }) {
   return (
     <div className={`flex flex-col gap-4 ${["/admin/settings","/admin/data","/admin/security","/admin/notify"].includes(path) ? "settings-page" : ""}`}>
@@ -41,7 +32,7 @@ export function Admin({
         ) : path === "/admin/settings" ? (
           <SettingsTab />
         ) : (
-          <Nodes onOpen={onOpen} nodes={nodes} refresh={refresh} site={site} canProvision={canProvision} distributionAvailable={distributionAvailable} />
+          <Ping nodes={nodes} />
         )}
       </div>
     </div>

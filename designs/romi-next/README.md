@@ -4,8 +4,8 @@
 
 | 版本 | 状态 | 入口 |
 | --- | --- | --- |
-| [v15 晨昏](revision-v15/README.md) | 已批准，现行规格；状态页已实施，节点详情与管理面板分批迁移 | [管理端](revision-v15/index.html)、[公开页](revision-v15/public.html)、[设计规范](revision-v15/system.html) |
-| [v14 视觉收敛](revision-v14/README.md) | 已被 v15 取代；迁移完成前节点详情与管理面板沿用其布局 | [管理端](revision-v14/index.html)、[公开页](revision-v14/public.html)、[设计规范](revision-v14/system.html) |
+| [v15 晨昏](revision-v15/README.md) | 已批准，现行规格；状态页、详情、后台导航与节点流程已实施，其余后台页面分批迁移 | [管理端](revision-v15/index.html)、[公开页](revision-v15/public.html)、[设计规范](revision-v15/system.html) |
+| [v14 视觉收敛](revision-v14/README.md) | 已被 v15 取代；监测、通知、数据、安全和站点设置的页面主体保留其布局 | [管理端](revision-v14/index.html)、[公开页](revision-v14/public.html)、[设计规范](revision-v14/system.html) |
 | [v12](revision-v12/README.md) | 已被 v14 取代 | [管理端](revision-v12/index.html)、[公开页](revision-v12/public.html) |
 
 - [表面/源码契约](ui-contract.json)

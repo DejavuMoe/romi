@@ -9,14 +9,13 @@ import { test, expect, signIn, navigateAdmin } from './fixtures.mjs'
 const PASSWORD = 'romi-e2e-only-password'
 
 async function openNodeForm(page, name) {
-  await page.getByRole('button', { name: `编辑菜单 ${name}`, exact: true }).click()
-  await page.getByRole('button', { name: '编辑节点', exact: true }).click()
-  await expect(page.getByRole('combobox', { name: '公开状态页' })).toBeVisible()
+  await page.getByRole('button', { name: `管理 ${name}`, exact: true }).click()
+  await page.getByRole('button', { name: '编辑设置', exact: true }).click()
+  await expect(page.getByRole('radiogroup', { name: '公开状态页' })).toBeVisible()
 }
 
 async function chooseVisibility(page, option) {
-  await page.getByRole('combobox', { name: '公开状态页' }).click()
-  await page.getByRole('option', { name: option, exact: true }).click()
+  await page.getByRole('radiogroup', { name: '公开状态页' }).getByRole('radio', { name: option, exact: true }).click()
 }
 
 test('the node form publishes and unpublishes, and the status page follows', async ({ page, hub }) => {
@@ -31,10 +30,11 @@ test('the node form publishes and unpublishes, and the status page follows', asy
 
   await signIn(page)
   await openNodeForm(page, '可见性节点')
-  await expect(page.getByRole('combobox', { name: '公开状态页' })).toHaveText('显示')
+  await expect(page.getByRole('radio', { name: '显示', exact: true })).toBeChecked()
   await chooseVisibility(page, '不显示')
   await page.getByRole('button', { name: '保存', exact: true }).click()
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.getByText('节点已保存', { exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   // The hub, not the panel, is what decides: the anonymous list must lose it and
   // the direct link must stop resolving.
@@ -47,19 +47,20 @@ test('the node form publishes and unpublishes, and the status page follows', asy
   expect(refused.status()).toBe(401)
 
   // The management list keeps it, marked.
-  await expect(page.getByText('可见性节点', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '可见性节点', exact: true })).toBeVisible()
   await expect(page.getByText('私有', { exact: true }).first()).toBeVisible()
 
   // And the choice survives a reload, so it was stored rather than held in the
   // form's own state.
   await page.reload()
   await openNodeForm(page, '可见性节点')
-  await expect(page.getByRole('combobox', { name: '公开状态页' })).toHaveText('不显示')
+  await expect(page.getByRole('radio', { name: '不显示', exact: true })).toBeChecked()
 
   // Publishing again restores anonymous access.
   await chooseVisibility(page, '显示')
   await page.getByRole('button', { name: '保存', exact: true }).click()
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.getByText('节点已保存', { exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
   await expect(async () => {
     const listed = await anonymous.request.get(`${hub.url}/api/nodes`)
     const body = await listed.json()
@@ -138,10 +139,10 @@ test('history tabs are one stop and move with the arrow keys', async ({ page, hu
   // Arrows move the selection, carry focus with it, and wrap.
   await selected.focus()
   await page.keyboard.press('ArrowRight')
-  await expect(page.getByRole('tab', { selected: true })).toHaveText('监测')
-  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe('监测')
-  await page.keyboard.press('End')
   await expect(page.getByRole('tab', { selected: true })).toHaveText('流量')
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe('流量')
+  await page.keyboard.press('End')
+  await expect(page.getByRole('tab', { selected: true })).toHaveText('监测')
   await page.keyboard.press('ArrowRight')
   await expect(page.getByRole('tab', { selected: true })).toHaveText('资源')
   await page.keyboard.press('Home')

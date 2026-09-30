@@ -1,9 +1,11 @@
 # 界面实现契约
 
-已批准的界面为 v15「晨昏」。规格在 `designs/romi-next/revision-v15/`：`public.html` 是状态页，`index.html` 是管理面板，`system.html` 是视觉规范。状态和源文件映射由 `designs/romi-next/ui-contract.json` 管理；三个 v15 surface 在节点详情与管理面板迁移完成前保持 approved。
-状态页与当前节点详情源码使用 v15 组件。详情页采用 SVG 历史图表，可切换表格、同步十字线和拖选时间范围；资源图数量为奇数时，首图占满一行。管理面板仍使用 v14 布局（侧栏、管理列表、560px 弹窗与手机贴底面板），颜色通过 `--primary`、`--border` 等别名接入 v15 令牌。实现状态与已执行的验证分别记录，源码迁移不代表浏览器回归已完成。
+已批准的界面为 v15「晨昏」。规格在 `designs/romi-next/revision-v15/`：`public.html` 是状态页，`index.html` 是管理面板，`system.html` 是视觉规范。状态和源文件映射由 `designs/romi-next/ui-contract.json` 管理；管理面板的完整 surface 在其他设置页迁移完成前保持 approved。
+状态页、节点详情、后台登录与导航、节点管理使用 v15 组件。详情采用 SVG 历史图表，可切换表格、同步十字线和拖选时间范围；资源图数量为奇数时，首图占满一行。后台推送与公开页复用同一采样缓存，详情和检查器的实时曲线由收到的推送积累。监测、通知、数据、安全和站点设置的页面主体保留既有布局，颜色通过共享令牌接入 v15。
 
-v15 的共享规则（`styles/theme.css`、`styles/controls.css`、`styles/public.css`；v14 页面使用的旧规则在 `styles/layout.css`）：
+后台节点页显示需要关注的节点、资源与网络管理列表。管理操作打开全高的右侧检查器，分概览、设置、账单与流量、安装四个页签；保存行保持可达。添加节点依次命名、显示一次性令牌与安装命令、等待真实首次上报。注册窗口列表按 Hub 返回的创建时间与窗口起始 ID 区分新节点，重载后仍可读取；创建时间仅在管理员节点响应中返回。部分字段更新和未编辑流量计数保持不变。
+
+v15 的共享规则（`styles/theme.css`、`styles/controls.css`、`styles/public.css`、`styles/admin.css`；保留页面的旧规则在 `styles/layout.css`）：
 
 - 字号只取 11/12/13/14/16/18/24/32/48/64px，正文 14px，写在 `body` 上，`rem` 保持浏览器默认；单位按 0.75em、等宽文本按 0.92em 随所在字号缩放；
 - 圆角只取 4/6/10/16/20px 与全圆；系统无衬线字体，数字为表格数字；
@@ -26,13 +28,14 @@ v15 的共享规则（`styles/theme.css`、`styles/controls.css`、`styles/publi
 | 状态页 | `web/src/App.tsx`、`components/Fleet.tsx`、`Globe.tsx`、`DayMap.tsx`、`Palette.tsx`、`Shell.tsx`、`components/ui/`、`lib/globe.ts`、`shared/geo.ts`、`shared/land.ts` | 匿名隔离、状态筛选与搜索、卡片/列表、中英文、地球与昼夜图、关闭页 |
 | 默认视图 | `server/src/api.rs`、两端设置/页面 | cards/list 服务端保存，访客切换不写回 |
 | 历史详情 | `web/src/components/NodeDetail.tsx`、`charts.tsx` | 资源/流量/监测、SVG 图与表格、缺样、RAM/ZRAM/Swap、同步十字线与缩放 |
-| 管理列表（v14 布局） | `admin/src/components/sections/nodes.tsx`、`node-forms.tsx` | ID/优先级、地址、版本、复制、编辑菜单、首行对齐 |
-| 登录/导航（v14 布局） | `Login.tsx`、`Navigation.tsx` | 会话、焦点、滚动锁定不抖动；退出后回到登录表单 |
+| 管理列表与检查器 | `admin/src/components/sections/nodes.tsx`、`node-forms.tsx` | 关注排序、地址/版本/资源、四页签、部分更新、精确计数、真实接入、注册窗口与焦点返回 |
+| 登录/导航 | `Login.tsx`、`Navigation.tsx`、`App.tsx` | 会话、搜索面板、中英文、移动抽屉、焦点与滚动锁定；退出后回到登录表单 |
 | 监测/通知/数据/安全/设置（v14 布局） | `sections/probes.tsx`、`notify.tsx`、`data.tsx`、`security.tsx`、`settings.tsx` | 勾选、面板间距、复选行、错误位不留空洞 |
 
 权限和分发前置条件以 Hub 为准。回归入口：
 
 - `e2e/approved-v15.spec.mjs`：状态页在中英文、明暗主题下加载，英文页不留中文，不出现后台数据；320–1440 不溢出；手机控件 ≥44px；字号与圆角在刻度上，标记与文字居中；地球绘制、转动，减少动画时静止；关闭页；跳转链接、焦点与搜索面板；状态筛选与搜索；
+- `e2e/v15-admin.spec.mjs`：三步添加等待上报、注册窗口列表与重载、搜索跳转与详情管理入口、检查器尺寸与英文文案、只改价格时保留精确字节计数；发行可用性和 Agent 上报使用合成浏览器状态，节点与设置操作使用真实 Hub；
 - `e2e/approved-v14.spec.mjs`：保留的后台回归与当前详情的尺寸检查；后台 320–1440 不溢出、手机控件 ≥44px、后台列表首行对齐、2px 焦点、弹窗标题栏与手机贴底面板；
 - `e2e/navigation.spec.mjs`：登录后回到原路径、只有密码登录、会话列表重试、离开数据页中止恢复、SVG 延迟图拖选缩放跨刷新保持、后台推送填充详情实时曲线；
 - `e2e/hardening.spec.mjs`：安全响应头与缓存、登录拒绝后停止轮询、公开范围选择器样式、单地址实时连接上限；

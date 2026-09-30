@@ -10,9 +10,9 @@
 | --- | --- | --- | --- |
 | public | `/` | 概览与按状态筛选、按名称/地区/系统搜索、卡片/列表切换、站点默认视图、节点搜索面板（`/`、⌘K 或 Ctrl+K）、中英文与明暗切换、地球与昼夜图、进入详情/登录；状态页未公开时显示登录提示 | `web/src/App.tsx`、`Fleet.tsx`、`Globe.tsx`、`DayMap.tsx`、`Palette.tsx`、`Shell.tsx` |
 | node-detail | `/node/{id}`、`/admin/node/{id}` | 资源（CPU、RAM/ZRAM/Swap、磁盘、进程、TCP/UDP）、监测（逐任务延迟、范围与丢包，可削峰）与流量（上传/下载）三个页签，各自时间窗；图表/表格、同步十字线与拖选缩放；实时指标与系统信息；登录后显示地址与备注；返回/深链 | `web/src/components/NodeDetail.tsx` |
-| login | `/admin/` 未登录态 | 账号密码（唯一登录方式）、错误提示 | `admin/src/components/Login.tsx`、`auth.rs` |
-| nodes | `/admin/nodes` | 名称/IP/标识搜索、状态筛选、管理列表、双栈 IP 复制、Agent 版本、优先级、新建/编辑/删除、带宽/协议可用性、安装、轮换、流量修正、账单 | `sections/nodes.tsx`、`sections/node-forms.tsx` |
-| registration | 节点页弹窗 | 开启/关闭注册窗口、复制短期命令、有效期 | `useRegisterWindow`、`RegisterDialog` |
+| login | `/admin/` 未登录态 | 账号密码（唯一登录方式）、错误提示、密码显示开关、语言与主题 | `admin/src/components/Login.tsx`、`auth.rs` |
+| nodes | `/admin/nodes` | 关注节点、名称/IP/标识搜索、状态筛选、资源/网络管理列表、双栈 IP 复制、Agent 版本、优先级；四页签检查器、新建/编辑/删除、带宽/协议、安装、轮换、流量修正与账单；三步添加等待首次上报 | `sections/nodes.tsx`、`sections/node-forms.tsx` |
+| registration | 后台弹窗 | 开启/关闭注册窗口、复制短期命令、倒计时、窗口开启后新增节点列表 | `useRegisterWindow`、`RegisterDialog` |
 | probes | `/admin/ping` | 新增/编辑/删除 host:port、间隔、节点指派 | `sections/probes.tsx`；`api::save_ping_task` |
 | notifications | `/admin/notify` | Telegram/Webhook、模板预览、按渠道测试、未保存禁用测试、阈值、节点离线开关 | `sections/notify.tsx`；`notify.rs` |
 | data | `/admin/data` | 数据统计、下载备份、上传恢复、取消、维护确认与周期配置 | `sections/data.tsx`；`api::db_*` |
@@ -65,4 +65,4 @@
 公开页的列表/卡片选择在详情往返时保留；节点顺序规则见[领域规则](../domain.md)。
 浏览器回归的范围与未覆盖项见[验收状态](../readiness.md)。
 
-文案依据现有中文领域术语与实际接口；英文文本见 `shared/locale-en.ts`。状态页与当前节点详情的文案使用中英文词条；管理面板自身文案仍以中文为主，共享状态名和时长随所选语言切换，英文环境下可能混排。
+文案依据现有中文领域术语与实际接口；英文文本见 `shared/locale-en.ts`。状态页、节点详情、后台登录、导航和节点管理使用中英文词条。监测、通知、数据、安全和站点设置的页面主体仍以中文为主，共享状态名和时长随所选语言切换，英文环境下可能混排。

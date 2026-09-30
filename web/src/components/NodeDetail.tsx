@@ -2,16 +2,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { place } from "../../../shared/geo.ts"
 import { T } from "../../../shared/i18n.ts"
-import { api, spark, type Node, type Spark } from "../lib/api"
+import { api, spark, type Node } from "../lib/api"
 import { bandwidth, bytes, continuousUptime, cycle, expiry, FOREVER, full, MODES, osName, pair, price, tone, uptime } from "../lib/format"
 import { cx, useNow } from "../lib/hooks"
-import { HistoryChart, HistoryTable, QuotaBar, Ring, Sparkline, type ChartKind, type ChartSeries } from "./charts"
+import { HistoryChart, HistoryTable, QuotaBar, Ring, type ChartKind, type ChartSeries } from "./charts"
 import { nodeFacts, outage, systemLine } from "./Fleet"
 import { Globe } from "./Globe"
 import { Button, Segmented, Switch, Tabs } from "./ui/controls"
 import { CopyValue, Empty, Notice, Skeleton } from "./ui/feedback"
 import { Icon, type IconName } from "./ui/icon"
-import { AnimatedNumber, FlowValue, LocalSky, Region, StatusBadge } from "./ui/status"
+import { Fact, FlowValue, LocalSky, Region, StatusBadge, VitalTile } from "./ui/status"
 
 type Point = {
   ts: number
@@ -142,44 +142,6 @@ function useHistory(id: number, hours: number, series: "metrics" | "ping") {
   // Another window's answer is none of this one's.
   const current = state.key === key
   return { data: current ? state.data : null, error: current ? state.error : "", busy: !current || state.busy, retry: () => again.current() }
-}
-
-function VitalTile({ icon, label, value, unit, sub, tone: level, trend, get, max, beat, color }: {
-  icon: IconName
-  label: string
-  value: number | ReactNode | null
-  unit?: string
-  sub: ReactNode
-  tone?: string
-  trend?: Spark[]
-  get?: (p: Spark) => number | null
-  max?: number
-  beat?: number
-  color?: string
-}) {
-  return (
-    <div className="vital" data-tone={level}>
-      <div className="vital-head">
-        <span className="vital-label"><Icon name={icon} size={14} />{label}</span>
-      </div>
-      <div className="vital-value num">
-        {value == null ? "—" : typeof value === "number" ? <AnimatedNumber value={value} format={(v) => (unit === "%" ? v.toFixed(0) : String(Math.round(v)))} /> : value}
-        {value != null && unit && <span className="unit">{unit}</span>}
-      </div>
-      <div className="vital-sub">{sub}</div>
-      {trend && get && <Sparkline points={trend} get={get} max={max} beat={beat} height={30} color={color} />}
-    </div>
-  )
-}
-
-function Fact({ label, children, mono }: { label: string; children?: ReactNode; mono?: boolean }) {
-  if (children === null || children === undefined || children === "") return null
-  return (
-    <div className="fact">
-      <dt>{label}</dt>
-      <dd className={mono ? "mono" : undefined}>{children}</dd>
-    </div>
-  )
 }
 
 const CYCLE_DAYS: Record<string, number> = { monthly: 30, quarterly: 91, semiannual: 182, yearly: 365, biennial: 730, triennial: 1095 }

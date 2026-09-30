@@ -135,6 +135,7 @@ export function useNodes() {
   const [error, setError] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
   const [tick, setTick] = useState(0)
+  const [updated, setUpdated] = useState(0)
 
   useEffect(() => {
     let socket: WebSocket | null = null
@@ -148,6 +149,7 @@ export function useNodes() {
       setAdmin(frame.admin)
       setError(null)
       setTick((n) => n + 1)
+      setUpdated(Date.now())
     }
 
     // A 401 is an answer, not an outage. Signed out with the public page off --
@@ -219,7 +221,7 @@ export function useNodes() {
 
   // `refresh` is also how the panel resumes after signing in: the effect reruns,
   // which is what restarts a stream stopped by the 401 above.
-  return { nodes, admin, error, tick, connected: nodes !== null && !error, refresh: () => setReload((n) => n + 1) }
+  return { nodes, admin, error, tick, updated, connected: nodes !== null && !error, refresh: () => setReload((n) => n + 1) }
 }
 
 

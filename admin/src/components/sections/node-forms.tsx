@@ -1,504 +1,349 @@
-import { useEffect, useId, useRef, useState } from "react"
-import { ChevronRight } from "lucide-react"
-import { toast } from "sonner"
-
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Field } from "@/components/ui/field"
-import { parseDate } from "@/lib/calendar"
-import { DatePicker } from "@/components/ui/date-picker"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
+import { useEffect, useRef, useState, type FormEvent } from "react"
+import { T } from "../../../../shared/i18n.ts"
+import { numericError } from "../../../../shared/validate.ts"
 import { agentCommand, api, changes, GIB, registrationCommand, trafficCorrection, type Node } from "@/lib/api"
-import { CYCLES } from "@/lib/format"
+import { parseDate } from "@/lib/calendar"
+import { type Settings } from "./common"
+import { nodeFacts, MeterRow, systemLine } from "../../../../web/src/components/Fleet"
+import { QuotaBar, Ring } from "../../../../web/src/components/charts"
+import { Button, Check, Field, Input, Segmented, Select, Switch, Tabs } from "../../../../web/src/components/ui/controls"
+import { CodeBlock, CopyValue, Notice, toast } from "../../../../web/src/components/ui/feedback"
+import { Icon } from "../../../../web/src/components/ui/icon"
+import { Confirm, Dialog, DialogTitle } from "../../../../web/src/components/ui/overlay"
+import { Fact, FlowValue, Region, StatusBadge, VitalTile } from "../../../../web/src/components/ui/status"
+import { bandwidth, continuousUptime, CYCLES, expiry, full, MODES, pair, price, tone } from "../../../../web/src/lib/format"
+import { spark } from "../../../../web/src/lib/api"
 
-import { copy, type ReturnFocus, ConfirmDialog, type Settings } from "./common"
+export type InspectTab = "overview" | "settings" | "billing" | "install"
+type IssuedNode = { id: number; name: string; token: string }
+const COUNTERS = ["total_rx", "total_tx", "month_rx", "month_tx"] as const
+const counterText = (value: number) => String(Number((value / GIB).toFixed(3)))
 
-// Counters the panel can correct after migration or an accounting error.
-const TRAFFIC_FIELDS = [
-  ["total_rx", "累计下行"],
-  ["total_tx", "累计上行"],
-  ["month_rx", "本月下行"],
-  ["month_tx", "本月上行"],
-] as const
-const TRAFFIC_MODES: Record<string, string> = {
-  sum: "上下行相加",
-  max: "取较大值",
-  up: "仅上行",
-  down: "仅下行",
+function BandwidthField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  const [unit, setUnit] = useState(value >= 1000 ? "Gbps" : "Mbps")
+  const [raw, setRaw] = useState(String(value / (unit === "Gbps" ? 1000 : 1)))
+  const scale = unit === "Gbps" ? 1000 : 1
+  const error = numericError(raw, { max: 1000000 / scale, step: "any", required: true })
+  return <Field label={label} hint={T("0 表示未设置")} error={error}>
+    <Input inputMode="decimal" value={raw} onChange={e => {
+      const text = e.target.value
+      setRaw(text)
+      onChange(numericError(text, { max: 1000000 / scale, step: "any", required: true }) ? NaN : Number(text) * scale)
+    }} suffix={<select className="input-unit" aria-label={T("{label}单位", { label })} value={unit} onChange={e => {
+      const next = e.target.value
+      if (!error) setRaw(String(value / (next === "Gbps" ? 1000 : 1)))
+      setUnit(next)
+    }}><option>Mbps</option><option>Gbps</option></select>} />
+  </Field>
 }
 
-export type IssuedNode = Pick<Node, "id" | "name"> & { token?: string }
-
-export function CreateNode({ onClose, onSaved, onCloseAutoFocus }: {
-  onClose: () => void
-  onSaved: (node: IssuedNode) => void
-} & ReturnFocus) {
-  const [name, setName] = useState("")
-  const [saving, setSaving] = useState(false)
-
-  async function save(e: React.FormEvent) {
+function SettingsForm({ node, onSaved, onDelete }: { node: Node; onSaved: () => void; onDelete: () => void }) {
+  const [base, setBase] = useState(node)
+  const [form, setForm] = useState(node)
+  const [priority, setPriority] = useState(String(node.priority ?? 0))
+  const [same, setSame] = useState(node.bandwidth_up === node.bandwidth_down)
+  const [reset, setReset] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const set = <K extends keyof Node>(key: K, value: Node[K]) => setForm(f => ({ ...f, [key]: value }))
+  const errors = { name: form.name.trim() ? "" : T("请填写节点名称"), priority: numericError(priority, { max: 999999, required: true }) }
+  const invalid = !!errors.name || !!errors.priority || [form.bandwidth_down ?? 0, same ? form.bandwidth_down ?? 0 : form.bandwidth_up ?? 0].some(value => !Number.isFinite(value) || value < 0 || value > 1000000)
+  const values = { name: form.name.trim(), remark: form.remark ?? "", priority: Number(priority), public: form.public,
+    has_ipv4: form.has_ipv4 ?? true, has_ipv6: form.has_ipv6 ?? false,
+    bandwidth_down: form.bandwidth_down ?? 0, bandwidth_up: same ? form.bandwidth_down ?? 0 : form.bandwidth_up ?? 0, notify: !!form.notify }
+  const patch = changes(base, values)
+  const dirty = Object.keys(patch).length > 0
+  const restore = () => { setForm(base); setPriority(String(base.priority ?? 0)); setSame(base.bandwidth_up === base.bandwidth_down); setReset(n => n + 1); setError("") }
+  async function save(e: FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return toast.error("请填写节点名称")
-    setSaving(true)
+    if (invalid || !dirty || busy) return
+    setBusy(true); setError("")
     try {
-      const fresh = await api<{ id: number; token: string }>("/nodes", {
-        method: "POST",
-        body: JSON.stringify({ name: name.trim() }),
-      })
-      toast.success("节点已添加")
-      onClose()
-      onSaved({ ...fresh, name: name.trim() })
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setSaving(false)
-    }
+      await api("/nodes/" + node.id, { method: "PUT", body: JSON.stringify(patch) })
+      setBase({ ...base, ...patch })
+      toast(T("节点已保存")); onSaved()
+    } catch (e) { setError(T((e as Error).message)) }
+    finally { setBusy(false) }
   }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>添加节点</DialogTitle>
-        </DialogHeader>
-        <form className="space-y-4" onSubmit={save}>
-          <Field label="名称">
-            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="香港 · 甲商家" />
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-            <Button type="submit" disabled={saving}>添加</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
+  return <form className="inspector-form" noValidate onSubmit={save}>
+    <Field label={T("名称")} error={errors.name}><Input value={form.name} maxLength={128} onChange={e => set("name", e.target.value)} /></Field>
+    <Field label={T("备注")} hint={T("仅管理员可见")} optional><Input value={form.remark ?? ""} placeholder={T("商家、用途")} onChange={e => set("remark", e.target.value)} /></Field>
+    <div className="form-grid">
+      <Field label={T("展示优先级")} hint={T("0–999999 整数，数字越大越靠前")} error={errors.priority}><Input inputMode="numeric" value={priority} onChange={e => setPriority(e.target.value)} /></Field>
+      <div className="field"><span className="field-label">{T("公开状态页")}</span><Segmented label={T("公开状态页")} value={form.public ? "public" : "private"} onChange={v => set("public", v === "public")} options={[{ value: "public", label: T("显示") }, { value: "private", label: T("不显示") }]} /><p className="field-message">{T("私有节点只在管理列表显示。")}</p></div>
+    </div>
+    <fieldset className="form-set"><legend>{T("网络")}</legend>
+      <div className="form-grid">{(["has_ipv4", "has_ipv6"] as const).map((key, i) => <div className="field" key={key}><span className="field-label">{i ? "IPv6" : "IPv4"}</span>
+        <Segmented label={i ? "IPv6" : "IPv4"} value={(form[key] ?? !i) ? "yes" : "no"} onChange={v => set(key, v === "yes")} options={[{ value: "yes", label: T("有") }, { value: "no", label: T("无") }]} /></div>)}</div>
+      <div className="form-grid">
+        <BandwidthField key={"down-" + reset} label={same ? T("可用带宽") : T("下载带宽")} value={form.bandwidth_down ?? 0} onChange={v => set("bandwidth_down", v)} />
+        {!same && <BandwidthField key={"up-" + reset} label={T("上传带宽")} value={form.bandwidth_up ?? 0} onChange={v => set("bandwidth_up", v)} />}
+      </div>
+      <Check checked={same} onChange={v => { if (!v) set("bandwidth_up", form.bandwidth_down ?? 0); setSame(v) }}>{T("上传与下载相同")}</Check>
+    </fieldset>
+    <Switch checked={!!form.notify} onChange={v => set("notify", v)} label={T("离线通知")} detail={T("掉线超过宽限期推送一条，恢复在线时再推一条")} />
+    {error && <Notice tone="bad">{error}</Notice>}
+    <div className="inspector-actions"><span className="dirty-note">{dirty ? T("有未保存的修改") : ""}</span>
+      <Button onClick={restore} disabled={!dirty || busy}>{T("还原")}</Button><Button kind="primary" type="submit" busy={busy} disabled={!dirty || invalid}>{T("保存")}</Button></div>
+    <div className="danger-zone"><div><p className="danger-title">{T("删除节点")}</p><p className="danger-detail">{T("历史指标、流量记录和凭证一并删除，不可恢复。")}</p></div><Button kind="danger-ghost" icon="trash-2" onClick={onDelete}>{T("删除节点")}</Button></div>
+  </form>
 }
 
-function BandwidthField({label,value,onChange}:{label:string;value:number;onChange:(value:number)=>void}){
-  const unitId=useId()
-  const [unit,setUnit]=useState(value>=1000?"Gbps":"Mbps")
-  const scale=unit==="Gbps"?1000:1
-  const [typed,setTyped]=useState(String(value/scale))
-  return <Field label={label} hint="0 表示未设置"><div className="flex gap-2"><Input type="number" min={0} max={1000000/scale} step="0.001" value={typed} onChange={e=>{const text=e.target.value;setTyped(text);onChange(/^\d+(?:\.\d+)?$/.test(text)?Number(text)*scale:NaN)}}/><Select value={unit} onValueChange={next=>{setUnit(next);if(Number.isFinite(value))setTyped(String(value/(next==="Gbps"?1000:1)))}}><SelectTrigger id={`${unitId}-unit`} aria-label={`${label}单位`}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Mbps">Mbps</SelectItem><SelectItem value="Gbps">Gbps</SelectItem></SelectContent></Select></div></Field>
+function billingValues(node: Node) {
+  const unit = node.traffic_unit === "TB" ? "TB" : "GB"
+  return { price: node.price ? String(node.price) : "", currency: node.currency, billing_cycle: node.billing_cycle,
+    expires_at: node.expires_at ?? "", limit: String(Number((node.traffic_limit / GIB / (unit === "TB" ? 1024 : 1)).toFixed(3))),
+    unit, traffic_mode: node.traffic_mode, reset: String(node.traffic_reset_day),
+    total_rx: counterText(node.total_rx), total_tx: counterText(node.total_tx), month_rx: counterText(node.month_rx), month_tx: counterText(node.month_tx) }
 }
 
-export function NodeForm({ node, onClose, onSaved, onCloseAutoFocus }: {
-  node: Node
-  onClose: () => void
-  onSaved: () => void
-} & ReturnFocus) {
-  const [form, setForm] = useState(node)
-  const [unit, setUnit] = useState(node.traffic_unit || "GB")
-  const [limitGib, setLimitGib] = useState(String(node.traffic_limit / GIB / (node.traffic_unit === "TB" ? 1024 : 1) || ""))
-  const [formError, setFormError] = useState("")
-  const [priority,setPriority]=useState(String(node.priority ?? 0))
-  const [resetDay,setResetDay]=useState(String(node.traffic_reset_day))
-  const [sameBandwidth,setSameBandwidth] = useState(node.bandwidth_up === node.bandwidth_down)
-  const [saving, setSaving] = useState(false)
-  const gib = (bytes: number) => String(Number((bytes / GIB).toFixed(3)))
-  const [traffic, setTraffic] = useState(() =>
-    Object.fromEntries(TRAFFIC_FIELDS.map(([k]) => [k, gib(node[k])])) as Record<string, string>,
-  )
-  // Compared as entered rather than as bytes: rounding to GB would read as an
-  // edit and zero a node that has transferred a few MB.
-  const pristine = useRef(traffic)
-  const set = <K extends keyof Node>(k: K, v: Node[K]) => setForm((f) => ({ ...f, [k]: v }))
-
-  async function save() {
-    if (!form.name.trim()) return toast.error("请填写节点名称")
-    const limit=Number(limitGib || "0") * (unit === "TB" ? 1024 : 1)
-    if (!/^\d*(?:\.\d+)?$/.test(limitGib) || !Number.isFinite(limit) || limit<0) return setFormError("流量额度须为非负数，不支持指数写法")
-    if (!/^\d+$/.test(resetDay) || Number(resetDay)<1 || Number(resetDay)>31) return setFormError("重置日须为 1–31 的整数")
-    if (!/^\d+$/.test(priority) || Number(priority)>999999) return setFormError("展示优先级须为 0–999999 的整数")
-    if ([form.bandwidth_down ?? 0,form.bandwidth_up ?? 0].some(v=>!Number.isFinite(v)||v<0||v>1000000)) return setFormError("可用带宽须为 0–1000000 Mbps")
-    setFormError("")
-    const patch = changes(node, {
-      name: form.name.trim(),
-      remark: form.remark,
-      traffic_mode: form.traffic_mode,
-      traffic_limit: Math.round(limit * GIB),
-      traffic_unit: unit,
-      priority: Number(priority),
-      public: form.public ?? true,
-      bandwidth_down: form.bandwidth_down ?? 0,
-      bandwidth_up: sameBandwidth ? form.bandwidth_down ?? 0 : form.bandwidth_up ?? 0,
-      has_ipv4: form.has_ipv4 ?? true,
-      has_ipv6: form.has_ipv6 ?? false,
-      traffic_reset_day: Number(resetDay),
-      notify: !!form.notify,
-    })
-    const correction = trafficCorrection(pristine.current, traffic)
-    if ([patch.traffic_limit, ...Object.values(correction)].some((v) => v !== undefined && (!Number.isSafeInteger(v) || v < 0))) {
-      return toast.error("流量必须是有效的非负数，且不能超出精确计数范围")
+function BillingForm({ node, onSaved }: { node: Node; onSaved: () => void }) {
+  const [base, setBase] = useState(() => billingValues(node))
+  const [v, setV] = useState(base)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const set = <K extends keyof typeof v>(key: K, value: (typeof v)[K]) => setV(old => ({ ...old, [key]: value }))
+  const errors = { price: numericError(v.price, { step: 0.01 }), expires_at: v.expires_at && !parseDate(v.expires_at) ? T("到期时间须为有效的 YYYY-MM-DD 日期") : "",
+    limit: numericError(v.limit, { step: "any", required: true }), reset: numericError(v.reset, { min: 1, max: 31, required: true }),
+    ...Object.fromEntries(COUNTERS.map(key => [key, numericError(v[key], { step: "any" })])) } as Record<string, string>
+  const invalid = Object.values(errors).some(Boolean)
+  const dirty = Object.keys(changes(base, v)).length > 0
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    if (invalid || !dirty || busy) return
+    const patch: Partial<Node> = {}
+    for (const key of ["currency", "billing_cycle", "traffic_mode"] as const) if (v[key] !== base[key]) patch[key] = v[key]
+    if (v.price !== base.price) patch.price = Number(v.price || 0)
+    if (v.expires_at !== base.expires_at) patch.expires_at = v.expires_at || null
+    if (v.reset !== base.reset) patch.traffic_reset_day = Number(v.reset)
+    if (v.unit !== base.unit) patch.traffic_unit = v.unit
+    if (v.limit !== base.limit || v.unit !== base.unit) patch.traffic_limit = Math.round(Number(v.limit) * GIB * (v.unit === "TB" ? 1024 : 1))
+    const correction = trafficCorrection(Object.fromEntries(COUNTERS.map(key => [key, base[key]])), Object.fromEntries(COUNTERS.map(key => [key, v[key]])))
+    if ([patch.traffic_limit, ...Object.values(correction)].some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0))) {
+      return setError(T("流量必须是有效的非负数，且不能超出精确计数范围"))
     }
-    setSaving(true)
+    setBusy(true); setError("")
     try {
-      // The correction belongs to the new reset period, so its day is saved
-      // first.
-      if (Object.keys(patch).length) {
-        await api(`/nodes/${node.id}`, { method: "PUT", body: JSON.stringify(patch) })
-      }
-      if (Object.keys(correction).length) {
-        await api(`/nodes/${node.id}/traffic`, {
-          method: "PUT",
-          body: JSON.stringify(correction),
-        })
-      }
-      toast.success("节点设置已保存")
-      onClose()
-      onSaved()
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setSaving(false)
-    }
+      if (Object.keys(patch).length) await api("/nodes/" + node.id, { method: "PUT", body: JSON.stringify(patch) })
+      if (Object.keys(correction).length) await api("/nodes/" + node.id + "/traffic", { method: "PUT", body: JSON.stringify(correction) })
+      setBase({ ...v }); toast(T("账单与流量已保存")); onSaved()
+    } catch (e) { setError(T((e as Error).message)) }
+    finally { setBusy(false) }
   }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{node.name}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <Field label="名称">
-            <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="每月流量额度" hint="0 表示不限">
-              <div className="flex gap-2"><Input type="number" min={0} step="0.001" value={limitGib} onChange={(e) => setLimitGib(e.target.value)} placeholder="0" /><Select value={unit} onValueChange={v=>{setLimitGib(String(Number(limitGib || "0")*(v==="TB"?1/1024:1024)));setUnit(v)}}><SelectTrigger id={`traffic-unit-${node.id}`} aria-label="流量额度单位"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="GB">GB</SelectItem><SelectItem value="TB">TB</SelectItem></SelectContent></Select></div>
-            </Field>
-            <Field label="流量计算方式">
-              <Select value={form.traffic_mode} onValueChange={(v) => set("traffic_mode", v)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TRAFFIC_MODES).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="每月重置日" hint="1–31。本月流量按新周期重算，总流量不变">
-              <Input type="number" min={1} max={31} value={resetDay} onChange={(e) => setResetDay(e.target.value)} />
-            </Field>
-            <Field label="备注" hint="仅管理员可见">
-              <Input value={form.remark ?? ""} onChange={(e) => set("remark", e.target.value)} placeholder="商家、用途" />
-            </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="展示优先级" hint="0–999999 整数，数字越大越靠前"><Input type="number" min={0} max={999999} step={1} value={priority} onChange={e=>setPriority(e.target.value)}/></Field>
-            <Field label="公开状态页" hint="私有节点只在管理列表显示。"><Select value={(form.public ?? true)?"public":"private"} onValueChange={v=>set("public",v==="public")}><SelectTrigger className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="public">显示</SelectItem><SelectItem value="private">不显示</SelectItem></SelectContent></Select></Field>
-            {(["has_ipv4","has_ipv6"] as const).map((key,index)=><Field key={key} label={index ? "IPv6" : "IPv4"}><Select value={(form[key] ?? !index)?"yes":"no"} onValueChange={v=>set(key,v==="yes")}><SelectTrigger className="w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="yes">有</SelectItem><SelectItem value="no">无</SelectItem></SelectContent></Select></Field>)}
-          </div>
-          <fieldset className="border p-4 space-y-3"><legend className="px-1 text-sm">可用带宽</legend>
-            <BandwidthField label="下载带宽" value={form.bandwidth_down ?? 0} onChange={v=>set("bandwidth_down",v)}/>
-            <label className="choice-row"><input type="checkbox" checked={sameBandwidth} onChange={e=>{if(!e.target.checked)set("bandwidth_up",form.bandwidth_down??0);setSameBandwidth(e.target.checked)}}/><span>上传与下载相同</span></label>
-            {!sameBandwidth && <BandwidthField label="上传带宽" value={form.bandwidth_up ?? 0} onChange={v=>set("bandwidth_up",v)}/>}
-          </fieldset>
-          <p role="alert" className="field-error">{formError}</p>
-          <details className="group border bg-muted/30 px-3 py-2.5">
-            <summary className="flex min-h-6 cursor-pointer items-center gap-2 text-sm font-medium"><ChevronRight className="size-4 transition-transform group-open:rotate-90" />流量校正</summary>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              按 GB 填入需要校正的值，未修改的计数器继续正常累计。
-            </p>
-            <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              {TRAFFIC_FIELDS.map(([key, label]) => (
-                <Field key={key} label={`${label} (GB)`}>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    value={traffic[key]}
-                    onChange={(e) => setTraffic((t) => ({ ...t, [key]: e.target.value }))}
-                  />
-                </Field>
-              ))}
-            </div>
-          </details>
-          <label className="choice-row">
-            <Switch checked={!!form.notify} onCheckedChange={(v) => set("notify", v)} />
-            <span>
-              <span className="block">离线通知</span>
-              <span className="block text-xs text-muted-foreground">掉线超过宽限期推送一条，恢复在线时再推一条</span>
-            </span>
-          </label>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={save} disabled={saving}>保存</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
+  return <form className="inspector-form" noValidate onSubmit={save}>
+    <fieldset className="form-set"><legend>{T("账单")}</legend><div className="form-grid">
+      <Field label={T("价格")} hint={T("留空或 0 为免费")} error={errors.price}><Input inputMode="decimal" value={v.price} onChange={e => set("price", e.target.value)} placeholder={T("免费")}
+        suffix={<select className="input-unit" aria-label={T("货币")} value={v.currency} onChange={e => set("currency", e.target.value)}>{["USD", "CNY", "EUR", "GBP", "JPY"].map(c => <option key={c}>{c}</option>)}</select>} /></Field>
+      <Field label={T("付款周期")}><Select value={v.billing_cycle} onChange={e => set("billing_cycle", e.target.value)}>{Object.entries(CYCLES).map(([key, label]) => <option key={key} value={key}>{T(label)}</option>)}</Select></Field></div>
+      <Field label={T("到期时间")} hint={T("YYYY-MM-DD；留空表示永不到期")} error={errors.expires_at}><Input type="date" value={v.expires_at} onChange={e => set("expires_at", e.target.value)} /></Field>
+    </fieldset>
+    <fieldset className="form-set"><legend>{T("流量")}</legend><div className="form-grid">
+      <Field label={T("每月流量额度")} hint={T("0 表示不限")} error={errors.limit}><Input inputMode="decimal" value={v.limit} onChange={e => set("limit", e.target.value)}
+        suffix={<select className="input-unit" aria-label={T("额度单位")} value={v.unit} onChange={e => {
+          const unit = e.target.value
+          if (!errors.limit) set("limit", String(Number((Number(v.limit) * (unit === "TB" ? 1 / 1024 : 1024)).toFixed(3))))
+          set("unit", unit)
+        }}><option>GB</option><option>TB</option></select>} /></Field>
+      <Field label={T("每月重置日")} hint={T("1–31。本月流量按新周期重算，总流量不变")} error={errors.reset}><Input inputMode="numeric" value={v.reset} onChange={e => set("reset", e.target.value)} /></Field></div>
+      <div className="field"><span className="field-label">{T("流量计算方式")}</span><Segmented label={T("流量计算方式")} value={v.traffic_mode} onChange={value => set("traffic_mode", value)} options={Object.entries(MODES).map(([value, label]) => ({ value, label: T(label) }))} /></div>
+      <details className="disclosure"><summary><Icon name="chevron-right" size={14} />{T("流量校正")}</summary><p className="muted small">{T("按 GB 填入需要校正的值，未修改的计数器继续正常累计。")}</p>
+        <div className="form-grid">{COUNTERS.map((key, i) => <Field key={key} label={[T("累计下行"), T("累计上行"), T("本月下行"), T("本月上行")][i] + " (GB)"} error={errors[key]}><Input inputMode="decimal" value={v[key]} onChange={e => set(key, e.target.value)} /></Field>)}</div></details>
+    </fieldset>
+    {error && <Notice tone="bad">{error}</Notice>}
+    <div className="inspector-actions"><span className="dirty-note">{dirty ? T("有未保存的修改") : ""}</span><Button onClick={() => { setV(base); setError("") }} disabled={!dirty || busy}>{T("还原")}</Button><Button kind="primary" type="submit" busy={busy} disabled={!dirty || invalid}>{T("保存")}</Button></div>
+  </form>
 }
 
-export function BillingForm({ node, onClose, onSaved, onCloseAutoFocus }: {
-  node: Node
-  onClose: () => void
-  onSaved: () => void
-} & ReturnFocus) {
-  const [form, setForm] = useState(node)
-  // Text rather than a number: a numeric state cannot represent an empty field,
-  // so clearing it would snap back to 0 mid-entry. Empty means free.
-  const [price, setPrice] = useState(node.price > 0 ? String(node.price) : "")
-  const [error,setError]=useState("")
-  const [saving, setSaving] = useState(false)
-  const set = <K extends keyof Node>(k: K, v: Node[K]) => setForm((f) => ({ ...f, [k]: v }))
-
-  async function save() {
-    if(!/^\d*(?:\.\d{1,2})?$/.test(price) || !Number.isFinite(Number(price))) return setError("价格须为非负数，最多两位小数")
-    if(form.expires_at && !parseDate(form.expires_at)) return setError("到期时间须为有效的 YYYY-MM-DD 日期")
-    setError("")
-    setSaving(true)
-    try {
-      await api(`/nodes/${node.id}`, {
-        method: "PUT",
-        body: JSON.stringify(changes(node, {
-          price: Number(price || "0"),
-          currency: form.currency,
-          billing_cycle: form.billing_cycle,
-          expires_at: form.expires_at || null,
-        })),
-      })
-      toast.success("续费设置已保存")
-      onClose()
-      onSaved()
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{node.name}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="价格" hint="留空或 0 为免费">
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="免费"
-              />
-            </Field>
-            <Field label="货币">
-              <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["USD", "CNY", "EUR", "GBP", "JPY"].map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="付款周期">
-              <Select value={form.billing_cycle} onValueChange={(v) => set("billing_cycle", v)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CYCLES).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="到期时间" hint="YYYY-MM-DD；留空表示永不到期">
-              <DatePicker value={form.expires_at ?? ""} onChange={(value) => set("expires_at", value)} />
-            </Field>
-          </div>
-        </div>
-        <p role="alert" className="field-error">{error}</p>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={save} disabled={saving}>保存</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
+function IntervalField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return <Field label={T("上报间隔（秒）")} hint={T("3–60 秒，整数；默认 3 秒。")} error={numericError(value, { min: 3, max: 60, required: true }) ? T("请输入 3–60 的整数") : ""}>
+    <Input inputMode="numeric" value={value} onChange={e => onChange(e.target.value)} />
+  </Field>
+}
+function TokenReveal({ token }: { token: string }) {
+  return <div className="token-reveal"><Notice tone="warn" icon="key-round">{T("节点令牌仅本次显示，关闭后无法再次查看。安装时按提示输入。")}</Notice><CodeBlock code={token} label={T("复制令牌")} /></div>
 }
 
-// The window lives on the hub; this reads it back and counts down, which is also
-// what makes an expired one disappear from the panel without interaction.
-export function useRegisterWindow() {
-  const [key, setKey] = useState("")
-  const [until, setUntil] = useState(0)
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
-
-  useEffect(() => {
-    api<Settings>("/settings")
-      .then((s) => { setKey(String(s.register_key ?? "")); setUntil(Number(s.register_until ?? 0)) })
-      .catch(() => {})
-    const timer = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  return {
-    key,
-    left: key === "" ? 0 : Math.max(0, until - now),
-    async open() {
-      try {
-        const w = await api<{ register_key: string; register_until: string }>("/register-window", { method: "POST" })
-        setKey(w.register_key)
-        setUntil(Number(w.register_until))
-      } catch (e) {
-        toast.error((e as Error).message)
-      }
-    },
-    async close() {
-      try {
-        await api("/register-window", { method: "DELETE" })
-        setKey("")
-        setUntil(0)
-        toast.success("注册窗口已关闭")
-      } catch (e) {
-        toast.error((e as Error).message)
-      }
-    },
-  }
-}
-
-export function RegisterDialog({ site, reg, onClose }: {
-  site: string
-  reg: ReturnType<typeof useRegisterWindow>
-  onClose: () => void
-}) {
-  const command = reg.left > 0 ? registrationCommand(site, reg.key) : ""
-  const clock = `${Math.floor(reg.left / 60)}:${String(reg.left % 60).padStart(2, "0")}`
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>批量注册</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            在节点上运行以下命令：脚本从本 Hub 下载与你当前发行版精确匹配的 Agent，
-            校验哈希后安装系统服务（systemd 或 OpenRC）。注册窗口持续一小时，新节点默认公开；命令包含
-            短期注册密钥，请妥善保管，每台机器会换取自己的长期令牌。
-          </p>
-          {command ? (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">安装命令</Label>
-              <pre className="h-24 overflow-auto whitespace-pre-wrap break-all border bg-muted/40 p-3 text-xs leading-relaxed select-all">
-                {command}
-              </pre>
-              <div className="flex items-center justify-between gap-4 border bg-muted/30 px-3 py-2.5 text-sm">
-                <span>
-                  <span className="block font-medium">窗口 {clock} 后自动关闭</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    到点自动失效，装完了也可以现在就关
-                  </span>
-                </span>
-                <Button variant="outline" size="sm" onClick={reg.close}>立即关闭</Button>
-              </div>
-            </div>
-          ) : (
-            <Button onClick={reg.open}>开启一小时窗口</Button>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>关闭</Button>
-          <Button onClick={() => copy(command)} disabled={!command}>
-            复制
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-export function InstallDialog({ node, site, onClose, onRotated, onCloseAutoFocus }: {
-  node: IssuedNode
-  site: string
-  onClose: () => void
-  onRotated: () => void
-} & ReturnFocus) {
-  const [token, setToken] = useState(node.token ?? "")
+function InstallPanel({ node, site, canProvision, distributionAvailable, onSaved }: { node: Node; site: string; canProvision: boolean; distributionAvailable: boolean; onSaved: () => void }) {
   const [interval, setInterval] = useState("3")
-  const [rotating, setRotating] = useState(false)
-  const [confirmRotate, setConfirmRotate] = useState(false)
-
-  const seconds = Number(interval)
-  const intervalValid = /^\d+$/.test(interval) && seconds >= 3 && seconds <= 60
-  const command = intervalValid ? agentCommand(site, seconds) : ""
-
+  const [token, setToken] = useState("")
+  const [confirm, setConfirm] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const allowed = canProvision && distributionAvailable
+  const valid = !numericError(interval, { min: 3, max: 60, required: true })
   async function rotate() {
-    setRotating(true)
+    if (!allowed || busy) return
+    setBusy(true)
     try {
-      const fresh = await api<{ token: string }>(`/nodes/${node.id}/token`, { method: "POST" })
-      setToken(fresh.token)
-      setConfirmRotate(false)
-      toast.success("凭证已换发，请保存并更新 Agent")
-      onRotated()
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setRotating(false)
-    }
+      const fresh = await api<{ token: string }>("/nodes/" + node.id + "/token", { method: "POST" })
+      setToken(fresh.token); setConfirm(false); toast(T("凭证已换发，请保存并更新 Agent")); onSaved()
+    } catch (e) { toast(T((e as Error).message), "bad") }
+    finally { setBusy(false) }
   }
+  return <div className="inspector-form">
+    <p className="muted">{T("{name} · 接入标识 node-{id}。在节点运行安装命令并输入原节点令牌；令牌丢失时可换发，新令牌仅本次显示。", { name: node.name, id: node.id })}</p>
+    {!allowed && <Notice tone="warn" icon="lock">{!canProvision ? T("请通过 HTTPS 域名访问面板后添加或安装节点。") : T("Hub 尚未配置经过验证的 Agent 本地分发；请先用原生安装器安装当前 romi 发行版，再复制安装命令。")}</Notice>}
+    <IntervalField value={interval} onChange={setInterval} />
+    <div className="field"><span className="field-label">{T("安装命令")}</span><CodeBlock code={allowed && valid ? agentCommand(site, Number(interval)) : ""} disabled={!allowed || !valid} empty={T("请填写有效的上报间隔。")} label={T("复制命令")} /></div>
+    {token && <TokenReveal token={token} />}
+    <div className="danger-zone"><div><p className="danger-title">{T("换发凭证")}</p><p className="danger-detail">{T("旧凭证立即作废，Agent 掉线，需用新令牌重新启动 Agent。")}</p></div><Button kind="danger-ghost" icon="key-round" onClick={() => setConfirm(true)} disabled={!allowed}>{T("换发")}</Button></div>
+    {confirm && <Confirm title={T("给「{name}」换发凭证？", { name: node.name })} detail={T("旧令牌会立即失效，已连接的 Agent 将断开。请在节点更新令牌后重新连接。")} confirmLabel={T("换发凭证")} busy={busy} onClose={() => setConfirm(false)} onConfirm={rotate} />}
+  </div>
+}
 
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>安装 Agent</DialogTitle>
-        </DialogHeader>
-        <DialogDescription>{node.name} · 接入标识 node-{node.id}。在节点运行安装命令并输入原节点令牌；令牌丢失时可换发，新令牌仅本次显示。</DialogDescription>
-        <div className="space-y-4">
-          <Field label="上报间隔（秒）" hint="3–60 秒，整数；默认 3 秒。">
-            <Input type="number" min={3} max={60} step={1} value={interval} onChange={(e) => setInterval(e.target.value)} />
-            <p className="field-error">{intervalValid ? "" : "请输入 3–60 的整数"}</p>
-          </Field>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">安装命令</Label>
-            <pre className="h-28 overflow-auto whitespace-pre-wrap break-all border bg-muted/40 p-3 text-xs leading-relaxed select-all">
-              {command || "请填写有效的上报间隔。"}
-            </pre>
-          </div>
-          {token && <div className="space-y-2"><Label>节点令牌（仅本次显示）</Label><pre className="break-all whitespace-pre-wrap border p-3 text-xs select-all">{token}</pre><Button variant="outline" onClick={() => copy(token)}>复制令牌</Button></div>}
-          <div className="flex items-center justify-between gap-4 border bg-muted/30 px-3 py-2.5 text-sm">
-            <span>
-              <span className="block font-medium">换发凭证</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                旧凭证立即作废，agent 掉线，需用新命令启动 Agent
-              </span>
-            </span>
-            <Button variant="outline" size="sm" disabled={rotating} onClick={() => setConfirmRotate(true)}>
-              换发
-            </Button>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>关闭</Button>
-          <Button onClick={() => copy(command)} disabled={!command || !intervalValid}>
-            复制
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-      {confirmRotate && (
-        <ConfirmDialog
-          title={`给「${node.name}」换发凭证？`}
-          description="旧令牌会立即失效，已连接的 Agent 将断开。请在节点更新令牌后重新连接。"
-          confirmLabel="换发凭证"
-          busy={rotating}
-          onClose={() => setConfirmRotate(false)}
-          onConfirm={rotate}
-        />
-      )}
-    </Dialog>
-  )
+function Overview({ node, beat, onTab }: { node: Node; beat: number; onTab: (tab: InspectTab) => void }) {
+  const f = nodeFacts(node), m = f.m, trend = spark(node.id)
+  return <div className="inspector-form">
+    <div className="vitals vitals-2">
+      <VitalTile icon="cpu" label="CPU" value={f.cpu} unit="%" tone={tone(f.cpu)} sub={m ? T("负载 {load}", { load: m.load[0].toFixed(2) }) : T("待上报")} trend={trend} get={p => p.cpu} max={100} beat={beat} color="var(--trend)" />
+      <VitalTile icon="arrow-down-up" label={T("网络")} value={m ? <span className="vital-rates"><FlowValue dir="down" value={m.net_rx} /><FlowValue dir="up" value={m.net_tx} /></span> : null} sub={T("带宽 {bandwidth}", { bandwidth: bandwidth(node.bandwidth_down) })} trend={trend} get={p => p.rx} beat={beat} color="var(--flow-down)" />
+    </div>
+    <MeterRow label={T("内存")} pct={f.mem} detail={m ? pair(m.mem_used, m.mem_total) : "—"} />
+    <MeterRow label={T("磁盘")} pct={f.disk} detail={m ? pair(m.disk_used, m.disk_total) : "—"} />
+    <QuotaBar node={node} />
+    <dl className="facts facts-2"><Fact label="IPv4"><CopyValue value={node.ipv4} label=" IPv4" /></Fact><Fact label="IPv6"><CopyValue value={node.ipv6} label=" IPv6" /></Fact>
+      <Fact label={T("接入标识")}><CopyValue value={"node-" + node.id} label={T("接入标识")} /></Fact><Fact label={T("Agent 版本")} mono>{node.agent_version || T("未上报")}</Fact>
+      <Fact label={T("连续在线")}>{continuousUptime(node)}</Fact><Fact label={T("最后上报")}>{node.last_seen ? full(node.last_seen * 1000) : T("尚未接入")}</Fact>
+      <Fact label={T("账单")}>{price(node)}</Fact><Fact label={T("到期")}>{expiry(node).text}</Fact></dl>
+    <div className="quick-actions"><Button icon="pencil" onClick={() => onTab("settings")}>{T("编辑设置")}</Button><Button icon="wallet" onClick={() => onTab("billing")}>{T("账单与流量")}</Button><Button icon="square-terminal" onClick={() => onTab("install")}>{T("安装 Agent")}</Button></div>
+  </div>
+}
+
+export function NodeInspector({ node, beat, initialTab = "overview", onClose, onOpen, onSaved, onDeleted, ...access }: {
+  node: Node; beat: number; initialTab?: InspectTab; onClose: () => void; onOpen: (node: Node) => void; onSaved: () => void; onDeleted: () => void
+  site: string; canProvision: boolean; distributionAvailable: boolean
+}) {
+  const [tab, setTab] = useState<InspectTab>(initialTab)
+  const [deleting, setDeleting] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const panel = useRef<HTMLDivElement>(null)
+  const removed = useRef(false)
+  function changeTab(next: InspectTab) { panel.current?.closest(".dialog-body")?.scrollTo(0, 0); setTab(next) }
+  async function remove() {
+    if (busy) return
+    setBusy(true)
+    try { await api("/nodes/" + node.id, { method: "DELETE" }); removed.current = true; setDeleting(false); toast(T("已删除")); onDeleted() }
+    catch (e) { toast(T((e as Error).message), "bad") }
+    finally { setBusy(false) }
+  }
+  return <Dialog kind="sheet" className="inspector" onClose={onClose} focusPanel onCloseAutoFocus={event => {
+    if (removed.current) { event.preventDefault(); requestAnimationFrame(() => document.getElementById("main")?.focus()) }
+  }}
+    head={<div className="inspector-head"><div className="inspector-where"><Region code={node.country} full />{!node.public && <span className="tag"><Icon name="lock" size={12} />{T("私有")}</span>}</div>
+      <DialogTitle>{node.name}</DialogTitle><div className="inspector-line"><StatusBadge node={node} beat={beat} /><span className="muted">{systemLine(node)}</span></div>
+      <a className="link-button inspector-open" href={"/admin/node/" + node.id} onClick={e => { e.preventDefault(); onOpen(node) }}>{T("查看详情与历史")} <Icon name="arrow-up-right" size={14} /></a></div>}
+    bar={<Tabs label={T("节点管理")} idPrefix="inspect" value={tab} onChange={changeTab} tabs={[
+      { value: "overview", label: T("概览") }, { value: "settings", label: T("设置") }, { value: "billing", label: T("账单与流量") }, { value: "install", label: T("安装") },
+    ]} />}>
+    <div ref={panel} role="tabpanel" id={"inspect-panel-" + tab} aria-labelledby={"inspect-" + tab} className="inspector-panel">
+      {tab === "overview" && <Overview node={node} beat={beat} onTab={changeTab} />}
+      {tab === "settings" && <SettingsForm node={node} onSaved={onSaved} onDelete={() => setDeleting(true)} />}
+      {tab === "billing" && <BillingForm node={node} onSaved={onSaved} />}
+      {tab === "install" && <InstallPanel node={node} onSaved={onSaved} {...access} />}
+    </div>
+    {deleting && <Confirm title={T("删除节点「{name}」？", { name: node.name })} detail={T("历史指标、流量记录和凭证一并删除，不可恢复。")} confirmLabel={T("删除节点")} busy={busy} onClose={() => setDeleting(false)} onConfirm={remove} />}
+  </Dialog>
+}
+
+export function CreateNode({ nodes, beat, site, canProvision, distributionAvailable, onClose, onOpen, onSaved }: {
+  nodes: Node[]; beat: number; site: string; canProvision: boolean; distributionAvailable: boolean
+  onClose: () => void; onOpen: (node: Node) => void; onSaved: () => void
+}) {
+  const [name, setName] = useState("")
+  const [issued, setIssued] = useState<IssuedNode | null>(null)
+  const [error, setError] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [interval, setInterval] = useState("3")
+  const live = nodes.find(node => node.id === issued?.id)
+  const step = issued ? live?.last_seen || (live?.online && live.metrics) ? 2 : 1 : 0
+  const valid = !numericError(interval, { min: 3, max: 60, required: true })
+  async function create(e: FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return setError(T("请填写节点名称"))
+    if (!canProvision || busy) return
+    setBusy(true); setError("")
+    try {
+      const fresh = await api<{ id: number; token: string }>("/nodes", { method: "POST", body: JSON.stringify({ name: name.trim() }) })
+      setIssued({ ...fresh, name: name.trim() }); toast(T("节点已添加")); onSaved()
+    } catch (e) { setError(T((e as Error).message)) }
+    finally { setBusy(false) }
+  }
+  return <Dialog title={step === 0 ? T("添加节点") : step === 1 ? T("安装 Agent") : T("{name} 已上线", { name: issued?.name || "" })}
+    subtitle={step === 1 && issued ? T("{name} · 接入标识 node-{id}", { name: issued.name, id: issued.id }) : undefined} onClose={onClose} className="add-flow"
+    footer={step === 0 ? <><Button onClick={onClose}>{T("取消")}</Button><Button kind="primary" type="submit" form="add-node-form" busy={busy} disabled={!canProvision}>{T("添加")}</Button></> :
+      step === 1 ? <><span className="foot-note">{T("关闭后可在节点的「安装」中重新获取命令")}</span><Button onClick={onClose}>{T("稍后安装")}</Button></> :
+      <><Button onClick={onClose}>{T("完成")}</Button><Button kind="primary" iconAfter="arrow-up-right" onClick={() => { onClose(); if (live) onOpen(live) }}>{T("查看节点")}</Button></>}>
+    <ol className="steps" aria-label={T("步骤")}>{[T("名称"), T("安装"), T("上线")].map((label, i) => <li key={label} data-state={i < step ? "done" : i === step ? "current" : "todo"} aria-current={i === step ? "step" : undefined}><span className="step-mark">{i < step ? <Icon name="check" size={12} /> : i + 1}</span><span>{label}</span></li>)}</ol>
+    {step === 0 && <form id="add-node-form" onSubmit={create} className="inspector-form"><Field label={T("名称")} error={error}><Input data-autofocus value={name} maxLength={128} placeholder={T("香港 · 甲商家")} onChange={e => { setName(e.target.value); setError("") }} /></Field></form>}
+    {step === 1 && issued && <div className="inspector-form"><TokenReveal token={issued.token} /><IntervalField value={interval} onChange={setInterval} />
+      {!distributionAvailable && <Notice tone="warn">{T("Hub 尚未配置经过验证的 Agent 本地分发；请先用原生安装器安装当前 romi 发行版，再复制安装命令。")}</Notice>}
+      <div className="field"><span className="field-label">{T("安装命令")}</span><CodeBlock code={valid && distributionAvailable ? agentCommand(site, Number(interval)) : ""} disabled={!valid || !distributionAvailable} empty={T("请填写有效的上报间隔。")} label={T("复制命令")} /></div>
+      <div className="waiting" role="status"><span className="radar" aria-hidden="true"><i /><i /><i /></span><div><p className="waiting-title">{T("等待 Agent 首次上报")}</p><p className="waiting-detail">{T("在节点上运行命令并输入令牌，上线后这里会自动更新。")}</p></div></div></div>}
+    {step === 2 && live && <div className="joined"><div className="joined-card"><div className="joined-head"><StatusBadge node={live} beat={beat} /><Region code={live.country} full /></div>
+      <p className="joined-meta">{systemLine(live)} · Agent {live.agent_version}</p><MeterRow label="CPU" pct={nodeFacts(live).cpu} detail={live.cpu_name} />
+      <MeterRow label={T("内存")} pct={nodeFacts(live).mem} detail={live.metrics ? pair(live.metrics.mem_used, live.metrics.mem_total) : "—"} />
+      <dl className="facts facts-2"><Fact label="IPv4"><CopyValue value={live.ipv4} label=" IPv4" /></Fact><Fact label={T("首次上报")}>{live.online_since ? full(live.online_since * 1000) : full(live.last_seen * 1000)}</Fact></dl></div></div>}
+  </Dialog>
+}
+
+export function useRegisterWindow(enabled = true) {
+  const [settings, setSettings] = useState<Settings | null>(null)
+  const [error, setError] = useState("")
+  const [reload, setReload] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [now, setNow] = useState(() => Date.now() / 1000)
+  useEffect(() => {
+    if (!enabled) return
+    const controller = new AbortController()
+    api<Settings>("/settings", { signal: controller.signal }).then(value => { if (!controller.signal.aborted) { setSettings(value); setNow(Date.now() / 1000); setError("") } })
+      .catch((e: Error) => { if (!controller.signal.aborted) setError(T(e.message || "网络错误")) })
+    return () => controller.abort()
+  }, [enabled, reload])
+  const key = enabled ? String(settings?.register_key ?? "") : ""
+  const until = enabled ? Number(settings?.register_until ?? 0) : 0
+  useEffect(() => {
+    if (!enabled || !key || until <= Date.now() / 1000) return
+    const timer = window.setInterval(() => {
+      const stamp = Date.now() / 1000
+      setNow(stamp)
+      if (stamp >= until) window.clearInterval(timer)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [enabled, key, until])
+  const left = key ? Math.max(0, Math.ceil(until - now)) : 0
+  async function open() {
+    if (!enabled || busy) return
+    setBusy(true); setError("")
+    try {
+      const window = await api<{ register_key: string; register_until: string; register_since_id: string }>("/register-window", { method: "POST" })
+      setSettings(old => ({ ...old, ...window })); setNow(Date.now() / 1000); toast(T("注册窗口已开启"))
+    } catch (e) { setError(T((e as Error).message)) }
+    finally { setBusy(false) }
+  }
+  async function close() {
+    if (!enabled || busy) return
+    setBusy(true); setError("")
+    try { await api("/register-window", { method: "DELETE" }); setSettings(old => ({ ...old, register_key: "", register_until: "0" })); toast(T("注册窗口已关闭")) }
+    catch (e) { setError(T((e as Error).message)) }
+    finally { setBusy(false) }
+  }
+  return { settings: enabled ? settings : null, key, until, left, busy, error: enabled ? error : "", open, close, retry: () => setReload(n => n + 1) }
+}
+
+export function RegisterDialog({ site, reg, nodes, beat, canProvision, distributionAvailable, onClose }: {
+  site: string; reg: ReturnType<typeof useRegisterWindow>; nodes: Node[]; beat: number; canProvision: boolean; distributionAvailable: boolean; onClose: () => void
+}) {
+  const command = reg.left > 0 && canProvision && distributionAvailable ? registrationCommand(site, reg.key) : ""
+  const clock = Math.floor(reg.left / 60) + ":" + String(reg.left % 60).padStart(2, "0")
+  const joined = reg.left > 0 ? nodes.filter(node => (node.created_at ?? 0) > reg.until - 3600 ||
+    (node.created_at === reg.until - 3600 && node.id > Number(reg.settings?.register_since_id ?? 0))) : []
+  return <Dialog title={T("批量注册")} onClose={onClose} footer={<><Button onClick={onClose}>{T("关闭")}</Button>{command && <Button kind="primary" icon="copy" onClick={() => navigator.clipboard.writeText(command).then(() => toast(T("已复制")), () => toast(T("无法访问剪贴板，请手动选择并复制"), "bad"))}>{T("复制命令")}</Button>}</>}>
+    <p className="muted">{T("在节点上运行以下命令：脚本从本 Hub 下载与当前发行版精确匹配的 Agent，校验哈希后安装系统服务（systemd 或 OpenRC）。新节点默认公开；命令包含短期注册密钥，每台机器会换取自己的长期令牌。")}</p>
+    {reg.error && <Notice tone="bad" action={<Button onClick={reg.retry} size="sm">{T("重试")}</Button>}>{reg.error}</Notice>}
+    {!canProvision || !distributionAvailable ? <Notice tone="warn" icon="lock">{!canProvision ? T("请通过 HTTPS 域名访问面板后添加或安装节点。") : T("Hub 尚未配置经过验证的 Agent 本地分发；请先用原生安装器安装当前 romi 发行版，再复制安装命令。")}</Notice> :
+      reg.left > 0 ? <><div className="window-state"><Ring value={reg.left} max={3600} size={52} stroke={4}><Icon name="timer" size={16} /></Ring><div><p className="window-title num">{T("窗口 {clock} 后自动关闭", { clock })}</p><p className="muted small">{T("到点自动失效，装完了也可以现在就关")}</p></div><Button size="sm" busy={reg.busy} onClick={reg.close}>{T("立即关闭")}</Button></div>
+        <div className="field"><span className="field-label">{T("安装命令")}</span><CodeBlock code={command} label={T("复制")} /></div>
+        <div className="registered"><p className="field-label">{T("本次已注册")} <span className="num">{joined.length}</span></p>{!joined.length ? <p className="registered-empty"><span className="radar radar-sm" aria-hidden="true"><i /><i /></span>{T("等待节点注册")}</p> :
+          <ul className="registered-list">{joined.map(node => <li key={node.id}><StatusBadge node={node} beat={beat} compact /><span className="registered-name">{node.name}</span><span className="muted small">{systemLine(node)}</span></li>)}</ul>}</div></> :
+      <div className="window-closed"><Button kind="primary" icon="play" busy={reg.busy} onClick={reg.open}>{T("开启一小时窗口")}</Button></div>}
+  </Dialog>
 }

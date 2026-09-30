@@ -34,15 +34,16 @@ async function visit(page, hub, [, path, admin], theme) {
     page.signedIn = true
   }
   await page.goto(path(hub))
-  await page.locator('main, .login-screen').first().waitFor()
+  await page.locator('main, .login').first().waitFor()
   await page.waitForLoadState('networkidle')
+  await page.evaluate(() => Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => {}))))
 }
 
 test('one focus treatment: a 2px solid ring', async ({ page, hub }) => {
   await seed(hub)
   await visit(page, hub, named('admin nodes'), 'light')
   await page.getByLabel('搜索节点').focus()
-  for (const target of [page.getByLabel('搜索节点'), page.getByRole('button', { name: '全部', exact: true })]) {
+  for (const target of [page.getByLabel('搜索节点'), page.getByRole('radio', { name: /^全部/ })]) {
     await target.focus()
     const ring = await target.evaluate((el) => ({ style: getComputedStyle(el).outlineStyle, width: getComputedStyle(el).outlineWidth }))
     expect(ring).toEqual({ style: 'solid', width: '2px' })
@@ -63,8 +64,8 @@ test('nothing overflows from 320 to 1440 and the admin list stays level', async 
   }
   await page.setViewportSize({ width: 1440, height: 900 })
   await visit(page, hub, named('admin nodes'), 'light')
-  const rows = await page.evaluate(() => [...document.querySelectorAll('.admin-node-table tbody tr')].map((tr) =>
-    [...tr.children].map((td) => Math.round([...td.children].find((el) => el.getBoundingClientRect().height > 0).getBoundingClientRect().top))))
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.admin-table tbody tr')].map((tr) =>
+    [...tr.children].map((td) => Math.round(td.getBoundingClientRect().top + parseFloat(getComputedStyle(td).paddingTop)))))
   expect(rows.length).toBe(3)
   for (const tops of rows) expect(new Set(tops).size, `first lines ${tops}`).toBe(1)
 })
@@ -92,15 +93,15 @@ test('a dialog is a title bar over its body, and a bottom sheet on a phone', asy
   await seed(hub)
   await signIn(page)
   await page.goto('/admin/nodes')
-  await page.getByRole('button', { name: /^编辑菜单/ }).first().click()
-  await page.getByRole('button', { name: '编辑节点', exact: true }).click()
+  await page.getByRole('button', { name: /^管理 / }).first().click()
+  await page.getByRole('button', { name: '编辑设置', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
   const measure = () => dialog.evaluate((el) => {
     const box = el.getBoundingClientRect()
-    const head = el.querySelector('[data-slot="dialog-header"]')
+    const head = el.querySelector('.dialog-head')
     const bar = head.getBoundingClientRect()
-    const close = el.querySelector('[data-slot="dialog-close"]').getBoundingClientRect()
+    const close = el.querySelector('.dialog-close').getBoundingClientRect()
     return {
       left: box.left, right: box.right, bottom: box.bottom, width: box.width, vw: innerWidth, vh: innerHeight,
       barOffset: Math.round(bar.top - box.top), barHeight: bar.height, rule: getComputedStyle(head).borderBottomStyle,
@@ -117,13 +118,11 @@ test('a dialog is a title bar over its body, and a bottom sheet on a phone', asy
     expect(Math.abs(opened.bottom - opened.vh)).toBeLessThanOrEqual(1)
   } else {
     expect(opened.width).toBeLessThanOrEqual(560)
-    // A floating box clear of both edges. Not an exact centre: the scroll lock
-    // leaves a scrollbar gutter, so the box centres on the page, not the window.
     expect(opened.left).toBeGreaterThan(0)
-    expect(opened.right).toBeLessThan(opened.vw)
+    expect(Math.abs(opened.right - opened.vw)).toBeLessThanOrEqual(1)
   }
   // The bar and its close button stay put while the long form scrolls.
-  await dialog.evaluate((el) => { el.scrollTop = el.scrollHeight })
+  await dialog.evaluate((el) => { const body = el.querySelector('.dialog-body'); body.scrollTop = body.scrollHeight })
   const scrolled = await measure()
   expect(scrolled.barOffset).toBe(opened.barOffset)
   expect(scrolled.closeInBar).toBe(true)

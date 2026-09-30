@@ -299,7 +299,12 @@
           "server/src/auth.rs",
           "server/src/geo.rs",
           "admin/src/components/ui/date-picker.tsx",
-          "admin/src/components/ui/switch.tsx"
+          "admin/src/components/ui/switch.tsx",
+          "styles/admin.css",
+          "web/src/components/Palette.tsx",
+          "web/src/components/ui/status.tsx",
+          "web/src/components/ui/overlay.tsx",
+          "server/src/db/mod.rs"
         ],
         "interfaces": [
           "GET /api/me",
@@ -323,7 +328,8 @@
           "e2e/visual-contract.spec.mjs",
           "e2e/approved-v12.spec.mjs",
           "e2e/approved-v13.spec.mjs",
-          "e2e/approved-v14.spec.mjs"
+          "e2e/approved-v14.spec.mjs",
+          "e2e/v15-admin.spec.mjs"
         ]
       },
       "views": [
@@ -461,7 +467,7 @@
           "interface": "GET /api/nodes/{id}/metrics"
         }
       ],
-      "status": "approved"
+      "status": "implemented"
     },
     {
       "id": "design-system-v15",

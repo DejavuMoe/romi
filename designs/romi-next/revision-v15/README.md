@@ -1,6 +1,6 @@
 # v15 晨昏
 
-状态：已批准（`_d_meta.json` 中为 `approved`），是现行规格。状态页 `/` 已在生产实现，节点详情与管理面板分批迁移，进度见 `docs/ui/implementation.md`。
+状态：已批准（`_d_meta.json` 中为 `approved`），是现行规格。状态页、节点详情、后台登录与导航、节点管理已在生产实现；其他后台页面分批迁移，进度见 `docs/ui/implementation.md`。
 
 入口（先在仓库根运行 `node designs/preview.mjs 4311`）：
 

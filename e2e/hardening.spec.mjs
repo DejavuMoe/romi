@@ -93,19 +93,16 @@ test('signing in resumes the node list the refusal stopped', async ({ page, hub 
   await page.waitForTimeout(1_000)
 
   await signIn(page)
-  await expect(page.getByText('恢复后的节点', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '恢复后的节点', exact: true })).toBeVisible()
 })
 
 test('the public range picker is styled by the stylesheet this app ships', async ({ page, hub }) => {
-  // The detail page borrows the panel's Select primitive. With only this app's
-  // own source scanned for classes, that component's utilities were compiled
-  // into the panel's stylesheet and nowhere else, so the control rendered
-  // unstyled here while every test that only checked text still passed.
+  // A rendered range control must carry its shared styles, not merely its text.
   const id = await hub.node('样式检查节点', true)
   await hub.request('/api/settings', { method: 'PUT', body: { public_page: 'on' } })
 
   await page.goto(`/node/${id}`)
-  const trigger = page.getByRole('combobox').first()
+  const trigger = page.getByRole('radiogroup', { name: '时间范围' })
   await expect(trigger).toBeVisible()
 
   const style = await trigger.evaluate((element) => {
@@ -117,14 +114,9 @@ test('the public range picker is styled by the stylesheet this app ships', async
     }
   })
   // An unstyled trigger is a block with no border.
-  expect(style.display).toBe('flex')
-  expect(style.border).toBe('solid')
-  // The canary: `data-[size=default]:h-8` exists only in the borrowed
-  // component's own file, so its 32px is what a missed scan takes away, leaving
-  // a bare inline-height control of about 20px. Not an equality: the shared
-  // touch-target rule raises this to 44px on a coarse pointer, which is the
-  // layout working.
-  expect(style.height).toBeGreaterThanOrEqual(32)
+  expect(['grid', 'inline-grid']).toContain(style.display)
+  // The compact control is 30px; its touch targets grow on a phone.
+  expect(style.height).toBeGreaterThanOrEqual(30)
 })
 
 test('one address holds a bounded number of public streams, returned on close', async ({ page, hub }) => {
