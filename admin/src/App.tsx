@@ -68,7 +68,7 @@ export default function App() {
   const [me, setMe] = useState<Me | null>(null)
   const [meError, setMeError] = useState("")
   const siteName = me?.site_name?.trim() && me.site_name !== "Monitor" ? me.site_name.trim() : "romi"
-  const { nodes, admin, error, refresh } = useNodes()
+  const { nodes, admin, error, tick, refresh } = useNodes()
 
   const loadMe = useCallback(() => {
     // `|| "..."` because an empty message reads as no error: api() falls back to
@@ -145,9 +145,10 @@ export default function App() {
           <Button variant="ghost" size="icon" onClick={signOut} title="退出登录" aria-label="退出登录"><LogOut /></Button>
         </header>
         <main id="main" tabIndex={-1} className="admin-content">
-          {path !== "/admin/nodes" && path !== "/admin/ping" && <div className="page-heading"><h1>{detailId ? "节点详情" : section.title}</h1></div>}
+          {/* A node's detail is headed by the node's own name. */}
+          {path !== "/admin/nodes" && path !== "/admin/ping" && !detailId && <div className="page-heading"><h1>{section.title}</h1></div>}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          {!nodes ? <Skeleton className="h-64" /> : detailId ? <><Button variant="ghost" onClick={()=>go("/admin/nodes")}>返回</Button>{detail ? <Suspense fallback={<Skeleton className="h-64"/>}><NodeDetail node={detail} authed/></Suspense> : <p>节点不存在</p>}</> : <Admin
+          {!nodes ? <Skeleton className="h-64" /> : detailId ? (detail ? <Suspense fallback={<Skeleton className="h-64"/>}><NodeDetail node={detail} beat={tick} admin theme={dark ? "dark" : "light"} backLabel="节点" backHref="/admin/nodes" onBack={()=>go("/admin/nodes")}/></Suspense> : <><Button variant="ghost" onClick={()=>go("/admin/nodes")}>返回</Button><p>节点不存在</p></>) : <Admin
             onOpen={id=>go(`/admin/node/${id}`)} path={path} nodes={sorted} refresh={refresh}
             site={me.site || location.origin}
             canProvision={me.can_provision && !!provisioningSite(location.origin) && !!provisioningSite(me.site || location.origin)}

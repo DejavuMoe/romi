@@ -58,7 +58,7 @@ test('public cards keep their resource meters and fill the grid at responsive wi
     }
     await page.getByRole('link', { name: 'Tokyo', exact: true }).focus()
     await page.keyboard.press('Enter')
-    await expect(page.getByRole('heading', { name: 'Tokyo', level: 2 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Tokyo', level: 1 })).toBeVisible()
     await page.getByRole('link', { name: '全部节点', exact: true }).click()
     await expect(page.getByRole('heading', { name: '节点状态', exact: true })).toBeVisible()
   }
@@ -67,14 +67,14 @@ test('public cards keep their resource meters and fill the grid at responsive wi
 test('node deep links, reload and browser history preserve navigation', async ({ page, hub }) => {
   const id = await hub.node('Linked E2E node', true)
   await page.goto(`/node/${id}`)
-  await expect(page.getByRole('heading', { name: 'Linked E2E node', level: 2 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Linked E2E node', level: 1 })).toBeVisible()
   await page.reload()
   await expect(page).toHaveTitle('Linked E2E node · E2E')
   await page.getByRole('link', { name: 'E2E', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Linked E2E node', level: 3 })).toBeVisible()
   await page.goBack()
   await expect(page).toHaveURL(new RegExp(`/node/${id}$`))
-  await expect(page.getByRole('heading', { name: 'Linked E2E node', level: 2 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Linked E2E node', level: 1 })).toBeVisible()
   await page.goForward()
   await expect(page.getByRole('heading', { name: 'Linked E2E node', level: 3 })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -92,6 +92,7 @@ function history() {
 
 test('history retries initial errors and retains the plot after a refresh error', async ({ page, hub }) => {
   const id = await hub.node('History E2E node', true)
+  await page.clock.install()
   let requests = 0
   await page.route(`**/api/nodes/${id}/metrics?*`, (route) => ++requests % 2
     ? route.fulfill({ status: 503, body: 'Temporary history failure' })
@@ -99,11 +100,11 @@ test('history retries initial errors and retains the plot after a refresh error'
   await page.goto(`/node/${id}`)
   await expect(page.getByRole('alert')).toContainText('Temporary history failure')
   await page.getByRole('button', { name: '重试', exact: true }).click()
-  await expect(page.getByRole('application').first()).toBeVisible()
+  await expect(page.locator('.chart-plot').first()).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
-  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await page.clock.fastForward(61_000)
   await expect(page.getByRole('alert')).toContainText('当前显示上次成功读取的数据')
-  await expect(page.getByRole('application').first()).toBeVisible()
+  await expect(page.locator('.chart-plot').first()).toBeVisible()
   await page.getByRole('button', { name: '重试', exact: true }).click()
   await expect(page.getByRole('alert')).toHaveCount(0)
   expect(requests).toBe(4)
@@ -123,11 +124,11 @@ test('history polling waits for responses and stops after leaving the detail pag
   await expect.poll(() => requests).toBe(1)
   await page.clock.fastForward(180_000)
   expect(requests).toBe(1)
-  await expect(page.getByRole('button', { name: '刷新中…' })).toBeDisabled()
+  await expect(page.getByRole('status', { name: '正在加载' })).toBeVisible()
   await first.fulfill({ json: { metrics: [], ping: [], probes: {}, loss: {} } })
-  await expect(page.getByText('这段时间没有历史数据').first()).toBeVisible()
+  await expect(page.getByText('暂无历史数据').first()).toBeVisible()
   await page.clock.fastForward(60_000)
-  await expect(page.getByRole('application').first()).toBeVisible()
+  await expect(page.locator('.chart-plot').first()).toBeVisible()
   expect(requests).toBe(2)
   await page.getByRole('link', { name: 'E2E', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Polling E2E node', level: 3 })).toBeVisible()

@@ -1,35 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { median } from "d3-array"
-import {
-  Area, Brush, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer,
-  Tooltip, XAxis, YAxis,
-} from "recharts"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import { usageTone } from "../../../shared/usage"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../admin/src/components/ui/select"
-import { Button } from "./ui/button"
-import { Skeleton } from "./ui/skeleton"
-import { Region, StatusBadge } from "./ui/status"
-import { api, type Node } from "../lib/api"
-import {
-  axisBytes, continuousUptime, bytes, clockFor, monthUsage, percent, uptime, osName, timeTicks, withHistoryGaps,
-} from "../lib/format"
+import { place } from "../../../shared/geo.ts"
+import { T } from "../../../shared/i18n.ts"
+import { api, spark, type Node, type Spark } from "../lib/api"
+import { bandwidth, bytes, continuousUptime, cycle, expiry, FOREVER, full, MODES, osName, pair, price, tone, uptime } from "../lib/format"
+import { cx, useNow } from "../lib/hooks"
+import { HistoryChart, HistoryTable, QuotaBar, Ring, Sparkline, type ChartKind, type ChartSeries } from "./charts"
+import { nodeFacts, outage, systemLine } from "./Fleet"
+import { Globe } from "./Globe"
+import { Button, Segmented, Switch, Tabs } from "./ui/controls"
+import { CopyValue, Empty, Notice, Skeleton } from "./ui/feedback"
+import { Icon, type IconName } from "./ui/icon"
+import { AnimatedNumber, FlowValue, LocalSky, Region, StatusBadge } from "./ui/status"
 
 type Point = {
+  ts: number
   step?: number
+  cpu: number | null
+  mem_used: number | null
+  disk_used: number | null
+  net_rx: number | null
+  net_tx: number | null
   procs?: number | null
   tcp?: number | null
   udp?: number | null
   zram_used?: number | null
   swap_disk_used?: number | null
-  swapfile_used?: number | null
-  swap_partition_used?: number | null
-  ts: number
-  cpu: number
-  mem_used: number
-  disk_used: number
-  net_rx: number
-  net_tx: number
 }
 // `latency` is the bucket's median round trip, null when every probe in it timed
 // out. `band` is the range its answers spanned, absent when they spanned nothing.
@@ -41,17 +37,20 @@ type PingPoint = {
   band?: [number, number]
   loss?: number
 }
-/** Probe names by id, sent alongside the samples they label. */
-type Probes = Record<string, string>
-/**
- * Proportion of the whole window each probe lost, by id, absent for probes that
- * lost nothing. Sent because it cannot be derived here: every bucket's `loss` is
- * already a percentage of that bucket, so the sample counts it was divided by are
- * unavailable. Averaging them would weight a bucket holding one sample equally
- * with one holding twelve, and the window's first and last buckets are partial
- * regardless of what the probe does.
- */
-type Loss = Record<string, number>
+type History = {
+  metrics: Point[]
+  ping: PingPoint[]
+  /** Probe names by id, sent alongside the samples they label. */
+  probes: Record<string, string>
+  /**
+   * Proportion of the whole window each probe lost, by id, absent for probes
+   * that lost nothing. Sent because it cannot be derived here: every bucket's
+   * `loss` is already a percentage of that bucket, so the sample counts it was
+   * divided by are unavailable. Averaging them would weight a bucket holding one
+   * sample equally with one holding twelve.
+   */
+  loss?: Record<string, number>
+}
 
 const RANGES = [
   { hours: 1, label: "1 小时" },
@@ -59,549 +58,485 @@ const RANGES = [
   { hours: 24, label: "24 小时" },
   { hours: 168, label: "7 天" },
 ]
-
-// Latency stops at a day. A week-wide bucket would still carry the spread and the
-// loss figure, but a week of probe history is outside this page's purpose, and
-// these are the windows in which every ping remains on the chart.
-const RANGES_FOR = { resources: RANGES, traffic: RANGES, latency: RANGES.filter((r) => r.hours <= 24) }
 const ADMIN_RANGES = [...RANGES, { hours: 720, label: "30 天" }, { hours: 2160, label: "90 天" }, { hours: 8760, label: "1 年" }]
+// Latency stops at a day: these are the windows in which every ping remains on
+// the chart, and a week of probe history is outside this page's purpose.
+const LATENCY_RANGES = RANGES.filter((r) => r.hours <= 24)
 
-const AXIS = { stroke: "currentColor", fontSize: 11, tickLine: false, axisLine: false }
+type Tab = "resources" | "traffic" | "latency"
 
-// No grow-in animation: it would spend 1.5 s drawing a line across the panel on
-// every range change, on a page meant to be read at a glance, and on the latency
-// chart across seven hundred points per probe.
-const TOOLTIP_STYLE = { maxWidth: "calc(100vw - 32px)", overflowWrap: "anywhere" as const, whiteSpace: "normal" as const, fontSize: 12, background: "var(--popover)", color: "var(--popover-foreground)", border: "1px solid var(--border)", borderRadius: 0, boxShadow: "none" }
+/**
+ * Hampel filter (Hampel 1974). A point more than `sigmas` robust deviations
+ * from its window's median is replaced by that median, while everything else
+ * passes through unchanged, which is what distinguishes it from a rolling
+ * median or a moving average. 1.4826 rescales the median absolute deviation to
+ * a standard deviation for normally distributed data.
+ */
+function despike(values: (number | null)[], window = 7, sigmas = 3): (number | null)[] {
+  const half = window >> 1
+  const med = (xs: number[]) => {
+    const s = xs.slice().sort((a, b) => a - b)
+    return s.length ? (s.length % 2 ? s[s.length >> 1] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null
+  }
+  return values.map((v, i) => {
+    // A timeout is a gap rather than a high reading: neither smoothed, nor
+    // counted towards what its neighbours are compared against.
+    if (v == null) return v
+    const near = values.slice(Math.max(0, i - half), i + half + 1).filter((x): x is number => x != null)
+    const mid = med(near) ?? v
+    const mad = med(near.map((x) => Math.abs(x - mid))) ?? 0
+    return mad > 0 && Math.abs(v - mid) > sigmas * 1.4826 * mad ? mid : v
+  })
+}
 
-const SERIES = { dot: false as const, strokeWidth: 1.25, isAnimationActive: false }
+/** The smallest spacing between samples, which is the bucket width. */
+function stepOf(ts: number[], fallback = 60) {
+  let step = Infinity
+  for (let i = 1; i < ts.length; i++) if (ts[i] > ts[i - 1]) step = Math.min(step, ts[i] - ts[i - 1])
+  return Number.isFinite(step) ? step : fallback
+}
 
-// One width for every stacked panel's value axis. Sized to their own labels --
-// 40px under "100%", 68px under "172 MB" -- the four plot areas would be offset by
-// 28px, placing a CPU spike and the network spike that caused it at different x.
-const Y_WIDTH = 68
+/**
+ * The node's history for one window. The first answer replaces nothing; a
+ * later refresh keeps what is on screen until it lands, and a failed one keeps
+ * it too, with the error beside it. The next refresh is scheduled a minute
+ * after the previous one completes, so a slow query never overlaps itself.
+ */
+function useHistory(id: number, hours: number, series: "metrics" | "ping") {
+  const key = `${id}/${hours}/${series}`
+  const [state, setState] = useState<{ key: string; data: History | null; error: string; busy: boolean }>({ key: "", data: null, error: "", busy: false })
+  const again = useRef<() => void>(() => {})
+  useEffect(() => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let inFlight = false
+    // What this screen can resolve, in device pixels, which is the unit the line
+    // is drawn in. The hub only thins further, so an approximate figure suffices.
+    const points = Math.round(innerWidth * (devicePixelRatio || 1))
+    const load = async (refresh: boolean) => {
+      if (inFlight || controller.signal.aborted) return
+      clearTimeout(timer)
+      inFlight = true
+      if (refresh) setState((s) => ({ ...s, busy: true }))
+      try {
+        const data = await api<History>(`/nodes/${id}/metrics?hours=${hours}&points=${points}&series=${series}`, { signal: controller.signal })
+        if (!controller.signal.aborted) setState({ key, data, error: "", busy: false })
+      } catch (e) {
+        // Kept apart from an empty answer: a refused request and an empty window
+        // are different, and the hub has reason to refuse this one -- it caps
+        // concurrent history queries over its reader pool.
+        if (!controller.signal.aborted) setState((s) => ({ key, data: s.key === key ? s.data : null, error: (e as Error).message || T("网络错误"), busy: false }))
+      } finally {
+        inFlight = false
+        if (!controller.signal.aborted) timer = setTimeout(() => void load(true), 60_000)
+      }
+    }
+    again.current = () => void load(true)
+    void load(false)
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+      again.current = () => {}
+    }
+  }, [id, hours, series, key])
+  // Another window's answer is none of this one's.
+  const current = state.key === key
+  return { data: current ? state.data : null, error: current ? state.error : "", busy: !current || state.busy, retry: () => again.current() }
+}
 
-// Series retain both a color and a line pattern in either theme.
-const PALETTE = [
-  { stroke: "var(--color-chart-1)", dash: undefined },
-  { stroke: "var(--color-chart-5)", dash: "6 3" },
-  { stroke: "var(--color-chart-3)", dash: "2 3" },
-  { stroke: "var(--color-chart-4)", dash: "10 4 2 4" },
-  { stroke: "var(--color-chart-5)", dash: "1 4" },
-]
-
-const TABS = [
-  { key: "resources", label: "资源" },
-  { key: "latency", label: "监测" },
-  { key: "traffic", label: "流量" },
-] as const
-
-function Panel({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
+function VitalTile({ icon, label, value, unit, sub, tone: level, trend, get, max, beat, color }: {
+  icon: IconName
+  label: string
+  value: number | ReactNode | null
+  unit?: string
+  sub: ReactNode
+  tone?: string
+  trend?: Spark[]
+  get?: (p: Spark) => number | null
+  max?: number
+  beat?: number
+  color?: string
+}) {
   return (
-    <div className="min-w-0 border p-3 sm:p-4">
-      <h4 className="mb-3 text-sm font-medium">{title}</h4>
-      <div className="h-48 w-full text-muted-foreground sm:h-56">{children}</div>
+    <div className="vital" data-tone={level}>
+      <div className="vital-head">
+        <span className="vital-label"><Icon name={icon} size={14} />{label}</span>
+      </div>
+      <div className="vital-value num">
+        {value == null ? "—" : typeof value === "number" ? <AnimatedNumber value={value} format={(v) => (unit === "%" ? v.toFixed(0) : String(Math.round(v)))} /> : value}
+        {value != null && unit && <span className="unit">{unit}</span>}
+      </div>
+      <div className="vital-sub">{sub}</div>
+      {trend && get && <Sparkline points={trend} get={get} max={max} beat={beat} height={30} color={color} />}
     </div>
   )
 }
 
-function Tab({ id, active, controls, onClick, children }: { id: string; active: boolean; controls: string; onClick: () => void; children: string }) {
+function Fact({ label, children, mono }: { label: string; children?: ReactNode; mono?: boolean }) {
+  if (children === null || children === undefined || children === "") return null
   return (
-    <button
-      id={id}
-      onClick={onClick}
-      role="tab"
-      aria-selected={active}
-      aria-controls={controls}
-      // A tab list is one stop, not three: Tab reaches the selected tab and the
-      // arrows move between them. See the keydown handler on the list.
-      tabIndex={active ? 0 : -1}
-      className={`history-tab border-b-2 transition-colors ${
-        active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:bg-accent"
-      }`}
-    >
-      {children}
-    </button>
+    <div className="fact">
+      <dt>{label}</dt>
+      <dd className={mono ? "mono" : undefined}>{children}</dd>
+    </div>
+  )
+}
+
+const CYCLE_DAYS: Record<string, number> = { monthly: 30, quarterly: 91, semiannual: 182, yearly: 365, biennial: 730, triennial: 1095 }
+
+function BillingPanel({ node }: { node: Node }) {
+  const exp = expiry(node)
+  const days = CYCLE_DAYS[node.billing_cycle] || 30
+  const left = exp.days == null ? null : Math.max(0, exp.days)
+  return (
+    <section className="panel" aria-labelledby="billing-title">
+      <h2 id="billing-title" className="panel-title"><Icon name="wallet" size={16} />{T("账单")}</h2>
+      <div className="billing-main">
+        <Ring value={left ?? days} max={days} size={64} stroke={5} tone={exp.tone === "bad" ? "bad" : exp.tone === "warn" ? "warn" : exp.days == null ? "muted" : "accent"}>
+          {exp.days == null ? "∞" : exp.days < 0 ? "!" : exp.days}
+        </Ring>
+        <div className="billing-text">
+          <strong className="num">{price(node)}</strong>
+          <span className={`ink-${exp.tone}`}>{exp.text}</span>
+        </div>
+      </div>
+      <dl className="facts">
+        <Fact label={T("到期日期")}>{node.expires_at || T(FOREVER)}</Fact>
+        <Fact label={T("付款周期")}>{cycle(node.billing_cycle)}</Fact>
+      </dl>
+    </section>
+  )
+}
+
+function TrafficPanel({ node, threshold }: { node: Node; threshold: number }) {
+  return (
+    <section className="panel" aria-labelledby="traffic-title">
+      <h2 id="traffic-title" className="panel-title"><Icon name="arrow-down-up" size={16} />{T("流量")}</h2>
+      <QuotaBar node={node} threshold={threshold} />
+      <dl className="facts facts-2">
+        <Fact label={T("计费方式")}>{T(MODES[node.traffic_mode] ?? MODES.sum)}</Fact>
+        <Fact label={T("每月重置日")}>{T("{n} 日", { n: node.traffic_reset_day || 1 })}</Fact>
+        <Fact label={T("今日下载 / 上传")}><span className="num">{bytes(node.day_rx)} / {bytes(node.day_tx)}</span></Fact>
+        <Fact label={T("累计下载 / 上传")}><span className="num">{bytes(node.total_rx)} / {bytes(node.total_tx)}</span></Fact>
+        <Fact label={T("可用带宽 · 下载 / 上传")}>{`${bandwidth(node.bandwidth_down)} / ${bandwidth(node.bandwidth_up)}`}</Fact>
+      </dl>
+    </section>
+  )
+}
+
+function SystemPanel({ node, admin }: { node: Node; admin: boolean }) {
+  // The address the Agent connected from stands in for a family it did not report.
+  const v6 = node.ip?.includes(":")
+  return (
+    <section className="panel" aria-labelledby="system-title">
+      <h2 id="system-title" className="panel-title"><Icon name="server" size={16} />{T("系统")}</h2>
+      <dl className="facts facts-2">
+        <Fact label={T("系统")}>{node.os ? osName(node.os) : T("待上报")}</Fact>
+        <Fact label={T("内核")} mono>{node.kernel || "—"}</Fact>
+        <Fact label={T("架构")} mono>{node.arch || "—"}</Fact>
+        <Fact label={T("虚拟化")}>{node.virt ? node.virt.toUpperCase() : "—"}</Fact>
+        <Fact label="CPU">{node.cpu_name ? `${node.cpu_name} · ${node.cpu_cores} vCPU` : T("待上报")}</Fact>
+        <Fact label={T("内存 / Swap")}><span className="num">{node.mem_total ? bytes(node.mem_total) : "—"} / {node.swap_total ? bytes(node.swap_total) : T("未启用")}</span></Fact>
+        <Fact label={T("磁盘")}><span className="num">{node.disk_total ? bytes(node.disk_total) : "—"}</span></Fact>
+        <Fact label={T("Agent 版本")} mono>{node.agent_version || T("未上报")}</Fact>
+      </dl>
+      {admin && (
+        <dl className="facts facts-2 facts-admin">
+          <Fact label="IPv4"><CopyValue value={node.ipv4 || (v6 ? undefined : node.ip)} label=" IPv4" /></Fact>
+          <Fact label="IPv6"><CopyValue value={node.ipv6 || (v6 ? node.ip : undefined)} label=" IPv6" /></Fact>
+          <Fact label={T("接入标识")}><CopyValue value={`node-${node.id}`} label={T("接入标识")} /></Fact>
+          <Fact label={T("备注")}>{node.remark || "—"}</Fact>
+        </dl>
+      )}
+    </section>
+  )
+}
+
+function HistorySection({ node, admin }: { node: Node; admin: boolean }) {
+  const [tab, setTab] = useState<Tab>("resources")
+  // Each tab keeps its own range: a 7-day trend and a 1-hour trace answer
+  // different questions.
+  const [ranges, setRanges] = useState<Record<Tab, number>>({ resources: 24, traffic: 24, latency: 6 })
+  const [hover, setHover] = useState<number | null>(null)
+  const [asTable, setAsTable] = useState(false)
+  const [smooth, setSmooth] = useState(false)
+  const hours = ranges[tab]
+  const { data, error, busy, retry } = useHistory(node.id, hours, tab === "latency" ? "ping" : "metrics")
+  // Held as times rather than sample positions, so the minute refresh leaves it
+  // on the same moments. It belongs to one tab and range.
+  const view = `${tab}/${hours}`
+  const [zoomAt, setZoomAt] = useState<{ view: string; range: [number, number] } | null>(null)
+  const zoom = zoomAt?.view === view ? zoomAt.range : null
+  const setZoom = (range: [number, number] | null) => setZoomAt(range ? { view, range } : null)
+  const available = tab === "latency" ? LATENCY_RANGES : admin ? ADMIN_RANGES : RANGES
+
+  const metrics = data?.metrics ?? []
+  const ping = data?.ping ?? []
+  const now = useNow(60_000)
+  const last = Math.max(0, ...(tab === "latency" ? ping : metrics).map((p) => p.ts))
+  const end = Math.max(Math.floor(now / 60_000) * 60, last)
+  const domain: [number, number] = zoom || [end - hours * 3600, end]
+
+  const ts = metrics.map((p) => p.ts)
+  const step = metrics[0]?.step ?? stepOf(ts)
+  const m = node.online ? node.metrics : null
+  const off = (enabled: boolean | undefined) => (enabled === false ? T("未启用") : null)
+  const charts: { title: string; kind: ChartKind; wide?: boolean; max?: number; series: ChartSeries[] }[] =
+    tab === "resources"
+      ? [
+          { title: "CPU", kind: "percent", series: [{ key: "cpu", label: "CPU", color: "var(--trend)", values: metrics.map((p) => p.cpu) }] },
+          {
+            title: T("内存"),
+            kind: "bytes",
+            // Swap can outgrow the physical memory it backs.
+            max: Math.max(node.mem_total, m?.swap_disk_total ?? 0) || undefined,
+            series: [
+              { key: "ram", label: "RAM", color: "var(--trend)", values: metrics.map((p) => p.mem_used) },
+              { key: "zram", label: "ZRAM", color: "var(--series-3)", dash: "5 3", area: false, values: metrics.map((p) => p.zram_used), status: off(m ? m.zram_devices !== 0 : undefined) },
+              { key: "swap", label: "Swap", color: "var(--series-4)", dash: "2 3", area: false, values: metrics.map((p) => p.swap_disk_used), status: off(m ? m.swap_disk_total !== 0 : undefined) },
+            ],
+          },
+          { title: T("磁盘"), kind: "percent", series: [{ key: "disk", label: T("磁盘"), color: "var(--trend)", values: metrics.map((p) => (p.disk_used == null || !node.disk_total ? null : (p.disk_used / node.disk_total) * 100)) }] },
+          { title: T("进程数"), kind: "count", series: [{ key: "procs", label: T("进程"), color: "var(--trend)", values: metrics.map((p) => p.procs) }] },
+          {
+            title: T("TCP / UDP 连接"),
+            kind: "count",
+            series: [
+              { key: "tcp", label: "TCP", color: "var(--trend)", values: metrics.map((p) => p.tcp) },
+              { key: "udp", label: "UDP", color: "var(--series-3)", area: false, values: metrics.map((p) => p.udp) },
+            ],
+          },
+        ]
+      : tab === "traffic"
+        ? [
+            {
+              title: T("网络速率"),
+              kind: "rate",
+              wide: true,
+              series: [
+                { key: "rx", label: T("下载"), color: "var(--flow-down)", values: metrics.map((p) => p.net_rx) },
+                { key: "tx", label: T("上传"), color: "var(--flow-up)", values: metrics.map((p) => p.net_tx) },
+              ],
+            },
+          ]
+        : []
+
+  // One chart per probe that reported, labelled from the names the samples
+  // arrived with. Timeouts are kept: dropping them would draw a probe losing
+  // half its packets as an unbroken line.
+  const probes = [...new Set(ping.map((p) => p.task_id))].map((id) => {
+    const rows = ping.filter((p) => p.task_id === id)
+    return { id, name: data?.probes?.[id] ?? T("探测 {id}", { id }), rows, loss: data?.loss?.[id] ?? 0 }
+  })
+
+  const inWindow = (t: number) => t >= domain[0] && t <= domain[1]
+  // Transfer inside the visible window, from the bucket rates.
+  const moved = (k: "net_rx" | "net_tx") => metrics.reduce((t, p) => (inWindow(p.ts) ? t + (p[k] ?? 0) * (p.step ?? step) : t), 0)
+  const peak = (values: (number | null | undefined)[]) => Math.max(0, ...values.filter((v, i): v is number => v != null && inWindow(ts[i])))
+  // An odd count would leave the last row half empty, so the first chart takes
+  // the whole row and the rest pair up.
+  const lead = (count: number, i: number) => count % 2 === 1 && i === 0
+  const summary = (c: (typeof charts)[number]) =>
+    c.kind === "percent"
+      ? T("峰值 {pct}%", { pct: peak(c.series[0].values).toFixed(0) })
+      : c.kind === "rate"
+        ? T("此时段 ↓ {down} · ↑ {up}", { down: bytes(moved("net_rx")), up: bytes(moved("net_tx")) })
+        : c.kind === "bytes"
+          ? T("物理内存 {size}", { size: bytes(node.mem_total) })
+          : T("峰值 {value}", { value: peak(c.series[0].values) })
+
+  const nothing = tab === "latency" ? !probes.length : !metrics.length
+  const tabs: { value: Tab; label: string; icon: IconName }[] = [
+    { value: "resources", label: T("资源"), icon: "cpu" },
+    { value: "traffic", label: T("流量"), icon: "arrow-down-up" },
+    { value: "latency", label: T("监测"), icon: "radar" },
+  ]
+  const skeletons = tab === "resources" ? 5 : 1
+
+  let body: ReactNode
+  if (!data)
+    body = error ? (
+      <Empty error title={T("历史加载失败")} detail={error} action={T("重试")} onAction={retry} />
+    ) : (
+      <div className="chart-grid" role="status" aria-label={T("正在加载")}>
+        {Array.from({ length: skeletons }, (_, i) => <Skeleton key={i} className={cx("chart-skeleton", lead(skeletons, i) && "is-lead")} />)}
+      </div>
+    )
+  else if (nothing)
+    body = <Empty icon="history" title={T("暂无历史数据")} detail={tab === "latency" ? T("此节点没有分配监测任务，或还没有结果。") : T("收到采样后，历史会显示在这里。")} />
+  else if (asTable)
+    body = tab === "latency" ? (
+      <HistoryTable ts={(probes[0]?.rows ?? []).map((r) => r.ts)} charts={probes.map((p) => ({ title: p.name, kind: "ms", series: [{ key: "latency", label: T("延迟"), color: "var(--trend)", values: p.rows.map((r) => r.latency) }] }))} />
+    ) : (
+      <HistoryTable ts={ts} charts={charts} />
+    )
+  else if (tab === "latency")
+    body = (
+      <div className="chart-grid">
+        {probes.map((p, i) => {
+          const rowTs = p.rows.map((r) => r.ts)
+          const raw = p.rows.map((r) => r.latency)
+          // The band stays raw: it exists to show what the smoothed line omits.
+          const values = smooth ? despike(raw) : raw
+          const answered = values.filter((v): v is number => v != null).sort((a, b) => a - b)
+          const med = answered[Math.floor(answered.length / 2)]
+          return (
+            <HistoryChart
+              key={p.id}
+              lead={lead(probes.length, i)}
+              height={lead(probes.length, i) ? 208 : 176}
+              title={p.name}
+              // Unrounded below 1%, since rounding would render 0.28% and 0.00%
+              // as the same figure.
+              summary={T("中位 {ms} ms · 丢包 {loss}%", { ms: med ? Math.round(med) : "—", loss: p.loss.toFixed(p.loss < 1 ? 2 : 1) })}
+              ts={rowTs}
+              kind="ms"
+              step={stepOf(rowTs)}
+              domain={domain}
+              hover={hover != null && rowTs.includes(hover) ? hover : null}
+              onHover={setHover}
+              onZoom={setZoom}
+              loss={p.rows.map((r) => r.loss ?? 0)}
+              series={[{ key: "latency", label: T("延迟"), color: "var(--trend)", values, band: p.rows.map((r) => r.band ?? null), area: false }]}
+            />
+          )
+        })}
+      </div>
+    )
+  else
+    body = (
+      <div className="chart-grid">
+        {charts.map((c, i) => (
+          <HistoryChart
+            key={c.title}
+            lead={lead(charts.length, i)}
+            title={c.title}
+            summary={summary(c)}
+            ts={ts}
+            kind={c.kind}
+            step={step}
+            domain={domain}
+            hover={hover}
+            onHover={setHover}
+            onZoom={setZoom}
+            height={c.wide ? 260 : lead(charts.length, i) ? 208 : 176}
+            max={c.max}
+            series={c.series}
+          />
+        ))}
+      </div>
+    )
+
+  return (
+    <section className="history" aria-labelledby="history-title">
+      <div className="history-bar">
+        <h2 id="history-title" className="section-title">{T("历史")}</h2>
+        <Tabs tabs={tabs} value={tab} onChange={setTab} label={T("历史类型")} idPrefix="history" />
+        <div className="history-tools">
+          <Segmented
+            size="sm"
+            label={T("时间范围")}
+            value={String(hours)}
+            onChange={(v) => setRanges({ ...ranges, [tab]: Number(v) })}
+            options={available.map((r) => ({ value: String(r.hours), label: T(r.label) }))}
+          />
+          {tab === "latency" && <Switch checked={smooth} onChange={setSmooth} label={T("平滑")} />}
+          <Segmented
+            size="sm"
+            label={T("历史显示方式")}
+            value={asTable ? "table" : "chart"}
+            onChange={(v) => setAsTable(v === "table")}
+            options={[{ value: "chart", label: T("图表") }, { value: "table", label: T("表格") }]}
+          />
+        </div>
+      </div>
+      {zoom && (
+        <div className="zoom-note">
+          <Icon name="search" size={14} />
+          <span className="num">{full(zoom[0] * 1000)} – {full(zoom[1] * 1000)}</span>
+          <button type="button" className="link-button" onClick={() => setZoom(null)}>{T("恢复完整范围")}</button>
+        </div>
+      )}
+      {data && error && (
+        <Notice tone="bad" action={<Button size="sm" icon="refresh-cw" busy={busy} onClick={retry}>{T("重试")}</Button>}>
+          {T("历史刷新失败：{error}。当前显示上次成功读取的数据。", { error })}
+        </Notice>
+      )}
+      <div id={`history-panel-${tab}`} role="tabpanel" aria-labelledby={`history-${tab}`} className={cx("history-body", data && busy && "is-loading")}>
+        {body}
+      </div>
+      <p className="history-hint">{T("在图表上拖动可放大，双击恢复。")}</p>
+    </section>
   )
 }
 
 /**
- * Hampel filter (Hampel 1974; MATLAB ships it as `hampel`). A point more than
- * `sigmas` robust deviations from its window's median is replaced by that median,
- * while everything else passes through unchanged, which is what distinguishes it
- * from a rolling median or a moving average.
- *
- * 1.4826 rescales the median absolute deviation to a standard deviation for
- * normally distributed data; 3 sigma is the conventional cut.
+ * One node: vitals now, the billing period, the machine, and its history. The
+ * panel passes `admin` for the long ranges and the fields only it receives.
  */
-function despike(points: PingPoint[], window = 7, sigmas = 3): PingPoint[] {
-  const half = window >> 1
-  // ponytail: recomputes the window per point. A few thousand samples is
-  // negligible; substitute a rolling structure if a chart ever needs 100k.
-  return points.map((p, i) => {
-    // A timeout is a gap rather than a high reading: neither smoothed, nor counted
-    // towards what its neighbours are compared against.
-    if (p.latency === null) return p
-    const near = points
-      .slice(Math.max(0, i - half), i + half + 1)
-      .map((x) => x.latency)
-      .filter((v) => v !== null)
-    const mid = median(near) ?? p.latency
-    const mad = median(near.map((v) => Math.abs(v - mid))) ?? 0
-    const outlier = mad > 0 && Math.abs(p.latency - mid) > sigmas * 1.4826 * mad
-    return outlier ? { ...p, latency: mid } : p
-  })
-}
-
-function Fact({ label, value }: { label: string; value?: string | number | null }) {
-  if (value === null || value === undefined || value === "") return null
+export function NodeDetail({ node, beat, theme, admin = false, onBack, backLabel, backHref = "/", onManage, threshold = 80 }: {
+  node: Node
+  beat?: number
+  theme?: string
+  admin?: boolean
+  onBack: () => void
+  backLabel?: string
+  backHref?: string
+  onManage?: (node: Node) => void
+  threshold?: number
+}) {
+  const f = nodeFacts(node)
+  const at = place(node.country)
+  const down = outage(node)
+  const trend = spark(node.id)
+  const m = f.m
   return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="break-words text-sm">{value}</dd>
-    </div>
-  )
-}
-
-export function NodeDetail({ node, authed = false }: { node: Node; authed?: boolean }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("resources")
-  // Each tab keeps its own range: a 7-day trend and a 1-hour trace answer
-  // different questions.
-  const [ranges, setRanges] = useState({ resources: 24, latency: 6, traffic: 24 })
-  const hours = ranges[tab]
-  const [smooth, setSmooth] = useState(false)
-  // Probes switched off. Hiding a slow one is what makes the fast ones readable,
-  // as the axis rescales to what remains.
-  const [hiddenProbes, setHiddenProbes] = useState<number[]>([])
-  const [data, setData] = useState<{ metrics: Point[]; ping: PingPoint[]; probes: Probes; loss?: Loss } | null>(null)
-  // Retained rather than folded into an empty result: a refused request and an
-  // empty window are different answers, and the hub has reason to refuse this one
-  // -- it caps concurrent history queries over its reader pool. Rendered as an
-  // empty window, a 503 would misdirect the reader.
-  const [failed, setFailed] = useState("")
-  const [refreshing, setRefreshing] = useState(false)
-  const refresh = useRef<() => void>(() => {})
-  // Where the brush has been dragged, so the axis reticks for the visible span
-  // rather than retaining the whole window's ticks. Held as times, not row
-  // indices: the minute refresh moves a rolling window along, which leaves an
-  // index pointing at a different moment -- so the zoom used to be dropped on
-  // every refresh instead. An end of `Infinity` is a span pinned to the newest
-  // sample, which keeps following it.
-  const [zoom, setZoom] = useState<[number, number] | null>(null)
-  // Where the chart begins on screen, so its height can occupy the remainder.
-  const [chartTop, setChartTop] = useState(0)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let loading = false
-    // The charts must not continue drawing the old range while the new one is in
-    // flight.
-    // oxlint-disable-next-line react/set-state-in-effect
-    setData(null)
-    // oxlint-disable-next-line react/set-state-in-effect
-    setZoom(null)
-    // oxlint-disable-next-line react/set-state-in-effect
-    setFailed("")
-    // What this screen can resolve, in device pixels, which is the unit the line
-    // is drawn in: a 1280-wide retina panel has 2560 of them for a day of minutes.
-    // Read here rather than from a ref, since the hub only thins further, an
-    // approximate figure suffices, and the viewport is known before layout. A
-    // rotation keeps whatever it fetched with.
-    //
-    // The tab determines which half is requested; the other accounted for a third
-    // to two thirds of every response and was never drawn.
-    const points = Math.round(globalThis.innerWidth * (globalThis.devicePixelRatio || 1))
-    const series = tab === "latency" ? "ping" : "metrics"
-    const load = async () => {
-      if (loading || controller.signal.aborted) return
-      clearTimeout(timer)
-      loading = true
-      setRefreshing(true)
-      try {
-        const next = await api<{ metrics: Point[]; ping: PingPoint[]; probes: Probes; loss?: Loss }>(
-          `/nodes/${node.id}/metrics?hours=${hours}&points=${points}&series=${series}`,
-          { signal: controller.signal },
-        )
-        if (!controller.signal.aborted) {
-          setData(next)
-          setFailed("")
-        }
-      } catch (e) {
-        if (!controller.signal.aborted) setFailed((e as Error).message || "网络错误")
-      } finally {
-        loading = false
-        if (!controller.signal.aborted) {
-          setRefreshing(false)
-          // History is stored in minute buckets. Schedule after completion so
-          // slow queries never overlap, and failures are retried as well.
-          timer = setTimeout(load, 60_000)
-        }
-      }
-    }
-    refresh.current = () => { void load() }
-    // oxlint-disable-next-line react/set-state-in-effect
-    void load()
-    return () => {
-      controller.abort()
-      clearTimeout(timer)
-      refresh.current = () => {}
-    }
-  }, [node.id, hours, tab])
-
-  const m = node.online ? node.metrics : null
-  // One series per probe that reported, labelled from the names the samples
-  // arrived with. Memoised, as are the two below: the node prop changes every few
-  // seconds as live metrics arrive, and rebuilding the chart's data array on those
-  // renders would reset the brush.
-  const pingSeries = useMemo(
-    () =>
-      [...new Set((data?.ping ?? []).map((p) => p.task_id))]
-        .map((id) => {
-          // Timeouts are retained: dropping them would draw a probe losing half
-          // its packets as an unbroken line, and one that never answered not at
-          // all.
-          const points = (data?.ping ?? []).filter((p) => p.task_id === id)
-          // Taken from the hub rather than summed from the buckets above, each of
-          // which is already a percentage of its own bucket, so averaging them
-          // would report one lost round in thirteen as 50%. Left unrounded, since
-          // `Math.round` would render 0.28% and 0.00% as the same badge, and the
-          // absence of a badge denotes no loss.
-          const loss = data?.loss?.[id] ?? 0
-          return { id, name: data?.probes?.[id] ?? `探测 ${id}`, points, loss }
-        })
-        .filter((s) => s.points.length > 0),
-    [data],
-  )
-
-  // The hub answers in seconds; the time axis requires milliseconds.
-  const metricRows = useMemo(
-    () => withHistoryGaps(data?.metrics ?? []).map((m) => ({ ...m, ts: m.ts * 1_000 })),
-    [data],
-  )
-
-  const shownProbes = useMemo(
-    () => pingSeries.filter((s) => !hiddenProbes.includes(s.id)),
-    [pingSeries, hiddenProbes],
-  )
-  // Keyed on the full list, so a line keeps its shade when others are hidden.
-  const style = (id: number) => PALETTE[pingSeries.findIndex((p) => p.id === id) % PALETTE.length]
-
-  // The hub stamps every sample with its bucket rather than the second the probe
-  // finished, so probes reporting at the bucket's rate share rows instead of each
-  // contributing its own: a day of four probes is 717 rows rather than 2,868. A
-  // slower probe leaves gaps in its own column, which is what `connectNulls`
-  // addresses.
-  //
-  // Every probe and both versions of every sample are held here whether or not
-  // they are on screen: recharts resets the brush when the data array changes
-  // identity, and re-reads a controlled selection only when the index props
-  // change, which they do not. Hiding a probe or enabling despiking therefore
-  // selects a `dataKey` rather than rebuilding the array.
-  const pingRows = useMemo(() => {
-    const rows = new Map<
-      number,
-      { ts: number } & Record<string, number | [number, number] | null>
-    >()
-    for (const s of pingSeries) {
-      const smoothed = despike(s.points)
-      s.points.forEach((p, i) => {
-        const row = rows.get(p.ts) ?? { ts: p.ts * 1_000 }
-        row[`t${s.id}`] = p.latency
-        row[`s${s.id}`] = smoothed[i].latency
-        row[`l${s.id}`] = p.loss ?? 0
-        // Raw, never despiked: the band exists to show what the line omits, and
-        // smoothing it would omit the same points.
-        row[`b${s.id}`] = p.band ?? null
-        rows.set(p.ts, row)
-      })
-    }
-    return [...rows.values()].sort((a, b) => a.ts - b.ts)
-  }, [pingSeries])
-
-  // The zoomed span as indices into the rows now on screen, or null for the
-  // whole window -- including when the window has rolled past the span
-  // entirely, which leaves nothing of it to show.
-  const zoomed = useMemo((): [number, number] | null => {
-    if (!zoom) return null
-    const from = pingRows.findIndex((row) => row.ts >= zoom[0])
-    const to = pingRows.findLastIndex((row) => row.ts <= zoom[1])
-    return from < 0 || to <= from ? null : [from, to]
-  }, [pingRows, zoom])
-
-  // A real time axis rather than the category axis recharts defaults to: on a
-  // category axis ticks are selected by index, so a period the agent was offline
-  // for collapses to nothing.
-  const timeAxis = (rows: { ts: number }[], from = 0, to = rows.length - 1) => ({
-    dataKey: "ts",
-    type: "number" as const,
-    domain: ["dataMin", "dataMax"] as const,
-    // Explicit, or recharts places them at 05:14 and 10:22. Any that still collide
-    // are dropped by `minTickGap`.
-    ticks: rows.length ? timeTicks(rows[from].ts, rows[to].ts) : undefined,
-    tickFormatter: clockFor(hours),
-    minTickGap: hours > 24 ? 72 : 40,
-    ...AXIS,
-  })
-
-  return (
-    <div className="node-detail space-y-4">
-      <div className="flex flex-wrap items-center gap-2"><h2 className="min-w-0 break-words text-xl font-semibold">{node.name}</h2><Region code={node.country}/><span className="ml-auto"><StatusBadge node={node}/></span></div>
-      {/* One list, one separator: a node that has not reported its system
-          would otherwise open the line with a stray "·". */}
-      <p className="text-xs text-muted-foreground">{[osName(node.os), node.arch, `连续在线 ${continuousUptime(node)}`, `本次启动 ${m ? uptime(m.uptime) : "—"}`].filter(Boolean).join(" · ")}</p>
-      <dl className="detail-kpis">{[["CPU",m?.cpu,node.cpu_cores ? `${node.cpu_cores} vCPU`:"待上报"],["RAM",m && m.mem_total>0?percent(m.mem_used,m.mem_total):null,node.mem_total?bytes(node.mem_total):"待上报"],["磁盘",m && m.disk_total>0?percent(m.disk_used,m.disk_total):null,node.disk_total?bytes(node.disk_total):"待上报"]].map(([name,value,foot])=><div key={String(name)}><dt>{name}</dt><dd data-tone={usageTone(value as number|null)} className="usage-number">{value==null?"—":`${Number(value).toFixed(0)}%`}</dd><small>{foot}</small></div>)}<div><dt>本期流量</dt><dd>{bytes(monthUsage(node))}</dd><small>{node.traffic_limit?`/ ${bytes(node.traffic_limit)}`:"不限"}</small></div></dl>
-      <dl className="detail-facts">
-        <Fact label="系统" value={node.os || "待上报"}/><Fact label="架构" value={node.arch || "待上报"}/><Fact label="内核" value={node.kernel || "待上报"}/>
-        <Fact label="可用带宽 · 上传 / 下载" value={`${bandwidth(node.bandwidth_up)} / ${bandwidth(node.bandwidth_down)}`}/><Fact label="Agent 版本" value={node.agent_version || "待上报"}/><Fact label="累计上传 / 下载" value={`${bytes(node.total_tx)} / ${bytes(node.total_rx)}`}/>
-        {authed && <Fact label="地址" value={[node.ipv4,node.ipv6,node.ip].filter(Boolean).join(" / ")}/>}
-      </dl>
-
-      {node.remark && (
-        <p className="bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-words">{node.remark}</p>
-      )}
-
-      <div className="history-controls">
-        <div
-          className="flex gap-1"
-          role="tablist"
-          aria-label="历史类型"
-          // Arrow/Home/End move the selection and carry focus with it, which is
-          // what `role="tab"` already promised. Without it a keyboard user pays
-          // three stops to pass the control and gets no arrow behaviour.
-          onKeyDown={(event) => {
-            const at = TABS.findIndex((t) => t.key === tab)
-            const to =
-              event.key === "ArrowRight" ? at + 1
-              : event.key === "ArrowLeft" ? at - 1
-              : event.key === "Home" ? 0
-              : event.key === "End" ? TABS.length - 1
-              : null
-            if (to === null) return
-            event.preventDefault()
-            const next = TABS[(to + TABS.length) % TABS.length]
-            setTab(next.key)
-            event.currentTarget.querySelector<HTMLElement>(`#tab-${next.key}`)?.focus()
-          }}
-        >
-          {TABS.map((t) => (
-            <Tab
-              key={t.key}
-              id={`tab-${t.key}`}
-              controls={`tabpanel-${t.key}`}
-              active={tab === t.key}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-            </Tab>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">时间范围</span><Select value={String(hours)} onValueChange={v=>setRanges(all=>({...all,[tab]:Number(v)}))}><SelectTrigger className="w-32" aria-label="时间范围"><SelectValue/></SelectTrigger><SelectContent>{(authed?ADMIN_RANGES:RANGES_FOR[tab]).map(r=><SelectItem key={r.hours} value={String(r.hours)}>{r.label}</SelectItem>)}</SelectContent></Select></div>
-          <Button variant="outline" size="sm" disabled={refreshing} onClick={() => refresh.current()}>
-            {refreshing ? "刷新中…" : failed ? "重试" : "刷新"}
-          </Button>
-        </div>
-      </div>
-
-      {failed && (
-        <p className="text-sm text-destructive" role="alert">
-          读取历史数据失败：{failed}{data ? "；当前显示上次成功读取的数据。" : ""}
-        </p>
-      )}
-      {/* The region the tabs switch. It names itself by the tab that selected
-          it, so the two are one control rather than two strings that drift. */}
-      <div id={`tabpanel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
-      {!data ? (
-        failed ? null : <Skeleton className="h-40 w-full" />
-      ) : tab === "latency" ? (
-        pingSeries.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">这段时间没有延迟数据</p>
-        ) : (
-          // An explicit pixel height on the column, so the chart can be `flex-1`
-          // within it while the legend takes what it needs: four probes are one row
-          // of chips on a desktop and two on a phone, so any fixed reservation is
-          // wrong on one of them.
-          <div
-            // `+ scrollY`, because getBoundingClientRect is measured from the
-            // viewport and this callback runs on every render; a live node
-            // re-renders every two seconds, so a scrolled page would re-derive the
-            // height from a top that has moved.
-            ref={(el) => {
-              if (el) setChartTop(el.getBoundingClientRect().top + scrollY)
-            }}
-            style={
-              chartTop
-                ? { height: `calc(100svh - ${Math.round(chartTop)}px - 1rem)` }
-                : undefined
-            }
-            className="flex min-h-72 flex-col gap-3">
-          {tab === "latency" && (
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={smooth}
-                onChange={(e) => setSmooth(e.target.checked)}
-                className="accent-foreground"
-              />
-              削峰
-            </label>
-          )}
-
-            {/* `min-h-0` is what makes `flex-1` a real number rather than the
-                content's own height: ResponsiveContainer reads its parent, and
-                a flex child not told it may shrink reports whatever the SVG
-                last was. The column above has a height in pixels, so this
-                resolves at layout instead of coming back 0. */}
-            <div className="min-h-0 w-full flex-1 text-muted-foreground">
-              {shownProbes.length === 0 ? (
-                <p className="py-8 text-center text-sm">没有选中任何探测</p>
-              ) : (
-                <ResponsiveContainer>
-                  <ComposedChart data={pingRows}>
-                    <CartesianGrid strokeDasharray="2 4" className="stroke-border" vertical={false} />
-                    <XAxis
-                      {...timeAxis(pingRows, zoomed?.[0] ?? 0, zoomed?.[1] ?? pingRows.length - 1)}
-                    />
-                    {/* Not anchored at zero: these lines live in a narrow band
-                        far from it, and zero flattens every wobble. */}
-                    <YAxis unit="ms" width={52} domain={["auto", "auto"]} {...AXIS} />
-                    <Tooltip
-                      labelFormatter={(ts) => new Date(Number(ts)).toLocaleString("zh-CN")}
-                      // The line is drawn from what answered, so without this a
-                      // bucket that lost most of its packets reads as normal.
-                      // `dataKey` is `t7`/`s7`; the loss sits at `l7`.
-                      formatter={(v, name, item) => {
-                        const loss = Number(item?.payload?.[`l${String(item.dataKey).slice(1)}`] ?? 0)
-                        return [`${Number(v).toFixed(1)} ms${loss > 0 ? ` · 丢 ${loss}%` : ""}`, name]
-                      }}
-                      contentStyle={TOOLTIP_STYLE}
-                    />
-                    {/* Behind the line, the range that bucket's answers
-                        spanned -- Smokeping's "smoke". At the day window a
-                        bucket moves 63 ms at the 90th percentile against the
-                        25 ms the trend moves, so a line alone draws the smaller
-                        of the two.
-
-                        Only with one probe on screen: rendered for four, the
-                        bands overlap into a fog and their extremes drag the
-                        axis from 165-385 out to 140-420. */}
-                    {shownProbes.length === 1 &&
-                      shownProbes.map((s) => (
-                        <Area
-                          key={`band${s.id}`}
-                          dataKey={`b${s.id}`}
-                          stroke="none"
-                          fill={style(s.id).stroke}
-                          fillOpacity={0.16}
-                          isAnimationActive={false}
-                          tooltipType="none"
-                          legendType="none"
-                          connectNulls
-                        />
-                      ))}
-                    {shownProbes.map((s) => (
-                      <Line
-                        key={s.id}
-                        dataKey={`${smooth ? "s" : "t"}${s.id}`}
-                        name={s.name}
-                        stroke={style(s.id).stroke}
-                        strokeDasharray={style(s.id).dash}
-                        {...SERIES}
-                        connectNulls
-                      />
-                    ))}
-                    {/* Drag either handle to zoom into a stretch of the trend. */}
-                    <Brush
-                      ariaLabel="调整延迟图表时间范围"
-                      dataKey="ts"
-                      height={22}
-                      travellerWidth={8}
-                      tickFormatter={clockFor(hours)}
-                      fill="var(--popover)"
-                      stroke="var(--primary)"
-                      // Controlled: left to itself the brush snaps back to the
-                      // full range whenever the rows change.
-                      startIndex={zoomed?.[0] ?? 0}
-                      endIndex={zoomed?.[1] ?? pingRows.length - 1}
-                      onChange={(r) => {
-                        const last = pingRows.length - 1
-                        const from = r.startIndex ?? 0
-                        const to = r.endIndex ?? last
-                        if (from <= 0 && to >= last) return setZoom(null)
-                        setZoom([pingRows[from].ts, to >= last ? Infinity : pingRows[to].ts])
-                      }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-
-            {/* Under the chart: what it covers is picked at the top, what is
-                drawn in it is picked here. Recharts paints the brush into the
-                same SVG as the axis, so this is as close beneath as HTML
-                sits. */}
-            {(pingSeries.length > 1 || pingSeries.some((s) => s.loss > 0)) && (
-            <div className="flex flex-wrap items-center justify-center gap-1.5">
-              {pingSeries.map((s) => {
-                const shown = !hiddenProbes.includes(s.id)
-                return (
-                  <button
-                    key={s.id}
-                    aria-pressed={shown}
-                    onClick={() =>
-                      setHiddenProbes((h) => (shown ? [...h, s.id] : h.filter((id) => id !== s.id)))
-                    }
-                    className={`inline-flex min-w-0 max-w-full items-center gap-1.5 border px-2 py-1 text-xs transition-opacity ${
-                      shown ? "" : "opacity-40"
-                    }`}
-                  >
-                    {/* The swatch carries the same shade and dash as the line. */}
-                    <svg width="14" height="6" className="shrink-0" aria-hidden>
-                      <line
-                        x1="0"
-                        y1="3"
-                        x2="14"
-                        y2="3"
-                        stroke={style(s.id).stroke}
-                        strokeDasharray={style(s.id).dash}
-                        strokeWidth="2"
-                      />
-                    </svg>
-                    {s.name}
-                    {/* The line is only what answered, so a probe dropping
-                        half its packets draws like a healthy one. */}
-                    {s.loss > 0 && (
-                      <span className="tabular-nums opacity-60">
-                        丢 {s.loss < 1 ? "<1" : Math.round(s.loss)}%
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-            )}
+    <article className="detail" data-status={f.status}>
+      <a className="back-link" href={backHref} onClick={(e) => { e.preventDefault(); onBack() }}>
+        <Icon name="arrow-left" size={16} />
+        {backLabel ?? T("全部节点")}
+      </a>
+      <header className="detail-head" style={{ viewTransitionName: `node-${node.id}` }}>
+        <div className="detail-id">
+          <div className="detail-where">
+            {node.country ? <Region code={node.country} full /> : <span className="muted">{T("未定位")}</span>}
+            <LocalSky code={node.country} text />
+            {admin && !node.public && <span className="tag"><Icon name="lock" size={12} />{T("私有")}</span>}
           </div>
-        )
-      ) : <div className="resource-panels">{resourcePlots(node).filter(plot=>tab!=="traffic" || plot.title==="上传 / 下载").map(plot=><div key={plot.title} className="resource-panel"><Panel title={<span className="flex items-center justify-between gap-2"><span className="flex items-baseline gap-2">{plot.title}{"usage" in plot && <span className="usage-number" data-tone={usageTone(plot.usage)}>{plot.usage==null?"—":`${plot.usage.toFixed(0)}%`}</span>}</span><span className="text-xs text-muted-foreground">{ADMIN_RANGES.find(r=>r.hours===hours)?.label}</span></span>}>
-        {metricRows.length===0 ? <p className="py-8 text-center text-sm">这段时间没有历史数据</p> : <ResponsiveContainer><LineChart data={metricRows}><CartesianGrid strokeDasharray="2 4" className="stroke-border" vertical={false}/><XAxis {...timeAxis(metricRows)}/><YAxis domain={[plot.domain[0] as number, plot.domain[1] as number | "auto"]} tickFormatter={plot.bytes?axisBytes:undefined} width={Y_WIDTH} {...AXIS}/><Tooltip labelFormatter={ts=>new Date(Number(ts)).toLocaleString("zh-CN")} formatter={v=>plot.bytes?bytes(Number(v)):String(v)} contentStyle={TOOLTIP_STYLE}/>{plot.series.map((series,i)=>series.disabled ? null : <Line key={series.key} dataKey={series.key} name={series.label} stroke={PALETTE[i].stroke} strokeDasharray={PALETTE[i].dash} connectNulls={false} {...SERIES}/>)}</LineChart></ResponsiveContainer>}
-      </Panel><ul className="chart-series">{plot.series.map((series,i)=><li key={series.key}><span style={{borderTopColor:PALETTE[i].stroke,borderTopStyle:i===1?"dashed":i===2?"dotted":"solid"}} aria-hidden="true"/>{series.label}<b>{series.current==null?"未上报":series.disabled?"未启用":plot.bytes?`${bytes(series.current)}${plot.title==="上传 / 下载"?"/s":""}`:`${series.current}${plot.title==="CPU"?"%":""}`}</b></li>)}</ul>
-      {plot.title==="RAM"&&<p className="px-4 pb-4 text-xs text-muted-foreground">Swapfile {m?.swapfile_used==null?"未上报":bytes(m.swapfile_used)} · 分区 {m?.swap_partition_used==null?"未上报":bytes(m.swap_partition_used)}</p>}
-      </div>)}</div>}
+          <h1 className="detail-name">{node.name}</h1>
+          <div className="detail-line">
+            <StatusBadge node={node} beat={beat} />
+            <span className="detail-meta">{systemLine(node)}</span>
+          </div>
+          <p className="detail-uptime num">
+            <span>{T("连续在线")} <b>{continuousUptime(node)}</b></span>
+            <span>{T("本次启动")} <b>{m ? uptime(m.uptime) : "—"}</b></span>
+            {!node.online && node.last_seen > 0 && <span>{T("最后上报")} <b>{full(node.last_seen * 1000)}</b></span>}
+          </p>
+          {onManage && (
+            <div className="detail-actions">
+              <Button kind="primary" icon="sliders-horizontal" onClick={() => onManage(node)}>{T("管理节点")}</Button>
+            </div>
+          )}
+        </div>
+        {at && <Globe variant="detail" nodes={[node]} lon={at[0]} lat={at[1]} size={216} theme={theme} beat={beat} />}
+      </header>
+      {down && <Notice tone={down.tone} icon={down.tone === "bad" ? "wifi-off" : "loader-circle"}>{T("{text}。历史数据仍可查看。", { text: down.text })}</Notice>}
+      {f.status === "never" && <Notice icon="clock">{T("此节点还没有上报。安装 Agent 后，实时数据和历史会显示在这里。")}</Notice>}
+      <div className="vitals">
+        <VitalTile icon="cpu" label="CPU" value={f.cpu} unit="%" tone={tone(f.cpu)} sub={m ? T("负载 {load}", { load: m.load.map((v) => v.toFixed(2)).join(" · ") }) : node.cpu_cores ? `${node.cpu_cores} vCPU` : T("待上报")} trend={trend} get={(p) => p.cpu} max={100} beat={beat} color="var(--trend)" />
+        <VitalTile icon="memory-stick" label={T("内存")} value={f.mem} unit="%" tone={tone(f.mem)} sub={m ? `${pair(m.mem_used, m.mem_total)}${(m.zram_total ?? 0) > 0 ? ` · ZRAM ${bytes(m.zram_used ?? 0)}` : ""}${m.swap_total > 0 ? ` · Swap ${bytes(m.swap_used)}` : ""}` : T("待上报")} trend={trend} get={(p) => p.mem} max={100} beat={beat} color="var(--trend)" />
+        <VitalTile icon="hard-drive" label={T("磁盘")} value={f.disk} unit="%" tone={tone(f.disk)} sub={m ? pair(m.disk_used, m.disk_total) : T("待上报")} />
+        <VitalTile icon="arrow-down-up" label={T("网络")} value={m ? <span className="vital-rates"><FlowValue dir="down" value={m.net_rx} /><FlowValue dir="up" value={m.net_tx} /></span> : null} sub={T("带宽 {bandwidth}", { bandwidth: bandwidth(node.bandwidth_down) })} trend={trend} get={(p) => p.rx} beat={beat} color="var(--flow-down)" />
+        <VitalTile icon="network" label={T("连接")} value={m ? <span className="vital-pair"><span>TCP <b>{m.tcp}</b></span><span>UDP <b>{m.udp}</b></span></span> : null} sub={T("当前连接数")} />
+        <VitalTile icon="activity" label={T("进程")} value={m ? m.procs : null} sub={T("当前进程数")} />
       </div>
-    </div>
+      <div className="panels">
+        <TrafficPanel node={node} threshold={threshold} />
+        <BillingPanel node={node} />
+        <SystemPanel node={node} admin={admin} />
+      </div>
+      <HistorySection key={node.id} node={node} admin={admin} />
+    </article>
   )
-}
-
-function bandwidth(value?:number){return !value?"未设置":value>=1000?`${value/1000} Gbps`:`${value} Mbps`}
-function resourcePlots(node:Node){
-  const m=node.online?node.metrics:null
-  const series=(key:string,label:string,current:number|null|undefined,disabled=false)=>({key,label,current,disabled})
-  return [
-    {title:"CPU",usage:m?.cpu,bytes:false,domain:[0,100],series:[series("cpu","CPU",m?.cpu)]},
-    {title:"RAM",usage:m && m.mem_total>0?percent(m.mem_used,m.mem_total):null,bytes:true,domain:[0,Math.max(node.mem_total,m?.swap_disk_total??0,1)],series:[series("mem_used","RAM",m?.mem_used),series("zram_used","ZRAM",m?.zram_used,m?.zram_devices===0),series("swap_disk_used","Swap",m?.swap_disk_used,m?.swap_disk_total===0)]},
-    {title:"磁盘",usage:m && m.disk_total>0?percent(m.disk_used,m.disk_total):null,bytes:true,domain:[0,Math.max(node.disk_total,1)],series:[series("disk_used","磁盘用量",m?.disk_used)]},
-    {title:"进程数",bytes:false,domain:[0,"auto"],series:[series("procs","进程",m?.procs)]},
-    {title:"上传 / 下载",bytes:true,domain:[0,"auto"],series:[series("net_tx","上传",m?.net_tx),series("net_rx","下载",m?.net_rx)]},
-    {title:"TCP / UDP 连接",bytes:false,domain:[0,"auto"],series:[series("tcp","TCP",m?.tcp),series("udp","UDP",m?.udp)]},
-  ]
 }

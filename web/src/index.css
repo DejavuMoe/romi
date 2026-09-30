@@ -1,24 +1,13 @@
-/* Scan this app's own source and nothing else. Tailwind's automatic detection
-   walks the whole repository, turning a word in a Rust file or a document into a
-   utility class in the shipped stylesheet: `.filter` and `.transform` were
-   here because api.rs calls `.filter(...)`. Worse than the wasted bytes, it
-   made the build depend on files that have nothing to do with it -- adding an
-   unrelated workflow changed the CSS, and with it the content hash of every
-   asset. */
+/* Tailwind supplies the reset and the token mapping the shared stylesheet
+   declares, and no utilities: this page is styled by the class names in
+   styles/, and scanning it for utilities turns those names and words in its
+   code into rules of their own -- `.ring` drew a box around the billing ring,
+   and `.filter` and `.transform` came from method calls. Automatic detection
+   would also walk the whole repository, tying the stylesheet's content hash to
+   unrelated files. */
 @import "tailwindcss" source(none);
-@source "../index.html";
-@source "../src";
-/* The detail page's range picker is the admin app's Select primitive. With only
-   this app's own source scanned, the classes that component carries -- its
-   dropdown layer, its trigger sizing -- are compiled into the admin stylesheet
-   and nowhere else, so the control renders unstyled here. The admin build states
-   the mirror of this for the components it borrows back. */
-@source "../../admin/src/components/ui";
-@import "tw-animate-css";
 
 @import "../../styles/theme.css";
-/* The detail page still uses the earlier layout until it moves to public.css. */
-@import "../../styles/layout.css";
 @import "../../styles/controls.css";
 @import "../../styles/public.css";
 

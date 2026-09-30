@@ -528,6 +528,8 @@ export const en: Record<string, Entry> = {
   "恢复完整范围": "Reset range",
   "历史加载失败": "Couldn't load history",
   "当前历史不可用，请稍后重试。": "History isn't available right now. Try again later.",
+  "历史刷新失败：{error}。当前显示上次成功读取的数据。": "History couldn't be refreshed: {error}. Showing the last data read.",
+  "探测 {id}": "Probe {id}",
   "暂无历史数据": "No history yet",
   "此节点没有分配监测任务，或还没有结果。": "This node has no monitors, or no results yet.",
   "收到采样后，历史会显示在这里。": "History appears here once samples arrive.",

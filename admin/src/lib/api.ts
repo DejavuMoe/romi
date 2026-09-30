@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 
 import type { Node } from "../../../shared/nodes.ts"
 import { api, ApiError } from "../../../shared/http.ts"
+import { record, safeNodes } from "../../../web/src/lib/api.ts"
 export type { Node, Metrics } from "../../../shared/nodes.ts"
 export { api, ApiError } from "../../../shared/http.ts"
 
@@ -133,12 +134,21 @@ export function useNodes() {
   const [admin, setAdmin] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let socket: WebSocket | null = null
     let poll: ReturnType<typeof setInterval> | null = null
     let retry: ReturnType<typeof setTimeout> | null = null
     let closed = false
+    const receive = (frame: { nodes: Node[]; admin: boolean }) => {
+      const list = safeNodes(frame.nodes)
+      record(list)
+      setNodes(list)
+      setAdmin(frame.admin)
+      setError(null)
+      setTick((n) => n + 1)
+    }
 
     // A 401 is an answer, not an outage. Signed out with the public page off --
     // which is the default, and therefore the state the login screen is normally
@@ -161,11 +171,7 @@ export function useNodes() {
 
     const fetchOnce = () =>
       api<{ nodes: Node[]; admin: boolean }>("/nodes")
-        .then((d) => {
-          setNodes(d.nodes)
-          setAdmin(d.admin)
-          setError(null)
-        })
+        .then(receive)
         .catch((e: Error) => {
           setError(e.message)
           // With the public page switched off, a revoked session receives a 401
@@ -192,9 +198,7 @@ export function useNodes() {
       }
       socket.onmessage = (event) => {
         const frame = JSON.parse(event.data)
-        setNodes(frame.nodes)
-        setAdmin(frame.admin)
-        setError(null)
+        receive(frame)
         // The stream has returned; the poll was only covering for it.
         if (poll) {
           clearInterval(poll)
@@ -215,7 +219,7 @@ export function useNodes() {
 
   // `refresh` is also how the panel resumes after signing in: the effect reruns,
   // which is what restarts a stream stopped by the 401 above.
-  return { nodes, admin, error, refresh: () => setReload((n) => n + 1) }
+  return { nodes, admin, error, tick, connected: nodes !== null && !error, refresh: () => setReload((n) => n + 1) }
 }
 
 

@@ -33,8 +33,8 @@ v15 的共享规则（`styles/theme.css`、`styles/controls.css`、`styles/publi
 权限和分发前置条件以 Hub 为准。回归入口：
 
 - `e2e/approved-v15.spec.mjs`：状态页在中英文、明暗主题下加载，英文页不留中文，不出现后台数据；320–1440 不溢出；手机控件 ≥44px；字号与圆角在刻度上，标记与文字居中；地球绘制、转动，减少动画时静止；关闭页；跳转链接、焦点与搜索面板；状态筛选与搜索；
-- `e2e/approved-v14.spec.mjs`：保留的 v14 详情与后台回归，详情选择器需随新组件更新；后台 320–1440 不溢出、手机控件 ≥44px、后台列表首行对齐、2px 焦点、弹窗标题栏与手机贴底面板；
-- `e2e/navigation.spec.mjs`：登录后回到原路径、只有密码登录、会话列表重试、离开数据页中止恢复、延迟图缩放跨刷新保持；
+- `e2e/approved-v14.spec.mjs`：保留的后台回归与当前详情的尺寸检查；后台 320–1440 不溢出、手机控件 ≥44px、后台列表首行对齐、2px 焦点、弹窗标题栏与手机贴底面板；
+- `e2e/navigation.spec.mjs`：登录后回到原路径、只有密码登录、会话列表重试、离开数据页中止恢复、SVG 延迟图拖选缩放跨刷新保持、后台推送填充详情实时曲线；
 - `e2e/hardening.spec.mjs`：安全响应头与缓存、登录拒绝后停止轮询、公开范围选择器样式、单地址实时连接上限；
 - `e2e/approved-v12.spec.mjs`、`e2e/approved-v13.spec.mjs`、`e2e/public.spec.mjs`、`e2e/admin.spec.mjs`、`e2e/visual-contract.spec.mjs`；
 - `shared/i18n.test.ts`：每个以字符串字面量传给 `T()` 的中文文本都有英文条目，占位符一致。

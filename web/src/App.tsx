@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { T } from "../../shared/i18n.ts"
 import { FleetView } from "@/components/Fleet"
 import { Globe } from "@/components/Globe"
+import { NodeDetail } from "@/components/NodeDetail"
 import { nodeItems, Palette } from "@/components/Palette"
 import { Footer, LangButton, ThemeButton } from "@/components/Shell"
 import { Brand, fleetTone, Mark, useFavicon } from "@/components/ui/brand"
@@ -13,11 +14,6 @@ import { api, useNodes, type Node } from "@/lib/api"
 import { transition, useHotkey, useLocale, useTheme } from "@/lib/hooks"
 
 type Me = { authed: boolean; site_name: string; public_page: boolean; public_default_view: "cards" | "list" }
-
-// Split out because the history charts are most of this bundle and the list
-// page draws none; the rest is fetched immediately after the list paints.
-const loadDetail = () => import("@/components/NodeDetail").then((m) => ({ default: m.NodeDetail }))
-const NodeDetail = lazy(loadDetail)
 
 // `/node/{id}` is a real page: it survives a reload, can be linked to, and back
 // leaves the detail view rather than the site. The hub serves index.html for any
@@ -68,11 +64,6 @@ export default function App() {
 
   useEffect(() => {
     loadMe()
-    // Warmed here rather than left to Suspense, which requests the chunk only
-    // once a render reaches the detail view, itself waiting on /me. Without this
-    // the split trades its first paint for a full-page skeleton over the first
-    // node opened.
-    void loadDetail()
   }, [loadMe])
 
   // The status page was closed while this tab was open. `me` holds whatever it
@@ -124,15 +115,9 @@ export default function App() {
     content = !nodes ? (
       <Skeleton className="hero-skeleton" label={T("正在加载")} />
     ) : selected ? (
-      <div className="detail">
-        <a className="back-link" href="/" onClick={(e) => { e.preventDefault(); go(null) }}>
-          <Icon name="arrow-left" />
-          {T("全部节点")}
-        </a>
-        <Suspense fallback={<Skeleton className="hero-skeleton" label={T("正在加载")} />}>
-          <NodeDetail node={selected} authed={me.authed} />
-        </Suspense>
-      </div>
+      // Signed in, the page shows what the panel's detail shows: the long
+      // ranges and the addresses, which the hub sends only to a session.
+      <NodeDetail node={selected} beat={tick} theme={theme} admin={me.authed} onBack={() => go(null)} />
     ) : (
       <Empty icon="map-pin" title={T("节点不存在")} detail={T("它可能未公开或已被删除。")} action={T("返回全部节点")} onAction={() => go(null)} />
     )

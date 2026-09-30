@@ -18,21 +18,22 @@ export function safeNodes(nodes: Node[]): Node[] {
 }
 
 /** One live sample of a node, as the hub pushed it. */
-export type Spark = { t: number; cpu: number | null; rx: number | null; tx: number | null }
+export type Spark = { t: number; cpu: number | null; mem: number | null; rx: number | null; tx: number | null }
 
 // The last three minutes of pushes per node, newest last, for the traces on the
 // cards and the fleet band. Kept outside React: every render reads the same
 // buffers, and a remount does not lose them.
 const SPARK = 90
 const sparks = new Map<number, Spark[]>()
-const EMPTY: Spark[] = Array.from({ length: SPARK }, () => ({ t: 0, cpu: null, rx: null, tx: null }))
+const EMPTY: Spark[] = Array.from({ length: SPARK }, () => ({ t: 0, cpu: null, mem: null, rx: null, tx: null }))
 
-function record(list: Node[]) {
+export function record(list: Node[]) {
   const t = Date.now() / 1000
   for (const n of list) {
     const m = n.online ? n.metrics : null
     const buffer = sparks.get(n.id) ?? EMPTY.slice()
-    buffer.push({ t, cpu: m?.cpu ?? null, rx: m?.net_rx ?? null, tx: m?.net_tx ?? null })
+    const mem = m && m.mem_total > 0 ? (m.mem_used / m.mem_total) * 100 : null
+    buffer.push({ t, cpu: m?.cpu ?? null, mem, rx: m?.net_rx ?? null, tx: m?.net_tx ?? null })
     sparks.set(n.id, buffer.slice(-SPARK))
   }
 }

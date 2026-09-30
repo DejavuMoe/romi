@@ -110,12 +110,13 @@ test('leaving the data section stops an unfinished restore', async ({ page }) =>
 test('a zoomed latency chart stays zoomed across a refresh', async ({ page, hub }) => {
   const id = await hub.node('缩放节点', true)
   await signIn(page)
+  await page.clock.install()
 
   // Synthetic history, because nothing in a test Hub produces probe samples. Each
   // answer rolls the window one minute forward, as the minute refresh does.
   let calls = 0
   await page.route(`**/api/nodes/${id}/metrics?**`, async (route) => {
-    const end = 1_700_000_000 + calls * 60
+    const end = Math.floor(Date.now() / 60_000) * 60 + calls * 60
     calls += 1
     const ping = Array.from({ length: 120 }, (_, i) => ({
       task_id: 1, ts: end - (119 - i) * 60, latency: 20 + (i % 7),
@@ -125,25 +126,47 @@ test('a zoomed latency chart stays zoomed across a refresh', async ({ page, hub 
 
   await page.goto(`/admin/node/${id}`)
   await page.getByRole('tab', { name: '监测' }).click()
-  const start = page.locator('.recharts-brush-traveller').first()
-  await expect(start).toBeVisible()
-  const box = await page.locator('.recharts-brush').boundingBox()
-
-  // Move the left handle 40 rows in, by keyboard: the handles take focus and
-  // step one row per arrow, which is also how a keyboard user zooms.
-  await start.focus()
-  for (let i = 0; i < 40; i += 1) await page.keyboard.press('ArrowRight')
-  const zoomed = (await start.boundingBox()).x
-  expect(zoomed - box.x, 'the handle moved in').toBeGreaterThan(box.width / 4)
+  const plot = page.locator('.chart-plot').first()
+  await expect(plot).toBeVisible()
+  await expect(plot.locator('.chart-svg')).toBeVisible()
+  await plot.scrollIntoViewIfNeeded()
+  const box = await plot.boundingBox()
+  await page.mouse.move(box.x + box.width * 0.3, box.y + 50)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width * 0.7, box.y + 50, { steps: 8 })
+  await page.mouse.up()
+  const note = page.locator('.zoom-note')
+  await expect(note).toBeVisible()
+  const zoomed = await note.locator('.num').textContent()
 
   // Refresh with a window that has rolled forward.
   const served = calls
-  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await page.clock.fastForward(61_000)
   await expect.poll(() => calls).toBe(served + 1)
-  await expect(page.getByRole('button', { name: '刷新', exact: true })).toBeEnabled()
+  await expect(note.locator('.num')).toHaveText(zoomed)
+})
 
-  // Still zoomed: the handle did not snap back to the left edge. It may move by
-  // the minute the window rolled, which is one step in 120.
-  const after = (await start.boundingBox()).x
-  expect(Math.abs(after - zoomed), 'the zoom survived the refresh').toBeLessThan(box.width / 20)
+test('the admin detail records live pushes into its three sparklines', async ({ page, hub }) => {
+  const id = await hub.node('实时详情', true)
+  await signIn(page)
+  const m = { uptime: 100, cpu: 25, load: [0.1, 0.2, 0.3], mem_total: 1024, mem_used: 512,
+    swap_total: 0, swap_used: 0, disk_total: 2048, disk_used: 1024, net_rx: 10, net_tx: 20,
+    total_rx: 100, total_tx: 200, month_rx: 50, month_tx: 100, tcp: 3, udp: 4, procs: 20 }
+  await page.route('**/api/nodes', async route => {
+    const response = await route.fetch()
+    const body = await response.json()
+    await route.fulfill({ response, json: { ...body, nodes: body.nodes.map(n => ({ ...n, online: true, metrics: m })) } })
+  })
+  await page.routeWebSocket('**/api/ws', ws => {
+    const server = ws.connectToServer()
+    let tick = 0
+    server.onMessage(message => {
+      const body = JSON.parse(message)
+      tick++
+      ws.send(JSON.stringify({ ...body, nodes: body.nodes.map(n => ({ ...n, online: true, metrics: { ...m, cpu: m.cpu + tick } })) }))
+    })
+  })
+  await page.goto(`/admin/node/${id}`)
+  await expect(page.locator('.vitals .spark .spark-line')).toHaveCount(3)
+  await expect(page.locator('.vitals .spark.is-idle')).toHaveCount(0)
 })

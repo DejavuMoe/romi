@@ -271,7 +271,7 @@ test('keyboard: skip link, visible focus and the search palette', async ({ page,
   await expect(palette.getByRole('option')).toHaveCount(1)
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/node\/\d+$/)
-  await expect(page.getByRole('heading', { name: NAMES[1], level: 2 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: NAMES[1], level: 1 })).toBeVisible()
 })
 
 test('status tiles filter the fleet and search narrows it', async ({ page, hub }) => {
