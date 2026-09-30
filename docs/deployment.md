@@ -1,15 +1,15 @@
-# romi 原生与 Agent Docker 部署
+# 部署与升级
 
 Hub 与 Agent 支持 Debian（systemd）与 Alpine（OpenRC），安装器支持 `--init auto|systemd|openrc`；
 平台矩阵与工件见[发布](release.md)。Hub/Agent 都以独立非 root 账号运行。Hub 仅监听回环，外部 HTTPS 由反向代理终止。
 原生安装需要 shell、curl、sha256sum 和系统账号管理工具；GNU Hub 需要系统 libstdc++。
 Agent Docker 镜像见下文「Agent Docker」一节；不提供 Hub Docker 交付，也不提供从可变 master 源码执行 `curl | sh` 的安装路径。
 
-## 信任边界
+## 安装来源与校验
 
-有两种不同的信任层级，不要混淆。
+Hub 从发布包安装，Agent 从你的 Hub 安装。两者使用不同的来源校验方式。
 
-### 1. 更安全的发行安装
+### 安装 Hub
 
 1. 从 GitHub Release 下载不可变的 release 资产；
 2. 按[发布](release.md)验证 attestation 与 `SHA256SUMS`；
@@ -21,7 +21,7 @@ Agent Docker 镜像见下文「Agent Docker」一节；不提供 Hub Docker 交�
 Hub 默认监听 `127.0.0.1:28080`，可用 `--port` 修改（Nginx 的 `proxy_pass` 需同步）。
 `--no-start` 不启动 Hub；在已运行的系统上，安装器仍会先停止 Hub 再切换 `current`，之后需手动 `systemctl start romi-hub` 或 `rc-service romi-hub start`。
 
-### 2. Hub 到节点的 Agent provisioning
+### 接入 Agent
 
 Hub 安装成功并配置了内置 Agent 分发后：
 
@@ -71,7 +71,7 @@ Hub 安装成功并配置了内置 Agent 分发后：
 /etc/systemd/system/romi-hub.service 或 /etc/init.d/romi-hub
 ```
 
-关键不变量：
+目录用途：
 
 - 二进制和版本元数据在 `/opt/romi/<组件>/releases/<version>/`，只读、root 控制；
 - Hub 和 Agent 各有独立的 `releases/` 与 `current`，因此同一台机器可以同时装两者，各自升级互不影响；
@@ -289,7 +289,7 @@ ROMI_INTERVAL=3
 
 host network/PID/UTS 与 `/:/host:ro` 用于读取宿主机真实指标。容器为 UID 65534，根文件系统只读，
 capabilities 全部移除，no-new-privileges 开启，默认内存限制 64 MiB、PID 限制 32；
-不需要 privileged 或 Docker socket。移除这些宿主视图会改变监控含义，不能声称仍是完整宿主指标。
+不需要 privileged 或 Docker socket。移除这些宿主视图后，采集结果不再代表完整的宿主机指标。
 Docker Desktop 的宿主视图是它的 Linux VM，不代表 Windows/macOS 的物理宿主。
 
 ## 资源
@@ -301,3 +301,25 @@ Docker Desktop 的宿主视图是它的 Linux VM，不代表 Windows/macOS 的�
 ### 国家/地区数据库
 
 后台设置页可保存 HTTPS Country MMDB 直链并更新、取消或重试；仅接受 Country 类型，下载上限 32 MiB、总超时 120 秒，格式完整验证后原子替换，失败保留旧库。查询完全本地进行。
+
+## 故障排查
+
+先区分 Hub 服务、反向代理和 Agent 三处连接，再查看对应日志。
+
+| 现象 | 检查方向 |
+| --- | --- |
+| 域名返回 502 | 在 Hub 主机请求 `curl -fsS http://127.0.0.1:28080/healthz`；使用自定义端口时同步修改命令与代理配置 |
+| 面板能打开，但无法添加节点 | 检查浏览器地址是否为 HTTPS 域名，以及代理是否保留 `Host`、传递 `X-Forwarded-Proto` |
+| 安装命令不可用或返回 503 | 检查 Hub 启动参数中的 `--distribution-dir`；分发文件必须与 Hub 版本匹配 |
+| Agent 一直未连接 | 检查节点到 Hub 的网络、域名解析、公共 CA 证书、令牌和 WebSocket 代理配置 |
+| WebSocket 频繁断开 | 检查代理的升级头与读超时，确认 Hub 或 Agent 服务没有反复重启 |
+| 恢复被拒绝 | 按错误检查备份格式、版本、大小和磁盘空间，限制见[存储](storage.md#备份格式与限制) |
+
+systemd 部署可查看最近的服务日志：
+
+```sh
+sudo journalctl -u romi-hub -n 100 --no-pager
+sudo journalctl -u romi-agent -n 100 --no-pager
+```
+
+OpenRC 使用 `rc-service romi-hub status` / `rc-service romi-agent status` 检查服务，日志位置见 [Alpine / OpenRC](#alpine-openrc)。反馈问题前去掉日志中的令牌、注册 key 和其他凭据。

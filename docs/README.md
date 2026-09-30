@@ -1,24 +1,31 @@
-# 文档导航
+# 文档
 
-按任务选择入口，不需要顺序阅读整个目录。产品事实、执行步骤和验证结果分别维护。
-本目录也是 VitePress 站点的内容源；在仓库根运行 `pnpm docs:dev` 可本地阅读，不另存一份正文。
+第一次使用从[快速开始](quick-start.md)安装 Hub 和 Agent，之后按[日常使用](guide.md)配置公开页、监测与通知。
 
-| 要解决的问题 | 推荐入口 |
+## 使用与运维
+
+| 文档 | 内容 |
 | --- | --- |
-| 第一次安装与接入 | [快速开始](quick-start.md) |
-| 产品包含什么，什么不做 | [需求](requirements.md) |
-| 一篇读懂现有功能、界面、业务流和数据库 | [代码导览](codebase-guide.md) |
-| 并发和资源边界 | [架构](architecture.md) |
-| 字段、权限、计费和状态语义 | [领域规则](domain.md) |
-| 数据库、历史、备份和迁移 | [存储](storage.md) |
-| 界面能力与实现映射 | [UI 能力](ui/capabilities.md)、[产品约束](product/constraints.md)、[界面实现](ui/implementation.md) |
-| 如何分阶段实施和提交 | [工程流程](engineering.md) |
-| 改动后跑什么检查 | [测试](testing.md) |
-| 如何安装、升级和恢复 | [部署](deployment.md) |
-| 如何交付同一份已验收工件 | [发布](release.md)、[本地快照](local-release.md) |
-| 安全机制与边界、报告漏洞 | [安全](security-baseline.md)、[SECURITY.md](https://github.com/DejavuMoe/romi/blob/master/SECURITY.md) |
-| 第三方许可 | [许可](legal.md)、[THIRD_PARTY_LICENSES.txt](https://github.com/DejavuMoe/romi/blob/master/THIRD_PARTY_LICENSES.txt) |
-| 如何做容量实验 | [基准方法](bench.md) |
-| 验证记录与适用范围 | [验收状态](readiness.md) |
+| [快速开始](quick-start.md) | 安装 Hub、登录、接入第一台主机 |
+| [日常使用](guide.md) | 查看节点、流量与历史，配置监测和通知，开放状态页 |
+| [部署与升级](deployment.md) | HTTPS 代理、系统服务、Agent Docker、升级与故障排查 |
+| [功能范围](requirements.md) | 支持的指标、平台与功能限制 |
+| [节点、流量与告警](domain.md) | 在线状态、账期、累计量与提醒规则 |
+| [存储、备份与恢复](storage.md) | 历史保留、数据库参数、备份限制和恢复流程 |
+| [安全](security-baseline.md) | 身份验证、匿名访问、凭据与传输 |
 
-代码和测试是行为依据，当前已批准设计在 `designs/romi-next/`。
+## 开发与维护
+
+| 文档 | 内容 |
+| --- | --- |
+| [开发指南](engineering.md) | 本地环境、开发服务器与贡献约定 |
+| [测试](testing.md) | 按改动范围选择检查，运行浏览器与集成测试 |
+| [代码导览](codebase-guide.md) | 模块、业务流程、接口与数据库表 |
+| [运行架构](architecture.md) | 请求、连接、队列与并发限制 |
+| [界面能力](ui/capabilities.md) · [界面约束](product/constraints.md) · [界面实现](ui/implementation.md) | 页面行为、交互规则与源码位置 |
+| [性能测试](bench.md) | 负载生成、容量测量与对照实验 |
+| [发布流程](release.md) · [本地快照](local-release.md) | 构建、验证与打包 |
+| [验证记录](readiness.md) | 特定版本执行过的检查与未覆盖范围 |
+| [许可与标志](legal.md) | MIT、第三方组件与 romi 标志 |
+
+本目录也是 VitePress 站点的内容源。在仓库根运行 `pnpm docs:dev`，打开 `http://127.0.0.1:4312/`；修改后运行 `make check-docs`。

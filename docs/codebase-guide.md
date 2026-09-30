@@ -1,29 +1,12 @@
-# romi 代码导览：功能、交互、业务与数据
+# 代码导览
 
-本文按当前生产源码描述 romi 的行为，供功能和架构审查。范围是 Hub、Agent、两套内嵌前端及 DuckDB；界面意图以 `designs/romi-next/` 为准，运行行为以代码和测试为准。并发上限见[架构](architecture.md)，存储细节见[存储](storage.md)，领域规则见[领域规则](domain.md)，权限边界见[安全边界](security-baseline.md)。
+本文介绍 Hub、Agent、前端和数据库之间的数据流，并列出主要源码入口。安装与日常操作见[快速开始](quick-start.md)和[使用指南](guide.md)；并发上限、存储实现与字段含义分别见[架构](architecture.md)、[存储](storage.md)和[领域规则](domain.md)。
 
 ## 1. 系统边界与运行形态
 
 romi 采用一个 Rust Hub 管理多个 Linux Agent。Hub 内嵌管理后台、公开状态页和 DuckDB；Agent 读取本机事实与指标，并执行 Hub 指派的 TCP 连接探测。非目标见[需求](requirements.md)。默认监听 `127.0.0.1:28080`，对外访问由 HTTPS 反向代理接入。
 
-```mermaid
-flowchart LR
-  Host[Linux 主机 / Agent] -->|Bearer + WebSocket<br/>hello、report、ping 结果| Ingest[Hub Agent 会话]
-  Ingest --> Live[内存中的节点实时状态]
-  Ingest -->|等待提交结果| Writer[有界单 writer]
-  Writer --> DB[(DuckDB)]
-  DB --> Reader[短读 / 有界分析 reader]
-  Live --> Snapshot[公开 / 管理快照]
-  Reader --> Snapshot
-  Snapshot -->|2 秒 WebSocket<br/>失败时 5 秒轮询| UI[公开页 / 管理后台]
-  Reader -->|历史、设置、备份| UI
-  DB --> Alerts[告警扫描与队列]
-  Live --> Alerts
-  Alerts --> TG[Telegram / Webhook]
-  UI -->|管理请求| API[Hub HTTP API]
-  API --> Writer
-  API -->|探测任务| Ingest
-```
+Agent 通过 WebSocket 上报；Hub 将实时状态保存在内存，持久数据交给 DuckDB 写入线程。浏览器订阅实时快照，历史与配置通过 HTTP 查询。通知模块读取节点状态并发送到 Telegram 或 Webhook。
 
 | 代码位置 | 主要责任 |
 | --- | --- |
@@ -37,46 +20,19 @@ flowchart LR
 
 Hub 的 `App` 持有数据库、连接中的 Agent、按公开/管理受众分开的快照、查询准入、通知队列与 GeoLite 状态。`agents` 和浏览器快照是进程内状态；节点配置、历史、累计流量与设置在 DuckDB 中。Hub 重启后 Agent 重连并重新提供实时数据，已提交的累计量不依赖内存快照。
 
-## 2. 现有功能与界面交互
+## 2. 前端与浏览器数据流
 
-页面的操作清单归[界面能力](ui/capabilities.md)，v15 状态页的组成与令牌归[界面实现](ui/implementation.md)；本节说明各页面的行为要点。
-
-### 2.1 公开状态页
-
-公开页入口为 `/`，节点详情为 `/node/{id}`，实现于 `web/src/App.tsx` 和 `web/src/components/`。匿名用户访问关闭的页面时看到登录提示和前往 `/admin/` 的入口，不显示任何节点。公开时只返回 `node.public = true` 的节点，已登录管理员可以看到完整列表。
-
-| 位置 | 当前可见内容与操作 | 状态处理 |
+| 入口 | 职责 | 源码 |
 | --- | --- | --- |
-| 首页概览 | 在线数与总数；在线、重连中、离线、未连接四个状态块，按下即筛选列表，再按一次取消，计数为 0 的状态块不可按；在线节点实时上传/下载速率与全队近三分钟走势、全部可见节点累计流量；有国家/地区的节点标在地球上，旁边的地区列表供键盘与读屏使用 | 初次加载用骨架；空列表、请求失败分别显示，失败可重试；实时连接断开时显示提示条，卡片视图同时淡化 |
-| 卡片 / 列表 | 按优先级降序、原排序、ID 排列。两种视图都显示状态、系统、CPU 走势、内存、磁盘、网络速率、本期流量与连续在线；卡片另显示负载与容量、各方向累计流量、设有额度时按当前速度预计的本期用量与重置日、价格、到期与本次启动。卡片的 CPU 走势约三分钟，列表约 80 秒，都从页面打开后收到的推送构建。可按名称、地区或系统搜索，`/`、⌘K 或 Ctrl+K 打开节点搜索面板 | 无匹配时可一键清除筛选 |
-| 节点详情 | 资源、监测、流量三类历史；系统事实、容量、Agent 版本、累计量；已登录时另显示地址与备注。后台的同一详情位于 `/admin/node/{id}` | 支持深链、刷新、后退；不存在或未公开时提示“节点不存在”并提供返回全部节点；历史失败可重试，刷新失败保留上次数据 |
-| 历史图 | 资源页显示 CPU、RAM/ZRAM/普通 Swap、磁盘、进程、上传/下载、TCP/UDP 连接；监测页显示延迟、范围与丢包；流量页聚焦上下行 | 每类保留自己的时间范围；60 秒后重取；缺样断线，不把未知值画成 0；监测图可削峰、隐藏探测和拖动时间刷选 |
+| `/`、`/node/{id}` | 公开状态与节点历史；登录后可查看私有节点 | `web/src/App.tsx`、`web/src/components/` |
+| `/admin/`、`/admin/node/{id}` | 账号登录、节点管理与同一套详情组件 | `admin/src/App.tsx`、`Navigation.tsx` |
+| `/admin/nodes`、`ping`、`notify`、`data`、`security`、`settings` | 节点、探测、通知、数据、账号与站点设置 | `admin/src/components/sections/` |
 
-访客的资源/流量页可选 1 小时、6 小时、24 小时和 7 天，监测页至 24 小时；已登录时三个页签都可选 1 小时至 1 年。浏览器按可绘制像素给出点数预算，Hub 决定最终桶宽。网络、容量、流量使用共享 IEC 字节单位；可用带宽是单独配置的十进制 Mbps/Gbps。
-顶栏可切换中文/English：默认跟随浏览器语言，选择保存在 `localStorage` 并写入 `<html lang>`；主题同样遵循本地保存值或系统偏好。页脚显示实时连接、节点与国家/地区数、时区和按当前日照绘制的昼夜图；页面提供跳到主要内容的链接。
-四种连接状态与连续在线的计算见[领域规则](domain.md)；系统本次启动时长来自 Agent 的 `uptime`，与连续在线不同。
+页面操作见[日常使用](guide.md)，接口与错误状态见[界面能力](ui/capabilities.md)，布局和组件映射见[界面实现](ui/implementation.md)。
 
-### 2.2 管理后台
+### 浏览器数据与失败处理
 
-`/admin/` 规范化为 `/admin/nodes`；后台各区有独立路径，节点详情为 `/admin/node/{id}`，都可刷新或直接打开。未登录时显示账号密码表单，登录成功后停留在原先请求的路径。桌面侧栏与移动端弹窗导航指向节点、监测、通知、数据、安全、设置和公开状态页；顶栏提供「状态面板」链接、明暗切换、退出登录；退出后回到登录表单。表单有忙态和错误提示，删除、令牌换发、维护、恢复使用确认弹窗；节点弹窗关闭后把焦点还给触发控件或主内容。
-
-| 页面 | 当前操作与行为 | 源码 |
-| --- | --- | --- |
-| 节点 `/admin/nodes` | 名称/IP/标识搜索、全部/在线/离线筛选、复制 IPv4/IPv6 与 `node-{id}`、查看版本；添加；编辑（含流量校正、可用带宽、IPv4/IPv6、离线通知、公开状态页）；账单（按钮名为“账单与流量”，含价格、币种、周期、到期）；安装（弹窗内可换发令牌）、删除 | `admin/src/components/sections/nodes.tsx` 的 `Nodes`；`admin/src/components/sections/node-forms.tsx` 的 `NodeForm`、`BillingForm`、`InstallDialog` |
-| 批量注册 | 开启一小时窗口、复制含短期 key 的命令、倒计时和提前关闭；每台 Agent 用 key 换自己的长期令牌 | `useRegisterWindow`、`RegisterDialog` |
-| 监测 `/admin/ping` | 创建/编辑/删除 TCP `host:port` 任务、设置间隔和执行节点；删除时连历史结果一起清除 | `Ping` |
-| 通知 `/admin/notify` | Telegram/Webhook 凭据与模板、预览、分别测试、显式清除；批量开关节点离线通知；设置离线宽限、流量阈值、到期天数和登录提醒 | `Notify`、`OfflineNodes` |
-| 数据 `/admin/data` | 文件/WAL/可复用空间与历史统计、周期维护、手动维护、下载备份、分片上传恢复及取消 | `Data` |
-| 安全 `/admin/security` | 修改账号和密码（需验证当前密码）、查看/撤销其他会话；会话列表读取失败时在卡片内提示并可重试 | `Security`、`Sessions` |
-| 设置 `/admin/settings` | 站点名称、分钟保留天数、连续在线重置阈值、公开页开关与默认视图、GeoLite Country 下载/取消 | `SettingsTab`、`GeoSettings` |
-
-添加节点、换发令牌、开启注册窗口与注册交换都要求 HTTPS 域名入口；后台的换发按钮还需要 Hub 配置了本地分发。节点编辑只提交改动过的字段。额度按 GB/TB 输入并转换为字节，`0` 表示不限；流量修正区的未改字段不会覆盖累计量。优先级以数值输入调整，整表 `PUT /api/nodes/order` 没有后台入口。管理列表对非公开节点显示「私有」标记。
-
-两端共用视觉变量和响应式样式；窄屏时后台改用抽屉导航，节点表格收敛为分行布局，公开卡片由多列变单列。按钮、输入和弹窗保留可见键盘焦点，样式照顾触屏尺寸及减少动画偏好。界面约束见[产品与界面约束](product/constraints.md)。
-
-### 2.3 浏览器数据与失败处理
-
-页面加载时并行请求 `/api/me`（身份与站点配置）和 `/api/nodes`（初始节点列表），并连接 `/api/ws`。Hub 定时推送一份按受众生成的节点快照；WebSocket 失败时页面每 5 秒轮询，并尝试重新连接。会话被撤销或公开页被关闭后，服务端停止原连接，客户端重新读取身份或转登录页。详情历史按当前标签调用 `/api/nodes/{id}/metrics?hours=&points=&series=`；切换窗口会取消旧请求，避免旧数据覆盖新窗口。延迟图的框选缩放按时间而非行号保存，每分钟刷新后保持；右端贴近最新样本时继续跟随，切换标签或范围时清除。共享 `shared/http.ts` 保留 HTTP 状态码，且对 `204 No Content` 不尝试解析 JSON。
+页面加载时并行请求 `/api/me`（身份与站点配置）和 `/api/nodes`（初始节点列表），并连接 `/api/ws`。Hub 定时推送一份按受众生成的节点快照；WebSocket 失败时页面每 5 秒轮询，并尝试重新连接。会话被撤销或公开页被关闭后，服务端停止原连接，客户端重新读取身份或转登录页。详情历史按当前标签调用 `/api/nodes/{id}/metrics?hours=&points=&series=`；切换窗口会取消旧请求，避免旧数据覆盖新窗口。图表缩放保存开始与结束时间，刷新时保持这段时间；未缩放时窗口随当前时间移动。共享 `shared/http.ts` 保留 HTTP 状态码，且对 `204 No Content` 不尝试解析 JSON。
 
 匿名与管理视图包含的字段见[安全边界](security-baseline.md)。权限由 Hub 的会话与节点可见性检查决定，隐藏界面按钮不能代替它。
 

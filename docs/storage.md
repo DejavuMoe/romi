@@ -68,7 +68,7 @@ Parquet 备份格式静态编入二进制，运行时不需要联网获取扩展
 | Batch | Agent 的流量累计、分钟指标、探测结果与 last_seen | 与其他遥测共享 group commit；失败处理见下 |
 | Solo | 设置、节点、会话及保留期清理 | 单独事务，错误不会连累其他写入 |
 | Maintenance | CHECKPOINT、测量可复用空间 | 不推进 generation，不清空/拒绝排队写入 |
-| Replace | 恢复备份、真正值得做的压缩 | 排空并拒绝旧 generation 的排队写入、在换文件的瞬间停止 reader；无论成败都推进 generation |
+| Replace | 恢复备份、达到压缩条件的维护 | 排空并拒绝旧 generation 的排队写入、在换文件的瞬间停止 reader；无论成败都推进 generation |
 
 DuckDB 没有 savepoint，一条语句失败会污染整个事务。因此一批遥测里若有一条失败，
 writer 先回滚该事务，再把这一批逐条放进各自的事务重放：只有出错的那条得到失败答复，

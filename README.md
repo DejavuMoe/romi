@@ -1,5 +1,7 @@
 # romi
 
+<img src="docs/public/logo.svg" alt="romi 标志" width="56" height="56">
+
 [![CI](https://github.com/DejavuMoe/romi/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DejavuMoe/romi/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -23,6 +25,7 @@
 
 | 主题 | 入口 |
 | --- | --- |
+| 节点、监测、通知与公开状态页 | [日常使用](docs/guide.md) |
 | 功能范围与非目标 | [需求](docs/requirements.md) |
 | 安装、反向代理、升级与备份 | [部署](docs/deployment.md) |
 | 数据库、历史保留与恢复 | [存储](docs/storage.md) |
@@ -54,7 +57,7 @@ make e2e          # 桌面/移动 Chromium 端到端测试（先运行 pnpm exec
 | `docs/` | 产品与工程文档，也是 VitePress 文档站的内容源 |
 | `designs/romi-next/` | 当前已批准的界面规格 |
 
-工作阶段、检查选择与提交约定见[开发流程](docs/engineering.md)和[测试](docs/testing.md)。
+开发环境、检查选择与贡献约定见[开发指南](docs/engineering.md)和[测试](docs/testing.md)。
 
 ## 反馈与贡献
 

@@ -1,7 +1,7 @@
 # 界面实现契约
 
 已批准的界面为 v15「晨昏」。规格在 `designs/romi-next/revision-v15/`：`public.html` 是状态页，`index.html` 是管理面板，`system.html` 是视觉规范。状态和源文件映射由 `designs/romi-next/ui-contract.json` 管理；三个 v15 surface 在节点详情与管理面板迁移完成前保持 approved。
-v15 分批实施：状态页 `/` 与公开详情页的外框（顶栏、页脚、返回链接与“节点不存在”空态）已按 v15 实现。节点详情主体与管理面板仍是 v14 的布局和组件（侧栏与顶栏、管理列表、560px 弹窗与手机贴底面板、recharts 历史图，直角、32px 控件与 15/20px 等字号），只有颜色经 `--primary`、`--border` 等别名换成 v15 令牌。
+状态页与当前节点详情源码使用 v15 组件。详情页采用 SVG 历史图表，可切换表格、同步十字线和拖选时间范围；资源图数量为奇数时，首图占满一行。管理面板仍使用 v14 布局（侧栏、管理列表、560px 弹窗与手机贴底面板），颜色通过 `--primary`、`--border` 等别名接入 v15 令牌。实现状态与已执行的验证分别记录，源码迁移不代表浏览器回归已完成。
 
 v15 的共享规则（`styles/theme.css`、`styles/controls.css`、`styles/public.css`；v14 页面使用的旧规则在 `styles/layout.css`）：
 
@@ -25,7 +25,7 @@ v15 的共享规则（`styles/theme.css`、`styles/controls.css`、`styles/publi
 | --- | --- | --- |
 | 状态页 | `web/src/App.tsx`、`components/Fleet.tsx`、`Globe.tsx`、`DayMap.tsx`、`Palette.tsx`、`Shell.tsx`、`components/ui/`、`lib/globe.ts`、`shared/geo.ts`、`shared/land.ts` | 匿名隔离、状态筛选与搜索、卡片/列表、中英文、地球与昼夜图、关闭页 |
 | 默认视图 | `server/src/api.rs`、两端设置/页面 | cards/list 服务端保存，访客切换不写回 |
-| 历史详情（v14 布局） | `web/src/components/NodeDetail.tsx` | 六类图表、缺样留空、RAM/ZRAM/Swap、KPI |
+| 历史详情 | `web/src/components/NodeDetail.tsx`、`charts.tsx` | 资源/流量/监测、SVG 图与表格、缺样、RAM/ZRAM/Swap、同步十字线与缩放 |
 | 管理列表（v14 布局） | `admin/src/components/sections/nodes.tsx`、`node-forms.tsx` | ID/优先级、地址、版本、复制、编辑菜单、首行对齐 |
 | 登录/导航（v14 布局） | `Login.tsx`、`Navigation.tsx` | 会话、焦点、滚动锁定不抖动；退出后回到登录表单 |
 | 监测/通知/数据/安全/设置（v14 布局） | `sections/probes.tsx`、`notify.tsx`、`data.tsx`、`security.tsx`、`settings.tsx` | 勾选、面板间距、复选行、错误位不留空洞 |
@@ -33,7 +33,7 @@ v15 的共享规则（`styles/theme.css`、`styles/controls.css`、`styles/publi
 权限和分发前置条件以 Hub 为准。回归入口：
 
 - `e2e/approved-v15.spec.mjs`：状态页在中英文、明暗主题下加载，英文页不留中文，不出现后台数据；320–1440 不溢出；手机控件 ≥44px；字号与圆角在刻度上，标记与文字居中；地球绘制、转动，减少动画时静止；关闭页；跳转链接、焦点与搜索面板；状态筛选与搜索；
-- `e2e/approved-v14.spec.mjs`：节点详情与后台 320–1440 不溢出、手机控件 ≥44px、后台列表首行对齐、2px 焦点、弹窗标题栏与手机贴底面板；
+- `e2e/approved-v14.spec.mjs`：保留的 v14 详情与后台回归，详情选择器需随新组件更新；后台 320–1440 不溢出、手机控件 ≥44px、后台列表首行对齐、2px 焦点、弹窗标题栏与手机贴底面板；
 - `e2e/navigation.spec.mjs`：登录后回到原路径、只有密码登录、会话列表重试、离开数据页中止恢复、延迟图缩放跨刷新保持；
 - `e2e/hardening.spec.mjs`：安全响应头与缓存、登录拒绝后停止轮询、公开范围选择器样式、单地址实时连接上限；
 - `e2e/approved-v12.spec.mjs`、`e2e/approved-v13.spec.mjs`、`e2e/public.spec.mjs`、`e2e/admin.spec.mjs`、`e2e/visual-contract.spec.mjs`；
