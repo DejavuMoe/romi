@@ -24,6 +24,17 @@
   align-items: center;
   gap: 4px;
 }
+.topbar-inner .brand {
+  min-width: 44px;
+}
+.topbar-inner .brand-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-inner .topbar-actions {
+  flex: none;
+}
 .search-trigger {
   display: inline-flex;
   align-items: center;
@@ -1677,6 +1688,16 @@
   }
 }
 @media (max-width: 400px) {
+  .topbar-inner {
+    gap: 4px;
+  }
+  .topbar-inner .topbar-actions {
+    gap: 0;
+  }
+  .topbar-inner .topbar-actions > a.btn {
+    min-width: 44px;
+    padding-inline: 4px;
+  }
   .facts-2 {
     grid-template-columns: 1fr;
   }

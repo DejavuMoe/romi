@@ -17,7 +17,7 @@
 | 检查 | 结果 | 范围 |
 | --- | --- | --- |
 | `make check-linux` | 通过 | 脚本、版本与许可、两端前端 lint/单测、fmt、Clippy；Hub 171、DuckDB 引擎 9、Agent 26 项测试通过，1 项手动基准按设计忽略 |
-| `make e2e` | 113 通过，5 跳过 | 桌面 1280×900、移动 390×844 Chromium；真实 Hub 的登录、匿名隔离、数据和设置回归，以及 v15 详情、导航、检查器、三步接入、注册列表、精确计数 |
+| `ROMI_E2E_BIN_DIR=target/release pnpm test:e2e` | 115 通过，5 跳过 | 重新构建 release Hub；桌面 1280×900、移动 390×844 Chromium；真实 Hub 的登录、匿名隔离、数据和设置回归，以及 v15 详情、导航、检查器、三步接入、注册列表、精确计数；窄屏系统字体回退、长站点名和导航点击区域 |
 | `make smoke` | 通过 | release Hub/Agent：登录、节点、DuckDB 单写锁、凭据轮换、真实 Agent 指标与版本化分发 |
 | `make live-capacity` | 通过 | 真实套接字席位上限、超额拒绝与关闭后回收 |
 | `make check-docs` | 通过 | 文档构建、站内链接、明暗/响应式布局、搜索与移动导航 |

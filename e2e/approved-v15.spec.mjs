@@ -1,7 +1,5 @@
-// The approved v15 status page, measured on the real Hub: the checks
-// revision-v15/exercise.cjs makes against the prototype, taken from the
-// production pages. The node detail and the admin panel follow in later slices.
-import { test, expect } from './fixtures.mjs'
+// The approved v15 status page, measured on a disposable real Hub.
+import { test, expect, signIn } from './fixtures.mjs'
 
 const NAMES = ['Tokyo edge-01', 'Singapore core-02', 'Frankfurt eu-01']
 // A test Hub has no country database, so the stream is given places to put the
@@ -136,6 +134,34 @@ test('nothing overflows from 320 to 1440 in either language', async ({ page, hub
         })
         expect(over.scroll, `${name} (${lang}) at ${width}px`).toBeLessThanOrEqual(0)
         expect(over.items, `${name} (${lang}) at ${width}px`).toEqual([])
+      }
+    }
+  }
+})
+
+test('a long site name leaves narrow header controls reachable before and after sign-in', async ({ page, hub }) => {
+  await seed(hub)
+  await hub.request('/api/settings', { method: 'PUT', body: { site_name: 'A long monitoring site name that must fit beside navigation' } })
+  for (const authed of [false, true]) {
+    if (authed) {
+      await page.addInitScript(() => localStorage.setItem('lang', 'zh-CN'))
+      await signIn(page)
+    }
+    for (const lang of ['zh-CN', 'en']) {
+      await open(page, { lang })
+      for (const width of [320, 390]) {
+        await page.setViewportSize({ width, height: 900 })
+        const header = await page.locator('.topbar-inner').evaluate((el) => {
+          const r = el.getBoundingClientRect(), s = getComputedStyle(el)
+          const controls = [...el.querySelectorAll('.brand, .topbar-actions > .btn')].filter(c => c.getClientRects().length)
+          return {
+            outside: controls.filter(c => c.getBoundingClientRect().right > r.right - parseFloat(s.paddingRight) + 1).map(c => c.className),
+            small: controls.filter(c => { const b = c.getBoundingClientRect(); return b.width < 43.5 || b.height < 43.5 }).map(c => c.className),
+            wrapped: el.querySelector('.brand-name').getBoundingClientRect().height > parseFloat(getComputedStyle(el.querySelector('.brand-name')).lineHeight) + 1,
+          }
+        })
+        expect(header, `${lang}, ${authed ? 'signed in' : 'anonymous'}, ${width}px`).toEqual({ outside: [], small: [], wrapped: false })
+        await expect(page.locator('.topbar-actions > a')).toHaveText(lang === 'en' ? (authed ? 'Open panel' : 'Sign in') : (authed ? '进入后台' : '登录'))
       }
     }
   }
