@@ -22,13 +22,9 @@ Replace every placeholder with the repository's real commands:
 
 ## Prototype-first gate
 
-- Install and load workflow skills from this project's `.agents/skills/`, including
-  `prototype-first-ui`, `baoyu-design`, and their required skill dependencies.
-  Do not use user/global copies or global install flags. Complete dependency
-  setup separately before design-only edits and commits.
 - Every user-visible layout, copy, navigation, interaction, workflow, component
-  state, dialog, menu, or information-hierarchy change must use
-  `$prototype-first-ui`.
+  state, dialog, menu, or information-hierarchy change follows the
+  `prototype-first-ui` workflow.
 - During design review, modify only `designs/**` and `docs/ui/**` unless the user
   explicitly changes a durable constraint.
 - Do not modify production UI or backend/native code before explicit approval of
@@ -58,9 +54,6 @@ Replace every placeholder with the repository's real commands:
 ## Visual and interaction defaults
 
 - Reuse the approved design system and current product terminology.
-- Operational interfaces default to task-oriented hierarchy and appropriate
-  information density, not a marketing hero, editorial serif styling, decorative
-  filler, card walls, nested cards, gratuitous gradients, or fake platform chrome.
 - Preserve keyboard, pointer, touch, context-menu, drag/drop, window, and native
   conventions that apply to the product.
 

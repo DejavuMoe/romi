@@ -14,7 +14,7 @@ Score each dimension from 0 to 2:
 
 ### Dimensions
 
-1. **Mode selection** — chooses exactly one valid mode and does not silently advance.
+1. **Mode selection** — selects the appropriate mode and satisfies its prerequisites before advancing.
 2. **Scope discipline** — design phases do not modify production; implementation is one approved slice.
 3. **Approval integrity** — positive feedback is not approval; exact asset/version and design commit are checked.
 4. **Content firewall** — prompt/audience/architecture/aesthetic material does not enter any text-bearing channel.

@@ -177,6 +177,34 @@ approval, and again against production before completion:
 10. Never render this review, its categories, the prompt, or the design reasoning in
    the product itself.
 
+## Helper commands
+
+After loading `scripts/collect_dom_content.js` into the rendered test page, call
+`window.__prototypeFirstUICollectDOMContent()` and save the returned object as
+JSON outside the repository until it has been reviewed for private content.
+Use the agent's available DOM evaluation tool; do not assume a browser API name.
+
+```sh
+python <skill-dir>/scripts/content_audit.py seed --capture dom-content.json \
+  --profile operational-strict --brief-file task-brief.txt \
+  --output designs/my-app/content-inventory.json
+```
+
+Review the inventory and fill each string's purpose, origin, decision, and
+evidence before checking it:
+
+```sh
+python <skill-dir>/scripts/content_audit.py check \
+  --inventory designs/my-app/content-inventory.json
+```
+
+For provisional browserless review only:
+
+```sh
+python <skill-dir>/scripts/content_audit.py static-scan \
+  --root designs/my-app --output static-content.json --include-code-strings
+```
+
 ## Compact decision test
 
 For each string, ask:

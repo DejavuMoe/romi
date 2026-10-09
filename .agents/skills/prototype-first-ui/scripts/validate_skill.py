@@ -160,9 +160,14 @@ def estimate_tokens(text: str) -> int:
 
 def files_under(root: Path) -> List[Path]:
     result: List[Path] = []
-    for path in root.rglob("*"):
-        if path.is_file() or path.is_symlink():
-            result.append(path)
+    for directory, dirs, names in os.walk(root):
+        current = Path(directory)
+        # A source checkout may have .git metadata; it is never package content.
+        if current == root:
+            dirs[:] = [name for name in dirs if name != ".git"]
+            names = [name for name in names if name != ".git"]
+        names += [name for name in dirs if (current / name).is_symlink()]
+        result.extend(current / name for name in names)
     return sorted(result, key=lambda value: value.relative_to(root).as_posix().casefold())
 
 
@@ -401,6 +406,8 @@ def validate_zip(path: Path) -> Validation:
                 pure = PurePosixPath(name)
                 if pure.is_absolute() or ".." in pure.parts:
                     validation.error("Unsafe ZIP member path: %s" % name)
+                if any(part in FATAL_JUNK_PARTS for part in pure.parts):
+                    validation.error("Development metadata must not be packaged: %s" % name)
                 if not pure.parts:
                     continue
                 roots.add(pure.parts[0])

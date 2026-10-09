@@ -1,13 +1,9 @@
 # {{PROJECT_NAME}} — product and UX constraints
 
-Keep this file short. Record only durable constraints that future design and
-implementation must obey. It is not a roadmap, changelog, session log, prompt
-archive, design critique, or implementation plan.
-
 ## Product
 
 - Product type: <fill>
-- Primary users: <fill; this is internal design context and must not become UI copy>
+- Primary users: <fill>
 - Primary jobs to be done: <fill>
 - UI surface classification: {{SURFACE_TYPE}}
 - Content profile: {{CONTENT_PROFILE}}
@@ -58,7 +54,7 @@ archive, design critique, or implementation plan.
 
 ## Visual and interaction constraints
 
-- Typography: <fill; operational tools normally use the approved sans-serif stack>
+- Typography: <fill>
 - Density/layout: <fill>
 - Required interaction conventions: <fill>
 - Forbidden patterns: <fill>

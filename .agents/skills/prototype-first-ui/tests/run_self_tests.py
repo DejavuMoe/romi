@@ -109,7 +109,7 @@ def assert_true(condition: bool, message: str) -> None:
 
 def init_repo(repo: Path) -> None:
     repo.mkdir(parents=True)
-    run(["git", "init", "-b", "main", str(repo)])
+    run(["git", "init", "-b", "master", str(repo)])
     git(repo, "config", "user.name", "Prototype Test")
     git(repo, "config", "user.email", "prototype@example.invalid")
 
@@ -273,6 +273,10 @@ def test_content_audit() -> str:
 def test_bootstrap() -> str:
     with tempfile.TemporaryDirectory(prefix="pui-bootstrap-") as raw:
         root = Path(raw)
+        fresh = root / "fresh"
+        fresh.mkdir()
+        run([PYTHON, str(SCRIPTS / "bootstrap.py"), "init", "--repo", str(fresh)])
+        assert_true(git(fresh, "symbolic-ref", "--short", "HEAD").stdout.strip() == "master", "New repository must default to master")
         repo = root / "repo"
         snapshot = root / "snapshot"
         init_repo(repo)
@@ -402,7 +406,7 @@ def test_bootstrap() -> str:
                 "--snapshot-dir",
                 str(snapshot),
                 "--branch",
-                "main",
+                "master",
                 "--commit",
             ]
         )
@@ -442,14 +446,14 @@ def test_bootstrap() -> str:
                 "--snapshot-dir",
                 str(snapshot),
                 "--branch",
-                "main",
+                "master",
                 "--yes-reset-history",
                 "--commit",
             ]
         )
         assert_true(git(repo, "rev-list", "--count", "HEAD").stdout.strip() == "1", "New history must have one root commit")
         assert_true(git(repo, "remote").stdout.strip() == "", "Remote was reattached")
-        assert_true(git(repo, "branch", "--show-current").stdout.strip() == "main", "Wrong branch")
+        assert_true(git(repo, "branch", "--show-current").stdout.strip() == "master", "Wrong branch")
         assert_true(git(repo, "config", "--local", "--get", "user.name").stdout.strip() == "Prototype Test", "Local identity not preserved")
         old_object = subprocess.run(
             ["git", "-C", str(repo), "cat-file", "-e", old_head],
@@ -719,11 +723,17 @@ def test_workflow_gate() -> str:
 def test_package_validation() -> str:
     with tempfile.TemporaryDirectory(prefix="pui-package-") as raw:
         root = Path(raw)
+        # Exercise the standalone checkout layout without touching real Git data.
+        source = root / "prototype-first-ui"
+        shutil.copytree(SKILL, source, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"))
+        write(source / ".git" / "config", "private-checkout-metadata\n")
+        scripts = source / "scripts"
         first = root / "prototype-first-ui-a.zip"
         second = root / "prototype-first-ui-b.zip"
-        run([PYTHON, str(SCRIPTS / "validate_skill.py"), "--skill-dir", str(SKILL)])
-        run([PYTHON, str(SCRIPTS / "package_skill.py"), "--source", str(SKILL), "--output", str(first)])
-        run([PYTHON, str(SCRIPTS / "package_skill.py"), "--source", str(SKILL), "--output", str(second)])
+        run([PYTHON, str(scripts / "validate_skill.py"), "--skill-dir", str(source)])
+        command = [PYTHON, str(scripts / "package_skill.py"), "--source", str(source)]
+        run(command + ["--output", str(first)])
+        run(command + ["--output", str(second)])
         assert_true(sha256(first) == sha256(second), "Deterministic packages differ")
         run([PYTHON, str(SCRIPTS / "validate_skill.py"), "--zip", str(first)])
         with zipfile.ZipFile(first) as archive:
@@ -731,8 +741,30 @@ def test_package_validation() -> str:
             assert_true(all(name.startswith("prototype-first-ui/") for name in names), "ZIP root is not stable")
             assert_true(not any("__pycache__" in name or name.endswith(".pyc") for name in names), "Runtime cache packaged")
             assert_true("prototype-first-ui/SKILL.md" in names, "SKILL.md missing from package")
+            assert_true(not any(".git" in Path(name).parts for name in names), "Git metadata packaged")
             assert_true(archive.testzip() is None, "ZIP CRC failed")
-    return "Agent Skill structure validation, JavaScript/Python syntax checks, ZIP CRC, root layout, cache exclusion and deterministic packaging passed."
+        checksum = first.with_suffix(".zip.sha256").read_text(encoding="ascii").split()[0]
+        assert_true(checksum == sha256(first), "Published checksum does not match ZIP")
+        notes = first.with_suffix(".notes.md").read_text(encoding="utf-8")
+        version = notes.split()[1]
+        run(command + ["--output", str(second), "--tag", "v" + version])
+        rejected = run_fail(command + ["--output", str(second), "--tag", "v999.0.0"])
+        assert_true("must match metadata.version" in rejected.stderr, "Wrong release tag was not rejected")
+        rejected = run_fail(command + ["--output", str(source / "nested.zip")])
+        assert_true("outside the source" in rejected.stderr, "Output inside source was not rejected")
+        assert_true(not (source / "nested.zip").exists(), "Rejected output was created")
+        write(source / "LICENSE", "Wrong license\n")
+        rejected = run_fail(command + ["--output", str(second)])
+        assert_true("both declare MIT" in rejected.stderr, "License mismatch was not rejected")
+        shutil.copyfile(SKILL / "LICENSE", source / "LICENSE")
+        write(source / "CHANGELOG.md", "# Changelog\n\n## 999.0.0 — 2026-09-29\n\n- Wrong version\n")
+        rejected = run_fail(command + ["--output", str(second)])
+        assert_true("first CHANGELOG.md release" in rejected.stderr, "Changelog mismatch was not rejected")
+        with zipfile.ZipFile(first, "a") as archive:
+            archive.writestr("prototype-first-ui/.git/config", "forbidden")
+        rejected = run_fail([PYTHON, str(scripts / "validate_skill.py"), "--zip", str(first)])
+        assert_true("Development metadata" in rejected.stderr, "ZIP Git metadata was not rejected")
+    return "Structure, syntax, deterministic ZIP/checksum, source Git exclusion, ZIP Git rejection, release version/license/changelog and output-path gates passed."
 
 
 def test_javascript_syntax() -> str:

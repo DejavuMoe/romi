@@ -24,6 +24,9 @@ The workflow may start at any valid state. An existing healthy repository does n
 need bootstrap. A repository with an existing approved design system does not need
 fresh exploration for every feature.
 
+Approval applies to the current deliverable until it changes or is revoked.
+Revisions return to review before implementation.
+
 ## Mode entry table
 
 | Request/state | Mode | Production edits allowed? |
@@ -113,7 +116,7 @@ Review every placeholder before committing.
 python <skill-dir>/scripts/bootstrap.py init \
   --repo . \
   --snapshot-dir ../<snapshot-directory> \
-  --branch main \
+  --branch <branch> \
   --yes-reset-history \
   --commit \
   --message "chore: establish clean project baseline"

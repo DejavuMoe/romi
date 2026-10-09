@@ -1,15 +1,9 @@
 {
   "evals": [
     {
-      "name": "required-skills-stay-project-local",
-      "prompt": "Use prototype-first-ui to redesign this project. The shell is currently inside .agents/skills/prototype-first-ui. Baoyu-design exists only in the user skills directory; its upstream installation example uses -g. Install whatever required skills are missing and proceed.",
-      "expected_output": "The agent resolves the canonical project root, installs only baoyu-design and any actually required skill dependencies into that project's .agents/skills, omits global flags, and verifies and reads the project entrypoint and supporting files. It does not use or modify the user copy, create links outside the project, install inside the current skill folder or a WSL build mirror, or mix setup files/lockfiles into design or approval commits.",
-      "files": []
-    },
-    {
-      "name": "project-dependency-unavailable",
-      "prompt": "Audit the existing UI and then prototype an improvement. The project-local baoyu-design skill is missing and cannot be downloaded, but a global copy is available.",
-      "expected_output": "The agent completes independent audit work, reports the missing <project-root>/.agents/skills/baoyu-design/SKILL.md path, and stops before dependent design generation. It does not silently use the global copy or invent a substitute design workflow.",
+      "name": "design-dependency-unavailable",
+      "prompt": "Audit the existing UI and then prototype an improvement. Baoyu-Design is not installed and cannot be downloaded.",
+      "expected_output": "The agent completes the independent capability audit and reports that prototype generation requires Baoyu-Design. It stops before dependent design generation.",
       "files": []
     },
     {

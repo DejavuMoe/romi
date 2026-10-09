@@ -579,7 +579,7 @@ def nested_git_markers(repo: Path) -> List[str]:
 
 def validate_branch(repo: Path, branch: str) -> str:
     if not branch or branch == "current":
-        branch = git_text(repo, "branch", "--show-current") or "main"
+        branch = git_text(repo, "branch", "--show-current") or "master"
     if not BRANCH_RE.match(branch):
         raise SystemExit("Invalid initial branch name: %r" % branch)
     result = run(["git", "check-ref-format", "--branch", branch], check=False)
@@ -739,7 +739,7 @@ def build_parser() -> argparse.ArgumentParser:
     init = sub.add_parser("init", help="Initialize a new local Git history.")
     init.add_argument("--repo", default=".")
     init.add_argument("--snapshot-dir")
-    init.add_argument("--branch", default="current")
+    init.add_argument("--branch", default="current", help="Initial branch; defaults to the current branch, or master for a new repository")
     init.add_argument("--yes-reset-history", action="store_true")
     init.add_argument("--commit", action="store_true")
     init.add_argument("--message", default="chore: establish clean project baseline")

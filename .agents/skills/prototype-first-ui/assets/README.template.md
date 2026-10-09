@@ -1,7 +1,6 @@
 # {{PROJECT_NAME}}
 
-<One factual sentence describing what the product does. Do not turn design goals
-or audience descriptions into promotional copy.>
+<Product description>
 
 ## Requirements
 

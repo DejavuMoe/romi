@@ -64,6 +64,11 @@ Do not hard-code `Codex Browser`, `AskUserQuestion`, `SendUserFile`, or another
 client-specific name in generated project instructions unless that repository is
 intentionally tied to that client.
 
+Skill invocation syntax also varies. `$prototype-first-ui` is an example, not a
+portable command. Use the host's skill selector, a supported slash invocation,
+or ask it to read `prototype-first-ui/SKILL.md` in the project's actual skills
+directory. Resolve dependency paths through the host's skill discovery mechanism.
+
 ## Questions and ambiguity
 
 Ask only when the answer materially changes product scope, content authority,
