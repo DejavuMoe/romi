@@ -84,6 +84,23 @@ test('the v15 security section requires the current password and confirms sessio
   await navigateAdmin(page, '安全')
   await expect(page.getByRole('heading', { name: '账号与密码', exact: true })).toBeVisible()
 
+  // The approved v15 sections use the whole content column, not the old
+  // 960px settings page. Measure against its padding so the assertion follows
+  // both desktop and mobile shells.
+  const geometry = await page.locator('.security-layout').evaluate(layout => {
+    const content = layout.closest('.admin-content')
+    if (!content) throw new Error('security page is outside the admin content column')
+    const box = layout.getBoundingClientRect()
+    const frame = content.getBoundingClientRect()
+    const style = getComputedStyle(content)
+    return {
+      leftGap: Math.round(box.left - frame.left - parseFloat(style.paddingLeft)),
+      rightGap: Math.round(frame.right - parseFloat(style.paddingRight) - box.right),
+    }
+  })
+  expect(Math.abs(geometry.leftGap)).toBeLessThanOrEqual(2)
+  expect(Math.abs(geometry.rightGap)).toBeLessThanOrEqual(2)
+
   const current = page.getByLabel('当前密码', { exact: true })
   const next = page.getByLabel('新密码', { exact: true })
   const submit = page.getByRole('button', { name: '保存', exact: true })
