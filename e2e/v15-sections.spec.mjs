@@ -466,12 +466,13 @@ test('the v15 notification templates insert placeholders and reject invalid JSON
   const telegram = page.getByRole('region', { name: 'Telegram', exact: true })
   const webhook = page.getByRole('region', { name: 'Webhook', exact: true })
   const template = telegram.getByLabel('消息模板', { exact: true })
-  await template.fill('Hello ')
+  await template.fill('Hello world')
   await template.evaluate(element => element.setSelectionRange(6, 6))
   await telegram.getByRole('button', { name: '{{title}}', exact: true }).click()
-  const expected = 'Hello {{title}}'
+  const expected = 'Hello {{title}}world'
   await expect(template).toHaveValue(expected)
-  await expect.poll(() => template.evaluate(element => element.selectionStart)).toBe(expected.length)
+  const caret = expected.indexOf('world')
+  await expect.poll(() => template.evaluate(element => [element.selectionStart, element.selectionEnd])).toEqual([caret, caret])
   await expect(telegram.locator('.tg-text')).toContainText('香港 · 甲商家')
 
   await webhook.getByLabel('请求体', { exact: true }).fill('{"content": {{title}}}')
