@@ -97,9 +97,8 @@ function Sessions({ revision }: { revision: number }) {
   )
 }
 
-function SecurityContent({ settings, set, save, error, sessionRevision, onSettingsSaved }: {
+function SecurityContent({ settings, save, error, sessionRevision, onSettingsSaved }: {
   settings: Record<string, string | boolean>
-  set: (key: string, value: string) => void
   save: SaveSettings
   error: string
   sessionRevision: number
@@ -134,7 +133,6 @@ function SecurityContent({ settings, set, save, error, sessionRevision, onSettin
       setNext("")
       setTried(false)
       setCurrentError("")
-      set("admin_username", account)
       onSettingsSaved()
       return
     }
@@ -175,12 +173,12 @@ function SecurityContent({ settings, set, save, error, sessionRevision, onSettin
 }
 
 export function Security() {
-  const { s, set, save, error, retry } = useSettings()
+  const { s, save, error, retry } = useSettings()
   const [sessions, setSessions] = useState(0)
   const state = !s ? (error ? "error" : "loading") : "ready"
   return (
     <PageLoad state={state} label={T("安全设置")} onRetry={retry} detail={T(error)}>
-      {s && <SecurityContent key={String(s.admin_username)} settings={s} set={set} save={save} error={error} sessionRevision={sessions} onSettingsSaved={() => setSessions(value => value + 1)} />}
+      {s && <SecurityContent settings={s} save={save} error={error} sessionRevision={sessions} onSettingsSaved={() => setSessions(value => value + 1)} />}
     </PageLoad>
   )
 }

@@ -167,6 +167,37 @@ test('the v15 security section requires the current password and confirms sessio
   await expect(rows).toHaveCount(before - 1)
 })
 
+test('a successful credential change keeps the security form mounted', async ({ page, hub }) => {
+  await signIn(page)
+  await navigateAdmin(page, '安全')
+  await expect(page.getByRole('heading', { name: '账号与密码', exact: true })).toBeVisible()
+  await expect(page.locator('.session-list li').first()).toBeVisible()
+
+  let sessionGets = 0
+  page.on('request', request => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/api/sessions') sessionGets += 1
+  })
+
+  const form = page.locator('.security-layout .card').first().locator('form')
+  await form.evaluate(element => { element.dataset.reviewMarker = 'kept' })
+  const sessionReload = page.waitForResponse(response =>
+    response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/sessions')
+
+  await page.getByLabel('账号', { exact: true }).fill('review-admin')
+  await page.getByLabel('当前密码', { exact: true }).fill('romi-e2e-only-password')
+  await page.getByLabel('新密码', { exact: true }).fill('review-admin-password')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByText('账号与密码已修改', { exact: true })).toBeVisible()
+  await sessionReload
+  await expect(page.locator('.session-list li').first()).toBeVisible()
+
+  // The form is the same DOM node, not a fresh mount keyed by the new name.
+  expect(await form.getAttribute('data-review-marker')).toBe('kept')
+  await expect(page.getByLabel('账号', { exact: true })).toHaveValue('review-admin')
+  // The credential change refreshes the session list once, not twice.
+  await page.waitForTimeout(250)
+  expect(sessionGets).toBe(1)
+})
 test('the migrated security section has English interface copy', async ({ page }) => {
   await signIn(page)
   await navigateAdmin(page, '安全')
