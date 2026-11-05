@@ -193,6 +193,11 @@ export function Data() {
   const used = Math.max(0, db.size - db.free)
   return (
     <>
+      {dbError && (
+        <Notice tone="bad" action={<Button size="sm" onClick={retry}>{T("重试")}</Button>}>
+          {T(dbError)}
+        </Notice>
+      )}
       {maintenance.error && <Notice tone="bad">{T(maintenance.error)}</Notice>}
       <div className="data-layout">
         <SectionCard

@@ -661,6 +661,33 @@ test('the v15 data section reports both maintenance outcomes', async ({ page }) 
   await expect(page.getByText('已清理 1,284 行，可复用 18.4 MiB 未达重写阈值，本次未重写文件', { exact: true })).toBeVisible()
 })
 
+test('a failed data refresh keeps the figures visible and offers a retry', async ({ page }) => {
+  await signIn(page)
+  let dbGets = 0
+  await page.route('**/api/db**', route => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/db' && route.request().method() === 'GET') {
+      dbGets += 1
+      if (dbGets === 2) return route.fulfill({ status: 503, contentType: 'text/plain', body: 'Temporary db refresh failure' })
+    }
+    if (path === '/api/db/maintenance') {
+      return route.fulfill({ json: { pruned: 0, freed: 0, compacted: false, reusable: 0 } })
+    }
+    return route.continue()
+  })
+  await navigateAdmin(page, '数据')
+  await expect(page.getByRole('heading', { name: '数据库', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '运行维护', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '运行维护', exact: true }).click()
+
+  const alert = page.getByRole('alert').filter({ hasText: 'Temporary db refresh failure' })
+  await expect(alert).toBeVisible()
+  await expect(page.getByRole('heading', { name: '数据库', exact: true })).toBeVisible()
+  await alert.getByRole('button', { name: '重试', exact: true }).click()
+  await expect(alert).toHaveCount(0)
+  expect(dbGets).toBe(3)
+})
+
 test('the migrated data section has English interface copy', async ({ page }) => {
   await signIn(page)
   await navigateAdmin(page, '数据')
