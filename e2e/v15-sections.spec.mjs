@@ -160,7 +160,6 @@ test('the v15 security section requires the current password and confirms sessio
         fontSize: style.fontSize,
         color: style.color,
         justifyContent: style.justifyContent,
-        marginTop: style.marginTop,
         flexWrap: style.flexWrap,
         gap: style.gap,
         paddingTop: style.paddingTop,
@@ -175,12 +174,19 @@ test('the v15 security section requires the current password and confirms sessio
   expect(footer.actual.fontSize).toBe(footer.target.fontSize)
   expect(footer.actual.color).toBe(footer.target.color)
   expect(footer.actual.justifyContent).toBe('normal')
-  expect(footer.actual.marginTop).toBe('auto')
   expect(footer.actual.flexWrap).toBe('nowrap')
   expect(footer.actual.gap).toBe('normal')
   expect(footer.actual.paddingTop).toBe('0px')
   expect(footer.actual.paddingBottom).toBe('0px')
   expect(footer.actual.borderTopWidth).toBe('0px')
+  // `margin-top: auto` computes to its used length in Chromium. Its effect is
+  // what the prototype specifies: the footer sits on the card's inner bottom.
+  const footerBottomGap = await page.locator('.security-layout .card-foot').evaluate(foot => {
+    const card = foot.closest('.card')
+    const padding = parseFloat(getComputedStyle(card).paddingBottom)
+    return Math.round(card.getBoundingClientRect().bottom - padding - foot.getBoundingClientRect().bottom)
+  })
+  expect(Math.abs(footerBottomGap)).toBeLessThanOrEqual(1)
 
   const current = page.getByLabel('当前密码', { exact: true })
   const next = page.getByLabel('新密码', { exact: true })
