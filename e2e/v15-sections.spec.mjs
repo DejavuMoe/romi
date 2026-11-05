@@ -402,6 +402,9 @@ test('the v15 notification section saves credentials without echoing them', asyn
 
   const telegramTest = telegram.getByRole('button', { name: '测试', exact: true })
   await expect(telegramTest).toBeEnabled()
+  await page.route('**/api/notify/test?channel=telegram', route => route.fulfill({ status: 200, json: { sent: ['telegram'] } }))
+  await telegramTest.click()
+  await expect(page.getByText('测试通知已发送：telegram', { exact: true })).toBeVisible()
   await telegram.getByLabel('消息模板', { exact: true }).fill('changed telegram template')
   await expect(telegramTest).toBeDisabled()
 
