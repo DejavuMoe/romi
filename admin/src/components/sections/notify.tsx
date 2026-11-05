@@ -316,7 +316,7 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
         <Field label="URL" hint={whConfigured ? T("已设置，留空不变") : T("以 POST 发送，Content-Type 为 application/json")} error={urlError}>
           <Input className="mono" value={url} placeholder={whConfigured ? "••••••••" : "https://…"} onChange={event => set("notify_webhook_url", event.target.value)} />
         </Field>
-        <Field label={T("请求头")} hint={T("可选，一行一个")} optional>
+        <Field label={T("请求头")} hint={settings.notify_webhook_headers_set ? T("已设置，留空不变") : T("可选，一行一个")} optional>
           <textarea
             className="input textarea"
             rows={2}
