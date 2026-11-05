@@ -348,6 +348,10 @@ test('the v15 settings section validates fields and moves the view choice by key
   await expect(page.getByRole('radio', { name: '列表', exact: true })).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByRole('radio', { name: '列表', exact: true })).toBeFocused()
   await expect(save).toBeEnabled()
+
+  await page.getByLabel('HTTPS 数据库直链', { exact: true }).fill('http://example.com/country.mmdb')
+  await expect(page.getByRole('alert').filter({ hasText: 'HTTPS' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载并更新', exact: true })).toBeDisabled()
 })
 
 test('the migrated settings section has English interface copy', async ({ page }) => {

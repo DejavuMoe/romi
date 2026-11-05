@@ -182,7 +182,7 @@ test('GeoLite polling does not erase a rejected update error',async({page})=>{
   let reads=0
   await page.route('**/api/geolite',route=>{if(route.request().method()==='GET')reads++;return route.continue()})
   await navigateAdmin(page,'设置')
-  await page.getByLabel('HTTPS 数据库直链',{exact:true}).fill('http://example.invalid/country.mmdb')
+  await page.getByLabel('HTTPS 数据库直链',{exact:true}).fill('https://example.com/country.mmdb#fragment')
   await page.getByRole('button',{name:'下载并更新',exact:true}).click()
   await expect(page.getByRole('alert')).toContainText('HTTPS')
   const before=reads

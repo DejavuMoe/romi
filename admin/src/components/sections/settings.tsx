@@ -138,7 +138,7 @@ function GeoCard({ initialUrl, onUrlSaved }: { initialUrl: string; onUrlSaved: (
       <div className="inspector-actions">
         <span className="dirty-note">{status?.state === "complete" ? T("更新完成") : status?.state === "cancelled" ? T("已取消") : ""}</span>
         {downloading && <Button onClick={() => void cancel()} busy={busy}>{T("取消")}</Button>}
-        <Button icon={failed ? "refresh-cw" : "download"} disabled={downloading || busy || !url.trim()} onClick={() => void update()}>
+        <Button icon={failed ? "refresh-cw" : "download"} disabled={downloading || busy || !url.trim() || !!urlError} onClick={() => void update()}>
           {failed ? T("重试") : T("下载并更新")}
         </Button>
       </div>
