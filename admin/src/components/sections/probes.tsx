@@ -58,7 +58,7 @@ function ProbeDialog({ probe, nodes, busy, onClose, onSave }: {
     name: probe?.name ?? "",
     target: probe?.target ?? "",
     interval: String(probe?.interval ?? 60),
-    nodes: probe?.nodes ?? nodes.filter(node => node.online).map(node => node.id),
+    nodes: probe ? probe.nodes.filter(id => nodes.some(node => node.id === id)) : nodes.filter(node => node.online).map(node => node.id),
   })
   const [tried, setTried] = useState(false)
   const [intervalTouched, setIntervalTouched] = useState(false)

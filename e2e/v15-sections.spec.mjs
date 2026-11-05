@@ -72,6 +72,30 @@ test('the v15 probes section selects, creates, edits and deletes a monitor', asy
   await expect(page.getByText('还没有监测任务', { exact: true })).toBeVisible()
 })
 
+test('editing a monitor ignores nodes deleted after its list was loaded', async ({ page, hub }) => {
+  const kept = await hub.node('Kept edge', false)
+  const gone = await hub.node('Gone edge', false)
+  await hub.request('/api/ping-tasks', {
+    method: 'POST',
+    body: { name: 'Stale monitor', target: '192.0.2.2:443', interval: 60, nodes: [kept, gone] },
+  })
+  await signIn(page)
+  await navigateAdmin(page, '监测')
+  await expect(page.getByRole('heading', { name: 'Stale monitor', exact: true })).toBeVisible()
+  await expect(page.getByText('Gone edge', { exact: true })).toBeVisible()
+
+  await hub.request(`/api/nodes/${gone}`, { method: 'DELETE' })
+  // The node list updates over the WebSocket while the monitor list remains the
+  // snapshot that was loaded before the deletion.
+  await expect(page.getByText('Gone edge', { exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: '编辑 Stale monitor', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByText('1 / 1', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('Kept edge', { exact: true })).toBeVisible()
+  await expect(dialog.locator('.picker-list input:checked')).toHaveCount(1)
+})
+
 test('the migrated probes section has English interface copy', async ({ page, hub }) => {
   await hub.node('Edge node', false)
   await signIn(page)
