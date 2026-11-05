@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState, type ReactNode } from "react"
 import { Copy } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { addresses, api, type Node } from "@/lib/api"
+import { addresses, api, ApiError, type Node } from "@/lib/api"
+import { T } from "../../../../shared/i18n.ts"
+import { Empty, Skeleton as V15Skeleton, toast as v15Toast } from "../../../../web/src/components/ui/feedback"
+import { Icon, type IconName } from "../../../../web/src/components/ui/icon"
+import { cx } from "../../../../web/src/lib/hooks"
 
 export function copy(text: string) {
   navigator.clipboard.writeText(text).then(
@@ -72,6 +76,48 @@ export function EmptyState({ title, detail }: { title: string; detail?: string }
   )
 }
 
+export function SectionCard({ id, title, icon, aside, className, children }: {
+  id?: string
+  title?: ReactNode
+  icon?: IconName
+  aside?: ReactNode
+  className?: string
+  children: ReactNode
+}) {
+  const own = useId()
+  const titleId = id ?? own
+  return (
+    <section className={cx("card", className)} aria-labelledby={title ? titleId : undefined}>
+      {(title || aside) && (
+        <div className="card-head">
+          {title && <h2 id={titleId} className="card-title">{icon && <Icon name={icon} size={16} />}{title}</h2>}
+          {aside}
+        </div>
+      )}
+      {children}
+    </section>
+  )
+}
+
+/** The shared loading/error frame for the sections migrated from the prototype. */
+export function PageLoad({ state, label, onRetry, detail, children }: {
+  state: "loading" | "error" | "ready"
+  label: string
+  onRetry: () => void
+  detail?: ReactNode
+  children: ReactNode
+}) {
+  if (state === "loading") return (
+    <div className="stack-page" role="status" aria-label={T("正在加载")}>
+      <V15Skeleton style={{ height: 180 }} />
+      <V15Skeleton style={{ height: 260 }} />
+    </div>
+  )
+  if (state === "error") return (
+    <Empty error title={T("{label}加载失败", { label })} detail={detail ?? T("请求失败，未改变任何数据。")} action={T("重试")} onAction={onRetry} />
+  )
+  return children
+}
 export type Settings = Record<string,string|boolean>
 export function useSettings() {
   const [saved,setSaved]=useState<Settings>({})
@@ -96,11 +142,11 @@ export function useSettings() {
     // just sent -- the password fields -- has to tell a rejection from a
     // success, and one that attributes a refusal to a particular field needs
     // its status.
-    save: async (patch: Record<string, string>): Promise<Error | null> => {
+    save: async (patch: Record<string, string>, options: { success?: string; quietStatus?: number } = {}): Promise<Error | null> => {
       setError("")
       try {
         await api("/settings", { method: "PUT", body: JSON.stringify(patch) })
-        toast.success("已保存")
+        v15Toast(options.success ?? T("已保存"))
         // Only the saved keys and the `*_set` flags are taken from the hub: a
         // credential comes back as a flag, so the typed value must not linger,
         // while another card's unsaved edits on the same page must survive.
@@ -114,9 +160,16 @@ export function useSettings() {
         })
         return null
       } catch (e) {
-        setError((e as Error).message)
-        toast.error((e as Error).message)
-        return e as Error
+        const error = e as Error
+        // A refusal that belongs on one field (the current password) must not
+        // also become a page-level error or a toast: S-2 says that field is the
+        // only place it appears.
+        const quiet = options.quietStatus !== undefined && e instanceof ApiError && e.status === options.quietStatus
+        if (!quiet) {
+          setError(error.message)
+          v15Toast(error.message, "bad")
+        }
+        return error
       }
     },
   }

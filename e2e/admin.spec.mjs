@@ -193,7 +193,7 @@ test('GeoLite polling does not erase a rejected update error',async({page})=>{
 test('a probe interval is refused on its field, in the approved wording', async ({ page }) => {
   await signIn(page)
   await navigateAdmin(page, '监测')
-  await page.getByRole('button', { name: '添加监测', exact: true }).click()
+  await page.getByRole('button', { name: '添加监测', exact: true }).first().click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('名称', { exact: true }).fill('间隔校验')
   await dialog.getByLabel('目标地址', { exact: true }).fill('192.0.2.1:443')
@@ -217,6 +217,6 @@ test('a probe interval is refused on its field, in the approved wording', async 
   await expect(dialog.getByRole('alert')).toHaveCount(0)
   await dialog.getByRole('button', { name: '保存', exact: true }).click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByRole('cell', { name: '间隔校验' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '间隔校验', exact: true })).toBeVisible()
   expect(posted).toBe(1)
 })
