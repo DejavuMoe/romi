@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from "react"
 
 import { T } from "../../../../shared/i18n.ts"
 import { connectionLabel } from "../../../../shared/nodes.ts"
-import { numericError } from "../../../../shared/validate.ts"
+import { numericError, validWebhookUrl } from "../../../../shared/validate.ts"
 import { api, type Node } from "@/lib/api"
 import { Mark } from "../../../../web/src/components/ui/brand"
 import { Button, Field, Input, PasswordInput, Switch } from "../../../../web/src/components/ui/controls"
@@ -222,7 +222,7 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
   const url = text("notify_webhook_url")
   const tokenError = token && !/^\d+:[A-Za-z0-9_-]+$/.test(token) ? T("Bot Token 格式应为 123456:ABC-DEF") : ""
   const chatError = chat && !/^(-?\d+|@[A-Za-z0-9_]+)$/.test(chat) ? T("请填写数字 ID 或 @频道名") : ""
-  const urlError = url && !/^https?:\/\/\S+$/.test(url) ? T("URL 须以 http:// 或 https:// 开头") : ""
+  const urlError = url && !validWebhookUrl(url) ? T("URL 须以 http:// 或 https:// 开头") : ""
   const ruleErrors = {
     grace: numericError(text("notify_grace"), { min: 1, max: 30, required: true }),
     traffic: numericError(text("notify_traffic"), { min: 0, max: 100, required: true }),

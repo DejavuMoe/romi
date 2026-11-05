@@ -23,3 +23,22 @@ export function numericError(
   if (step !== "any" && Math.abs((n - min) / step - Math.round((n - min) / step)) > 1e-7) return T("请按 {step} 的步长填写", { step })
   return ""
 }
+
+/** The Hub's GeoLite URL rule: HTTPS, a host, and no user info. */
+export function validGeoLiteUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw)
+    return url.protocol === "https:" && url.hostname !== "" && !url.username && !url.password
+  } catch {
+    return false
+  }
+}
+
+/** The Hub's Webhook URL rule: either HTTP or HTTPS. */
+export function validWebhookUrl(raw: string): boolean {
+  try {
+    return ["http:", "https:"].includes(new URL(raw).protocol)
+  } catch {
+    return false
+  }
+}

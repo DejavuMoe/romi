@@ -45,4 +45,14 @@ assert.equal(continuousUptime({online:true,last_seen:1000,online_since:1100},100
   ])
   assert.equal(numericError("", { required: false }), "")
   assert.equal(numericError("0.25", { step: 0.5 }), "请按 0.5 的步长填写")
+  const { validGeoLiteUrl, validWebhookUrl } = await import("./validate.ts")
+  assert.deepEqual(
+    ["https://example.com", "HTTPS://example.com/x", "https://example.com?x", "https://example.com/x#frag",
+      "http://example.com/x", "https://user@example.com/x", "https://"].map(validGeoLiteUrl),
+    [true, true, true, true, false, false, false],
+  )
+  assert.deepEqual(
+    ["http://example.com/hook", "HTTP://example.com/hook", "https://example.com", "ftp://example.com", "not a url"].map(validWebhookUrl),
+    [true, true, true, false, false],
+  )
 }

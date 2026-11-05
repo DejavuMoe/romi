@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 
 import { T } from "../../../../shared/i18n.ts"
-import { numericError } from "../../../../shared/validate.ts"
+import { numericError, validGeoLiteUrl } from "../../../../shared/validate.ts"
 import { api } from "@/lib/api"
 import { bytes } from "@/lib/format"
 import { Button, Field, Input, Switch } from "../../../../web/src/components/ui/controls"
@@ -110,7 +110,7 @@ function GeoCard({ initialUrl, onUrlSaved }: { initialUrl: string; onUrlSaved: (
 
   const downloading = status?.state === "downloading"
   const failed = status?.state === "error" || !!updateError
-  const urlError = url && !/^https:\/\/[^\s/@]+\/\S*$/.test(url) ? T("请填写不含账号信息的 HTTPS 地址") : ""
+  const urlError = url && !validGeoLiteUrl(url) ? T("请填写不含账号信息的 HTTPS 地址") : ""
   const fieldError = updateError ? T(updateError) : urlError || (status?.state === "error" ? T(status.error) : "")
   return (
     <SectionCard

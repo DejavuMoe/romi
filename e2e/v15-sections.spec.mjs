@@ -350,9 +350,16 @@ test('the v15 settings section validates fields and moves the view choice by key
   await expect(page.getByRole('radio', { name: '列表', exact: true })).toBeFocused()
   await expect(save).toBeEnabled()
 
-  await page.getByLabel('HTTPS 数据库直链', { exact: true }).fill('http://example.com/country.mmdb')
+  const geoUrl = page.getByLabel('HTTPS 数据库直链', { exact: true })
+  const geoButton = page.getByRole('button', { name: '下载并更新', exact: true })
+  for (const value of ['https://example.com', 'HTTPS://example.com/country.mmdb', 'https://example.com?x']) {
+    await geoUrl.fill(value)
+    await expect(page.getByRole('alert').filter({ hasText: 'HTTPS' })).toHaveCount(0)
+    await expect(geoButton).toBeEnabled()
+  }
+  await geoUrl.fill('http://example.com/country.mmdb')
   await expect(page.getByRole('alert').filter({ hasText: 'HTTPS' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '下载并更新', exact: true })).toBeDisabled()
+  await expect(geoButton).toBeDisabled()
 })
 
 test('the migrated settings section has English interface copy', async ({ page }) => {
@@ -414,6 +421,8 @@ test('the v15 notification section saves credentials without echoing them', asyn
   await telegram.getByLabel('消息模板', { exact: true }).fill('changed telegram template')
   await expect(telegramTest).toBeDisabled()
 
+  await webhook.getByLabel('URL', { exact: true }).fill('HTTP://example.com/hook')
+  await expect(webhook.getByRole('alert')).toHaveCount(0)
   await webhook.getByLabel('URL', { exact: true }).fill('https://example.com/hook')
   const headers = webhook.getByLabel('请求头')
   await headers.fill('Authorization: Bearer secret')
