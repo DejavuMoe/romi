@@ -156,7 +156,7 @@ type SettingsValues = {
 
 function initialValues(settings: Settings): SettingsValues {
   return {
-    site_name: String(settings.site_name ?? ""),
+    site_name: String(settings.site_name || "Monitor"),
     public_page: String(settings.public_page ?? "") === "on",
     public_default_view: String(settings.public_default_view ?? "cards") === "list" ? "list" : "cards",
     retention_days: String(settings.retention_days ?? "30"),

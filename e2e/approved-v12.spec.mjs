@@ -9,7 +9,6 @@ test('public default view persists on the Hub while visitor switching stays loca
   const setting = page.getByRole('radiogroup', { name:'公开页默认视图', exact:true })
   await expect(setting.getByRole('radio', { name:'卡片', exact:true })).toHaveAttribute('aria-checked','true')
   await setting.getByRole('radio', { name:'列表', exact:true }).click()
-  await page.getByLabel('站点名称', { exact:true }).fill('Public view site')
   const save = page.getByRole('button', { name:'保存站点设置', exact:true })
   await expect(save).toBeEnabled()
   await save.click()

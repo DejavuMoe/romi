@@ -288,6 +288,7 @@ test('the v15 settings section discards, saves and restores the site form', asyn
   await expectFullContentWidth(page, '.settings-layout')
 
   const site = page.getByLabel('站点名称', { exact: true })
+  await expect(site).toHaveValue('Monitor')
   const original = await site.inputValue()
   const bar = page.locator('.save-bar')
   await expect(bar).toHaveAttribute('aria-hidden', 'true')
@@ -366,7 +367,12 @@ test('the migrated settings section has English interface copy', async ({ page }
   await expectNoChinese(readError)
   await expectNoChinese(page.locator('main'))
 
+  // A fresh hub has no stored site_name; the form must show the same fallback
+  // as the public page instead of blocking the untouched field.
+  await expect(page.getByLabel('Site name', { exact: true })).toHaveValue('Monitor')
   await page.getByLabel('Minute history retention (days)', { exact: true }).fill('60')
+  await expect(page.getByRole('alert').filter({ hasText: 'Enter a site name' })).toHaveCount(0)
+  await page.getByLabel('Site name', { exact: true }).fill('')
   await expect(page.getByRole('alert').filter({ hasText: 'Enter a site name' })).toBeVisible()
   await expectNoChinese(page.locator('main'))
 })
