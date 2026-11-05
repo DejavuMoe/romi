@@ -500,7 +500,7 @@ test('notification channel operations keep independent busy states', async ({ pa
     await route.continue()
   })
 
-  const webhookTest = webhook.getByRole('button', { name: '测试', exact: true })
+  const webhookTest = webhook.locator('.inspector-actions button').first()
   await webhookTest.click()
   await expect(webhookTest).toHaveText('发送中…')
   await expect(webhookTest).toBeDisabled()
