@@ -28,6 +28,10 @@ async function routeOnline(page, hub, onlineIds) {
   })
 }
 
+async function expectNoChinese(locator) {
+  expect(await locator.innerText()).not.toMatch(/[\u3400-\u9fff]/)
+}
+
 test('the v15 probes section selects, creates, edits and deletes a monitor', async ({ page, hub }) => {
   const online = await hub.node('Online edge', false)
   await hub.node('Offline edge', false)
@@ -74,8 +78,26 @@ test('the migrated probes section has English interface copy', async ({ page, hu
   await navigateAdmin(page, '监测')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await expect(page.getByText('No monitors yet', { exact: true })).toBeVisible()
-  const text = await page.locator('main').innerText()
-  expect(text).not.toMatch(/[\u3400-\u9fff]/)
+  await expectNoChinese(page.locator('main'))
+
+  // A dialog is rendered in a portal, so it needs its own copy check. Submit
+  // empty fields to include the field-level error state.
+  await page.getByRole('button', { name: 'Add monitor', exact: true }).first().click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading', { name: 'Add monitor', exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog.getByRole('alert').filter({ hasText: 'Enter a name' })).toBeVisible()
+  await expect(dialog.getByRole('alert').filter({ hasText: 'Enter a target' })).toBeVisible()
+  await expectNoChinese(dialog)
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  // The page-level failure state is English too.
+  await page.route('**/api/ping-tasks', route => route.fulfill({ status: 500, contentType: 'text/plain', body: 'test list failure' }))
+  await page.reload()
+  const loadError = page.getByRole('alert').filter({ hasText: "Couldn't load Monitors" })
+  await expect(loadError).toBeVisible()
+  await expectNoChinese(loadError)
+  await expectNoChinese(page.locator('main'))
 })
 
 test('the v15 security section requires the current password and confirms session deletion', async ({ page, hub }) => {
@@ -198,12 +220,29 @@ test('a successful credential change keeps the security form mounted', async ({ 
   await page.waitForTimeout(250)
   expect(sessionGets).toBe(1)
 })
-test('the migrated security section has English interface copy', async ({ page }) => {
+test('the migrated security section has English interface copy', async ({ page, hub }) => {
+  // A second session supplies a non-current row whose confirmation is a portal.
+  await hub.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'romi-e2e-only-password' } })
   await signIn(page)
   await navigateAdmin(page, '安全')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Username and password', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Sign-in sessions', exact: true })).toBeVisible()
-  const text = await page.locator('main').innerText()
-  expect(text).not.toMatch(/[\u3400-\u9fff]/)
+  await expectNoChinese(page.locator('main'))
+
+  const deleteSession = page.getByRole('button', { name: 'Delete session', exact: true }).first()
+  await expect(deleteSession).toBeVisible()
+  await deleteSession.click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByText('Delete session?', { exact: true })).toBeVisible()
+  await expectNoChinese(dialog)
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  // The page-level failure state is English too.
+  await page.route('**/api/settings', route => route.fulfill({ status: 500, contentType: 'text/plain', body: 'test settings failure' }))
+  await page.reload()
+  const loadError = page.getByRole('alert').filter({ hasText: "Couldn't load Security settings" })
+  await expect(loadError).toBeVisible()
+  await expectNoChinese(loadError)
+  await expectNoChinese(page.locator('main'))
 })
