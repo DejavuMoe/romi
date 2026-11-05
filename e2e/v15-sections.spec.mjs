@@ -478,6 +478,45 @@ test('the v15 notification templates insert placeholders and reject invalid JSON
   await expect(webhook.getByRole('alert').filter({ hasText: '代入后不是合法 JSON' })).toBeVisible()
 })
 
+test('notification channel operations keep independent busy states', async ({ page, hub }) => {
+  await hub.request('/api/settings', { method: 'PUT', body: { notify_webhook_url: 'https://example.com/hook' } })
+  await signIn(page)
+  await navigateAdmin(page, '通知')
+  const telegram = page.getByRole('region', { name: 'Telegram', exact: true })
+  const webhook = page.getByRole('region', { name: 'Webhook', exact: true })
+
+  let releaseTest
+  const testHeld = new Promise(resolve => { releaseTest = resolve })
+  let releaseSave
+  const saveHeld = new Promise(resolve => { releaseSave = resolve })
+  await page.route('**/api/notify/test?channel=webhook', async route => {
+    await testHeld
+    await route.fulfill({ json: { sent: ['webhook'] } })
+  })
+  await page.route('**/api/settings', async route => {
+    const body = route.request().method() === 'PUT' ? route.request().postDataJSON() : null
+    if (body?.notify_telegram_token) await saveHeld
+    await route.continue()
+  })
+
+  const webhookTest = webhook.getByRole('button', { name: '测试', exact: true })
+  await webhookTest.click()
+  await expect(webhookTest).toHaveText('发送中…')
+  await expect(webhookTest).toBeDisabled()
+
+  await telegram.getByLabel('Bot Token', { exact: true }).fill('123456:ABC-DEF')
+  await telegram.getByLabel('Chat ID', { exact: true }).fill('-1001234567890')
+  await telegram.getByRole('button', { name: '保存', exact: true }).click()
+  // Starting the Telegram save must not clear the Webhook test's busy state.
+  await expect(webhookTest).toHaveText('发送中…')
+  await expect(webhookTest).toBeDisabled()
+
+  releaseTest()
+  await expect(page.getByText('测试通知已发送：webhook', { exact: true })).toBeVisible()
+  releaseSave()
+  await expect(page.getByText('Telegram 已保存', { exact: true })).toBeVisible()
+})
+
 test('the v15 notification rules validate and persist', async ({ page, hub }) => {
   await signIn(page)
   await navigateAdmin(page, '通知')

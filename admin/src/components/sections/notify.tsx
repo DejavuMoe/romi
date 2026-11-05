@@ -211,7 +211,16 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
   nodes: Node[]
   refresh: () => void
 }) {
-  const [busy, setBusy] = useState("")
+  const [busy, setBusy] = useState<Set<string>>(() => new Set())
+  const isBusy = (key: string) => busy.has(key)
+  const markBusy = (key: string, active: boolean) => {
+    setBusy(old => {
+      const next = new Set(old)
+      if (active) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
   const text = (key: string) => String(settings[key] ?? "")
   const site = text("site_name") || "Monitor"
   const tgSet = !!settings.notify_telegram_token_set
@@ -233,20 +242,23 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
   const rulesDirty = dirty(["notify_grace", "notify_traffic", "notify_expiry", "notify_login"])
 
   async function saveChannel(key: string, patch: Record<string, string>, success: string) {
-    setBusy(key)
-    await save(patch, { success })
-    setBusy("")
+    markBusy(key, true)
+    try {
+      await save(patch, { success })
+    } finally {
+      markBusy(key, false)
+    }
   }
 
   async function test(channel: "telegram" | "webhook") {
-    setBusy(`test-${channel}`)
+    markBusy(`test-${channel}`, true)
     try {
       const { sent } = await api<{ sent: string[] }>(`/notify/test?channel=${channel}`, { method: "POST" })
       toast(T("测试通知已发送：{label}", { label: sent.join("、") }))
     } catch (e) {
       toast(T((e as Error).message), "bad")
     } finally {
-      setBusy("")
+      markBusy(`test-${channel}`, false)
     }
   }
 
@@ -275,8 +287,8 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
         icon="send"
         configured={tgConfigured}
         dirty={tgDirty}
-        saving={busy === "tg"}
-        testing={busy === "test-telegram"}
+        saving={isBusy("tg")}
+        testing={isBusy("test-telegram")}
         testReason={tgConfigured ? T("使用已保存的配置测试") : T("先保存渠道配置")}
         onSave={saveTelegram}
         onTest={() => void test("telegram")}
@@ -307,8 +319,8 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
         icon="webhook"
         configured={whConfigured}
         dirty={whDirty}
-        saving={busy === "wh"}
-        testing={busy === "test-webhook"}
+        saving={isBusy("wh")}
+        testing={isBusy("test-webhook")}
         testReason={whConfigured ? T("使用已保存的配置测试") : T("先保存渠道配置")}
         onSave={saveWebhook}
         onTest={() => void test("webhook")}
@@ -365,7 +377,7 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
           <Switch checked={settings.notify_login !== "off"} onChange={next => set("notify_login", next ? "on" : "off")} label={T("登录后台时提醒")} />
           <div className="inspector-actions">
             <span className="dirty-note">{rulesDirty ? T("有未保存的修改") : ""}</span>
-            <Button kind="primary" type="submit" busy={busy === "rules"} disabled={!rulesDirty}>{T("保存事件设置")}</Button>
+            <Button kind="primary" type="submit" busy={isBusy("rules")} disabled={!rulesDirty}>{T("保存事件设置")}</Button>
           </div>
         </form>
       </SectionCard>
