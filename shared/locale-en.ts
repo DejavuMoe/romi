@@ -354,6 +354,10 @@ export const en: Record<string, Entry> = {
   "保存事件设置": "Save alert rules",
   "已开启「{name}」离线通知": "Offline alerts on for “{name}”",
   "已关闭「{name}」离线通知": "Offline alerts off for “{name}”",
+  "全部打开": "Turn all on",
+  "全部关闭": "Turn all off",
+  "清除请求头": "Clear headers",
+  "清除": "Clear",
 
   // Data, backup and maintenance
   "数据": "Data",

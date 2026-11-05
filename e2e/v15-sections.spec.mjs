@@ -370,3 +370,159 @@ test('the migrated settings section has English interface copy', async ({ page }
   await expect(page.getByRole('alert').filter({ hasText: 'Enter a site name' })).toBeVisible()
   await expectNoChinese(page.locator('main'))
 })
+
+test('the v15 notification section saves credentials without echoing them', async ({ page, hub }) => {
+  await signIn(page)
+  await navigateAdmin(page, '通知')
+  const telegram = page.getByRole('region', { name: 'Telegram', exact: true })
+  const webhook = page.getByRole('region', { name: 'Webhook', exact: true })
+  await expect(telegram.getByRole('heading', { name: 'Telegram', exact: true })).toBeVisible()
+  await expect(telegram.getByText('未配置', { exact: true })).toBeVisible()
+
+  const puts = []
+  page.on('request', request => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === '/api/settings') puts.push(request.postDataJSON())
+  })
+
+  await telegram.getByLabel('Bot Token', { exact: true }).fill('123456:ABC-DEF')
+  await telegram.getByLabel('Chat ID', { exact: true }).fill('-1001234567890')
+  await telegram.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByText('Telegram 已保存', { exact: true })).toBeVisible()
+  await expect(telegram.getByText('已配置', { exact: true })).toBeVisible()
+  await expect(telegram.getByLabel('Bot Token', { exact: true })).toHaveValue('')
+  let saved = await hub.request('/api/settings')
+  expect(saved.notify_telegram_token_set).toBe(true)
+  expect(saved.notify_telegram_chat).toBe('-1001234567890')
+  expect(saved).not.toHaveProperty('notify_telegram_token')
+  expect(puts[0]).toMatchObject({
+    notify_telegram_chat: '-1001234567890',
+    notify_telegram_token: '123456:ABC-DEF',
+  })
+  expect(puts[0]).not.toHaveProperty('notify_webhook_url')
+
+  const telegramTest = telegram.getByRole('button', { name: '测试', exact: true })
+  await expect(telegramTest).toBeEnabled()
+  await telegram.getByLabel('消息模板', { exact: true }).fill('changed telegram template')
+  await expect(telegramTest).toBeDisabled()
+
+  await webhook.getByLabel('URL', { exact: true }).fill('https://example.com/hook')
+  await webhook.getByLabel('请求头').fill('Authorization: Bearer secret')
+  await webhook.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByText('Webhook 已保存', { exact: true })).toBeVisible()
+  await expect(webhook.getByText('已配置', { exact: true })).toBeVisible()
+  await expect(webhook.getByLabel('URL', { exact: true })).toHaveValue('')
+  await expect(webhook.getByLabel('请求头')).toHaveValue('')
+  saved = await hub.request('/api/settings')
+  expect(saved.notify_webhook_url_set).toBe(true)
+  expect(saved.notify_webhook_headers_set).toBe(true)
+  expect(saved).not.toHaveProperty('notify_webhook_url')
+  expect(saved).not.toHaveProperty('notify_webhook_headers')
+  // Saving the Webhook must not discard the Telegram template being edited.
+  await expect(telegram.getByLabel('消息模板', { exact: true })).toHaveValue('changed telegram template')
+
+  await telegram.getByRole('button', { name: '清除已保存的 Bot Token', exact: true }).click()
+  await expect(page.getByText('已清除 Bot Token', { exact: true })).toBeVisible()
+  saved = await hub.request('/api/settings')
+  expect(saved.notify_telegram_token_set).toBe(false)
+  expect(saved.notify_telegram_chat).toBe('-1001234567890')
+
+  await webhook.getByRole('button', { name: '清除请求头', exact: true }).click()
+  await expect(page.getByText('已保存', { exact: true })).toBeVisible()
+  saved = await hub.request('/api/settings')
+  expect(saved.notify_webhook_url_set).toBe(true)
+  expect(saved.notify_webhook_headers_set).toBe(false)
+
+  await webhook.getByRole('button', { name: '清除', exact: true }).click()
+  await expect.poll(async () => (await hub.request('/api/settings')).notify_webhook_url_set).toBe(false)
+  saved = await hub.request('/api/settings')
+  expect(saved.notify_webhook_headers_set).toBe(false)
+})
+
+test('the v15 notification templates insert placeholders and reject invalid JSON', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '通知')
+  const telegram = page.getByRole('region', { name: 'Telegram', exact: true })
+  const webhook = page.getByRole('region', { name: 'Webhook', exact: true })
+  const template = telegram.getByLabel('消息模板', { exact: true })
+  await template.fill('Hello ')
+  await template.evaluate(element => element.setSelectionRange(6, 6))
+  await telegram.getByRole('button', { name: '{{title}}', exact: true }).click()
+  const expected = 'Hello {{title}}'
+  await expect(template).toHaveValue(expected)
+  await expect.poll(() => template.evaluate(element => element.selectionStart)).toBe(expected.length)
+  await expect(telegram.locator('.tg-text')).toContainText('香港 · 甲商家')
+
+  await webhook.getByLabel('请求体', { exact: true }).fill('{"content": {{title}}}')
+  await expect(webhook.getByRole('alert').filter({ hasText: '代入后不是合法 JSON' })).toBeVisible()
+})
+
+test('the v15 notification rules validate and persist', async ({ page, hub }) => {
+  await signIn(page)
+  await navigateAdmin(page, '通知')
+  const rules = page.getByRole('region', { name: '提醒规则', exact: true })
+  const grace = rules.getByLabel('离线宽限期（分钟）', { exact: true })
+  const traffic = rules.getByLabel('流量提醒（%）', { exact: true })
+  const expiry = rules.getByLabel('到期提醒（天）', { exact: true })
+
+  await grace.fill('0')
+  await expect(rules.getByRole('alert').filter({ hasText: '不能小于 1' })).toBeVisible()
+  await traffic.fill('101')
+  await expect(rules.getByRole('alert').filter({ hasText: '不能大于 100' })).toBeVisible()
+  await expiry.fill('366')
+  await expect(rules.getByRole('alert').filter({ hasText: '不能大于 365' })).toBeVisible()
+
+  await grace.fill('5')
+  await traffic.fill('90')
+  await expiry.fill('30')
+  await rules.getByRole('switch', { name: '登录后台时提醒', exact: true }).click()
+  await rules.getByRole('button', { name: '保存事件设置', exact: true }).click()
+  await expect(page.getByText('已保存', { exact: true })).toBeVisible()
+  const saved = await hub.request('/api/settings')
+  expect(saved.notify_grace).toBe('5')
+  expect(saved.notify_traffic).toBe('90')
+  expect(saved.notify_expiry).toBe('30')
+  expect(saved.notify_login).toBe('off')
+})
+
+test('the v15 notification section toggles offline alerts for every node', async ({ page, hub }) => {
+  await hub.node('Notify A', false)
+  await hub.node('Notify B', false)
+  await signIn(page)
+  await navigateAdmin(page, '通知')
+  const card = page.getByRole('region', { name: '离线通知', exact: true })
+  const count = card.locator('.card-head .num')
+  await expect(count).toHaveText('0 / 2')
+
+  await card.getByRole('button', { name: '全部打开', exact: true }).click()
+  await expect.poll(() => count.innerText()).toBe('2 / 2')
+  await expect(card.getByRole('switch')).toHaveCount(2)
+  await expect(card.getByRole('switch').first()).toHaveAttribute('aria-checked', 'true')
+
+  await card.getByRole('button', { name: '全部关闭', exact: true }).click()
+  await expect.poll(() => count.innerText()).toBe('0 / 2')
+  await card.getByRole('switch', { name: /Notify A/ }).click()
+  await expect(page.getByText('已开启「Notify A」离线通知', { exact: true })).toBeVisible()
+  await expect.poll(() => count.innerText()).toBe('1 / 2')
+})
+
+test('the migrated notification section has English interface copy', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '通知')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  const telegram = page.getByRole('region', { name: 'Telegram', exact: true })
+  await expect(telegram.getByRole('heading', { name: 'Telegram', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Alert rules', exact: true })).toBeVisible()
+  await expectNoChinese(page.locator('main'))
+
+  await telegram.getByLabel('Bot Token', { exact: true }).fill('not-a-token')
+  const fieldError = telegram.getByRole('alert').filter({ hasText: 'Bot Token should look like 123456:ABC-DEF' })
+  await expect(fieldError).toBeVisible()
+  await expectNoChinese(fieldError)
+
+  await page.route('**/api/settings', route => route.fulfill({ status: 500, contentType: 'text/plain', body: 'test settings failure' }))
+  await page.reload()
+  const loadError = page.getByRole('alert').filter({ hasText: "Couldn't load Alert settings" })
+  await expect(loadError).toBeVisible()
+  await expectNoChinese(loadError)
+  await expectNoChinese(page.locator('main'))
+})

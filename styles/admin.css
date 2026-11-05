@@ -1122,6 +1122,155 @@
   font-size: var(--fs-md);
   color: var(--text-3);
 }
+.card > .inspector-form {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.card > .inspector-form > .inspector-actions,
+.card > .inspector-actions {
+  margin-top: auto;
+}
+
+/* notifications */
+.template {
+  display: grid;
+  gap: 10px;
+}
+.placeholder-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -6px;
+}
+.placeholder {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.placeholder:hover {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.template-preview {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.tg-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.tg-avatar .mark {
+  --mark-stem: var(--on-accent);
+  --mark-probe: var(--on-accent);
+}
+.tg-preview {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.tg-bubble {
+  position: relative;
+  max-width: 340px;
+  padding: 8px 12px 20px;
+  border-radius: var(--r-md) var(--r-md) var(--r-md) var(--r-xs);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), 0 0 0 1px var(--line);
+}
+.tg-sender {
+  color: var(--accent-ink);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.tg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+}
+.tg-time {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.json-preview {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-loose);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.json-preview.is-invalid {
+  color: var(--bad-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 40%, transparent);
+}
+/* One line per node: switch, name, and its state at the right. Beside another
+   card the list takes that card's height and scrolls inside it. */
+.offline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.switch-list {
+  display: grid;
+  align-content: start;
+  margin: 0 -8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-3) transparent;
+}
+.card > .switch-list {
+  flex: 1 1 0;
+  min-height: 240px;
+}
+.switch-list .switch-row {
+  align-items: center;
+  padding: 8px;
+  border-radius: var(--r-sm);
+}
+.switch-list .switch-row:hover {
+  background: var(--surface-2);
+}
+.switch-list .switch-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.switch-list .switch-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.switch-list .switch-detail {
+  flex: none;
+  font-size: var(--fs-sm);
+}
 
 /* security */
 .security-layout > .notice {
