@@ -77,3 +77,50 @@ test('the migrated probes section has English interface copy', async ({ page, hu
   const text = await page.locator('main').innerText()
   expect(text).not.toMatch(/[\u3400-\u9fff]/)
 })
+
+test('the v15 security section requires the current password and confirms session deletion', async ({ page, hub }) => {
+  await hub.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'romi-e2e-only-password' } })
+  await signIn(page)
+  await navigateAdmin(page, '安全')
+  await expect(page.getByRole('heading', { name: '账号与密码', exact: true })).toBeVisible()
+
+  const current = page.getByLabel('当前密码', { exact: true })
+  const next = page.getByLabel('新密码', { exact: true })
+  const submit = page.getByRole('button', { name: '保存', exact: true })
+  let puts = 0
+  page.on('request', request => {
+    if (request.method() === 'PUT' && request.url().endsWith('/api/settings')) puts += 1
+  })
+
+  await next.fill('a-brand-new-password')
+  await submit.click()
+  await expect(page.getByRole('alert').filter({ hasText: '请填写当前密码' })).toBeVisible()
+  await expect(current).toBeFocused()
+  expect(puts, 'empty current password never reaches the hub').toBe(0)
+
+  await current.fill('not-the-password')
+  await submit.click()
+  await expect(page.getByRole('alert').filter({ hasText: '当前密码不正确' })).toBeVisible()
+  await expect(current).toBeFocused()
+  expect(puts).toBe(1)
+
+  const rows = page.locator('.session-list li')
+  const before = await rows.count()
+  expect(before).toBeGreaterThan(1)
+  await page.getByRole('button', { name: '删除会话', exact: true }).first().click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByText('删除会话？', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: '删除会话', exact: true }).click()
+  await expect(page.getByText('已删除会话', { exact: true })).toBeVisible()
+  await expect(rows).toHaveCount(before - 1)
+})
+
+test('the migrated security section has English interface copy', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '安全')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Username and password', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sign-in sessions', exact: true })).toBeVisible()
+  const text = await page.locator('main').innerText()
+  expect(text).not.toMatch(/[\u3400-\u9fff]/)
+})

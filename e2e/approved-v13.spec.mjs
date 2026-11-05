@@ -75,20 +75,25 @@ test('changing the password requires the current one', async ({ page, hub }) => 
 
   const current = page.getByLabel('当前密码', { exact: true })
   const next = page.getByLabel('新密码', { exact: true })
-  const submit = page.getByRole('button', { name: '修改密码', exact: true })
+  const submit = page.getByRole('button', { name: '保存', exact: true })
 
-  // Nothing to submit until both halves are present.
-  await expect(submit).toBeDisabled()
+  // The current password is required before the hub is called, and the refusal
+  // belongs to that field.
   await next.fill('a-brand-new-password')
-  await expect(submit).toBeDisabled()
+  await submit.click()
+  const required = page.getByRole('alert').filter({ hasText: '请填写当前密码' })
+  await expect(required).toBeVisible()
+  await expect(current).toHaveAttribute('aria-invalid', 'true')
+  await expect(current).toBeFocused()
 
   // A wrong current password is refused on its own field, and the old one still
   // works: the refusal has to be the hub's, not the panel's.
   await current.fill('not-the-password')
-  await expect(submit).toBeEnabled()
+  await expect(required).toHaveCount(0)
   await submit.click()
   const refusal = page.getByRole('alert').filter({ hasText: '当前密码不正确' })
   await expect(refusal).toBeVisible()
+  await expect(current).toBeFocused()
   // Attached to the field it concerns, not merely present on the page.
   await expect(current).toHaveAttribute('aria-invalid', 'true')
   const describedBy = await current.getAttribute('aria-describedby')

@@ -45,7 +45,7 @@ test('the account password is the only way in', async ({ page }) => {
 
   // The security page opens on the account form, with the sessions after it.
   await navigateAdmin(page, '安全')
-  await expect(page.locator('main h3')).toHaveText(['账号与密码', '登录会话'])
+  await expect(page.locator('main h2')).toHaveText(['账号与密码', '登录会话'])
   await expect(page.locator('main')).not.toContainText(/github/i)
 })
 
@@ -57,7 +57,7 @@ test('a failed session list says so in its card and recovers on retry', async ({
     : route.continue())
   await navigateAdmin(page, '安全')
 
-  const card = page.locator('[data-slot="card"]', { has: page.getByRole('heading', { name: '登录会话' }) })
+  const card = page.locator('section.card', { has: page.getByRole('heading', { name: '登录会话' }) })
   const alert = card.getByRole('alert')
   await expect(alert).toContainText('会话列表加载失败')
   await expect(alert).toContainText('暂时无法确认其他设备的登录状态。')

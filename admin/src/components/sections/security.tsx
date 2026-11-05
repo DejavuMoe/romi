@@ -1,140 +1,186 @@
-import { useEffect, useState } from "react"
-import { Trash2 } from "lucide-react"
-import { toast } from "sonner"
+import { useEffect, useState, type FormEvent } from "react"
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Field } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { T } from "../../../../shared/i18n.ts"
 import { api, ApiError } from "@/lib/api"
+import { Button, Field, IconButton, Input, PasswordInput } from "../../../../web/src/components/ui/controls"
+import { Empty, Notice, Skeleton, toast } from "../../../../web/src/components/ui/feedback"
+import { Icon } from "../../../../web/src/components/ui/icon"
+import { Confirm } from "../../../../web/src/components/ui/overlay"
+import { full } from "../../../../web/src/lib/format"
 
-import { LoadState, useSettings } from "./common"
+import { PageLoad, SectionCard, useSettings } from "./common"
 
 type Session = { id: string; current: boolean; created_at: number }
+type SaveSettings = (patch: Record<string, string>, options?: { success?: string; quietStatus?: number }) => Promise<Error | null>
 
-function Sessions() {
+function Sessions({ revision }: { revision: number }) {
   const [rows, setRows] = useState<Session[] | null>(null)
-  const [busy, setBusy] = useState("")
-  // The list fails on its own while the rest of the page works. The card used
-  // to vanish with only a toast, which reads as "no other sessions" -- the one
-  // thing a failed read cannot tell.
   const [failed, setFailed] = useState(false)
+  const [busy, setBusy] = useState("")
+  const [revoking, setRevoking] = useState<Session | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
-  const load = () =>
-    api<Session[]>("/sessions")
-      .then((next) => { setRows(next); setFailed(false) })
-      .catch(() => { setRows(null); setFailed(true) })
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    api<Session[]>("/sessions", { signal: controller.signal })
+      .then(next => { if (!controller.signal.aborted) { setRows(next); setFailed(false) } })
+      .catch(() => { if (!controller.signal.aborted) setFailed(true) })
+    return () => controller.abort()
+  }, [revision, attempt])
+  const retry = () => { setRows(null); setFailed(false); setAttempt(value => value + 1) }
 
-  async function remove(id: string) {
-    setBusy(id)
+  async function remove() {
+    if (!revoking) return
+    const target = revoking
+    setBusy(target.id)
     try {
-      await api(`/sessions/${id}`, { method: "DELETE" })
-      toast.success("已删除会话")
-      load()
+      await api(`/sessions/${target.id}`, { method: "DELETE" })
+      toast(T("已删除会话"))
+      setRevoking(null)
+      setRows(old => old?.filter(session => session.id !== target.id) ?? null)
     } catch (e) {
-      toast.error((e as Error).message)
+      toast(T((e as Error).message), "bad")
     } finally {
       setBusy("")
     }
   }
 
-  if (!rows && !failed) return null
   return (
-    <Card>
-      <div>
-        <h3 className="text-sm font-medium">登录会话</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          每次登录一条，14 天后过期。删除后该设备下一次请求就被登出。
-        </p>
-      </div>
-      {!rows ? (
-        <div role="alert" className="load-state">
-          <span className="load-state-mark" aria-hidden="true">[ ! ]</span>
-          <p className="load-state-title">会话列表加载失败</p>
-          <p>暂时无法确认其他设备的登录状态。</p>
-          <Button variant="outline" size="sm" onClick={load}>重试</Button>
-        </div>
+    <SectionCard
+      id="sessions"
+      title={T("登录会话")}
+      icon="monitor"
+      aside={rows && <span className="muted small num">{T("{n} 个", { n: rows.length })}</span>}
+    >
+      {failed ? (
+        <Empty
+          error
+          compact
+          title={T("会话列表加载失败")}
+          detail={T("暂时无法确认其他设备的登录状态。")}
+          action={T("重试")}
+          onAction={retry}
+        />
+      ) : !rows ? (
+        <Skeleton style={{ height: 120 }} label={T("正在加载")} />
       ) : (
-      <div className="divide-y">
-        {rows.map((s) => (
-          <div key={s.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-              <span className="tnum">{new Date(s.created_at * 1000).toLocaleString()}</span>
-              {s.current && <Badge variant="secondary">当前设备</Badge>}
-            </div>
-            {/* 当前会话没有删除按钮：右上角的退出登录做的就是这件事，而在这里删
-                只会让已经渲染好的面板以为自己还登着。 */}
-            {!s.current && (
-              <Button size="icon" variant="ghost" title="删除会话" disabled={!!busy} onClick={() => remove(s.id)}>
-                <Trash2 />
-              </Button>
-            )}
-          </div>
-        ))}
-      </div>
+        <ul className="session-list">
+          {rows.map(session => {
+            const left = Math.ceil((session.created_at + 14 * 86400 - Date.now() / 1000) / 86400)
+            return (
+              <li key={session.id}>
+                <span className="session-icon"><Icon name={session.current ? "laptop" : "monitor"} size={16} /></span>
+                <span className="session-text">
+                  <span className="num">{T("登录于 {time}", { time: full(session.created_at * 1000) })}</span>
+                  <span className="muted small">{T("{n} 天后过期", { n: left })}</span>
+                </span>
+                {session.current
+                  ? <span className="tag" data-tone="accent">{T("当前设备")}</span>
+                  : <IconButton label={T("删除会话")} icon="trash-2" onClick={() => setRevoking(session)} tip="left" />}
+              </li>
+            )
+          })}
+        </ul>
       )}
-    </Card>
+      <p className="card-foot muted small">{T("每次登录一条，14 天后过期。删除后该设备下一次请求就被登出。")}</p>
+      {revoking && (
+        <Confirm
+          title={T("删除会话？")}
+          detail={T("登录于 {time} 的设备下一次请求就会被登出。", { time: full(revoking.created_at * 1000) })}
+          confirmLabel={T("删除会话")}
+          busy={busy === revoking.id}
+          onClose={() => setRevoking(null)}
+          onConfirm={remove}
+        />
+      )}
+    </SectionCard>
+  )
+}
+
+function SecurityContent({ settings, set, save, error, sessionRevision, onSettingsSaved }: {
+  settings: Record<string, string | boolean>
+  set: (key: string, value: string) => void
+  save: SaveSettings
+  error: string
+  sessionRevision: number
+  onSettingsSaved: () => void
+}) {
+  const [account, setAccount] = useState(String(settings.admin_username ?? "admin"))
+  const [current, setCurrent] = useState("")
+  const [next, setNext] = useState("")
+  const [tried, setTried] = useState(false)
+  const [currentError, setCurrentError] = useState("")
+  const [busy, setBusy] = useState(false)
+  const accountError = /^[A-Za-z0-9_.-]{1,64}$/.test(account) ? "" : T("1–64 位字母、数字、点、下划线或连字符")
+  const nextError = next.length < 12 ? T("至少 12 位") : ""
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setTried(true)
+    if (!current) {
+      setCurrentError(T("请填写当前密码"))
+      requestAnimationFrame(() => document.getElementById("current-password")?.focus())
+      return
+    }
+    if (accountError || nextError) return
+    setBusy(true)
+    const failure = await save(
+      { admin_username: account, admin_password: next, current_password: current },
+      { success: T("账号与密码已修改"), quietStatus: 403 },
+    )
+    setBusy(false)
+    if (!failure) {
+      setCurrent("")
+      setNext("")
+      setTried(false)
+      setCurrentError("")
+      set("admin_username", account)
+      onSettingsSaved()
+      return
+    }
+    if (failure instanceof ApiError && failure.status === 403) {
+      setCurrentError(T("当前密码不正确"))
+      requestAnimationFrame(() => document.getElementById("current-password")?.focus())
+    }
+  }
+
+  return (
+    <div className="security-layout">
+      {error && <Notice tone="bad">{T(error)}</Notice>}
+      <SectionCard id="account" title={T("账号与密码")} icon="key-round">
+        <form className="inspector-form" onSubmit={submit} noValidate>
+          <Field label={T("账号")} error={tried ? accountError : ""}>
+            <Input autoComplete="username" value={account} onChange={event => setAccount(event.target.value)} />
+          </Field>
+          <Field label={T("当前密码")} hint={T("修改账号或密码都需要先验证当前密码。")} error={currentError}>
+            <PasswordInput
+              id="current-password"
+              autoComplete="current-password"
+              value={current}
+              onChange={event => { setCurrent(event.target.value); setCurrentError("") }}
+            />
+          </Field>
+          <Field label={T("新密码")} hint={T("至少 12 位 · 已输入 {n} 位", { n: next.length })} error={tried ? nextError : ""}>
+            <PasswordInput autoComplete="new-password" value={next} onChange={event => setNext(event.target.value)} />
+          </Field>
+          <div className="inspector-actions">
+            <span className="dirty-note">{T("修改后，其他设备的登录会话失效")}</span>
+            <Button kind="primary" type="submit" busy={busy}>{T("保存")}</Button>
+          </div>
+        </form>
+      </SectionCard>
+      <Sessions revision={sessionRevision} />
+    </div>
   )
 }
 
 export function Security() {
   const { s, set, save, error, retry } = useSettings()
-  const [password, setPassword] = useState("")
-  const [current, setCurrent] = useState("")
-  const [currentError, setCurrentError] = useState("")
-  if (!s) return <LoadState error={error} retry={retry} />
-
+  const [sessions, setSessions] = useState(0)
+  const state = !s ? (error ? "error" : "loading") : "ready"
   return (
-    // The approved order: the account form, then the sessions it governs.
-    <div className="space-y-4">{error && <p role="alert" className="field-error">{error}</p>}
-      <Card>
-        <div>
-          <h3 className="text-sm font-medium">账号与密码</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            修改账号或密码后，其他设备的登录会话失效。
-          </p>
-        </div>
-        <Field label="账号"><Input value={String(s.admin_username ?? "admin")} onChange={e=>set("admin_username",e.target.value)}/></Field>
-        <Field label="当前密码" hint="修改账号或密码都需要先验证当前密码。" error={currentError}>
-          <Input type="password" value={current} onChange={(e) => { setCurrent(e.target.value); setCurrentError("") }} autoComplete="current-password" />
-        </Field>
-        <Field label="新密码" hint="至少 12 位">
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-        </Field>
-        <div>
-          <Button
-            size="sm"
-            disabled={password.length < 12 || current === ""}
-            onClick={() =>
-              save({
-                admin_username: String(s.admin_username ?? "admin"),
-                admin_password: password,
-                current_password: current,
-              }).then((failure) => {
-                // Cleared only once the hub accepted it. A rejected change that
-                // empties the fields leaves the operator retyping a password the
-                // panel never said it refused.
-                if (!failure) {
-                  setPassword("")
-                  setCurrent("")
-                  return
-                }
-                // A wrong password is the one refusal that belongs on a field.
-                // Anything else is a failure of the request, which `save`
-                // already reported.
-                const refused = failure instanceof ApiError && failure.status === 403
-                setCurrentError(refused ? "当前密码不正确" : "")
-              })
-            }
-          >
-            修改密码
-          </Button>
-        </div>
-      </Card>
-
-      <Sessions />
-    </div>
+    <PageLoad state={state} label={T("安全设置")} onRetry={retry} detail={T(error)}>
+      {s && <SecurityContent key={String(s.admin_username)} settings={s} set={set} save={save} error={error} sessionRevision={sessions} onSettingsSaved={() => setSessions(value => value + 1)} />}
+    </PageLoad>
   )
 }
