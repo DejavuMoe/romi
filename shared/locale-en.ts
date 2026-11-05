@@ -357,7 +357,7 @@ export const en: Record<string, Entry> = {
   "全部打开": "Turn all on",
   "全部关闭": "Turn all off",
   "清除请求头": "Clear headers",
-  "清除": "Clear",
+  "清除 Webhook": "Clear webhook",
 
   // Data, backup and maintenance
   "数据": "Data",

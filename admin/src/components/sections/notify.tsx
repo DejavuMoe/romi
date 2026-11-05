@@ -345,7 +345,7 @@ function NotifyContent({ settings, set, save, dirty, error, nodes, refresh }: {
         )}
         {whConfigured && (
           <button type="button" className="link-button danger-link" onClick={() => void saveChannel("wh", { notify_webhook_url: "", notify_webhook_headers: "" }, T("已保存"))}>
-            {T("清除")}
+            {T("清除 Webhook")}
           </button>
         )}
       </ChannelCard>

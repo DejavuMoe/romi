@@ -454,7 +454,7 @@ test('the v15 notification section saves credentials without echoing them', asyn
   await expect(headers.locator('..').getByText('可选，一行一个', { exact: true })).toBeVisible()
   await expect(headers.locator('..').getByText('已设置，留空不变', { exact: true })).toHaveCount(0)
 
-  await webhook.getByRole('button', { name: '清除', exact: true }).click()
+  await webhook.getByRole('button', { name: '清除 Webhook', exact: true }).click()
   await expect.poll(async () => (await hub.request('/api/settings')).notify_webhook_url_set).toBe(false)
   saved = await hub.request('/api/settings')
   expect(saved.notify_webhook_headers_set).toBe(false)
