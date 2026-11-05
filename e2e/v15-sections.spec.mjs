@@ -101,6 +101,41 @@ test('the v15 security section requires the current password and confirms sessio
   expect(Math.abs(geometry.leftGap)).toBeLessThanOrEqual(2)
   expect(Math.abs(geometry.rightGap)).toBeLessThanOrEqual(2)
 
+  // The prototype footer only sets its display, alignment, height and bottom
+  // edge. Compare the rest with `.muted.small` so the old public-card footer
+  // rules cannot leak into the section card.
+  const footer = await page.locator('.security-layout .card-foot').evaluate(foot => {
+    const reference = document.createElement('span')
+    reference.className = 'muted small'
+    document.body.append(reference)
+    const read = element => {
+      const style = getComputedStyle(element)
+      return {
+        fontSize: style.fontSize,
+        color: style.color,
+        justifyContent: style.justifyContent,
+        marginTop: style.marginTop,
+        flexWrap: style.flexWrap,
+        gap: style.gap,
+        paddingTop: style.paddingTop,
+        paddingBottom: style.paddingBottom,
+        borderTopWidth: style.borderTopWidth,
+      }
+    }
+    const result = { actual: read(foot), target: read(reference) }
+    reference.remove()
+    return result
+  })
+  expect(footer.actual.fontSize).toBe(footer.target.fontSize)
+  expect(footer.actual.color).toBe(footer.target.color)
+  expect(footer.actual.justifyContent).toBe('normal')
+  expect(footer.actual.marginTop).toBe('auto')
+  expect(footer.actual.flexWrap).toBe('nowrap')
+  expect(footer.actual.gap).toBe('normal')
+  expect(footer.actual.paddingTop).toBe('0px')
+  expect(footer.actual.paddingBottom).toBe('0px')
+  expect(footer.actual.borderTopWidth).toBe('0px')
+
   const current = page.getByLabel('当前密码', { exact: true })
   const next = page.getByLabel('新密码', { exact: true })
   const submit = page.getByRole('button', { name: '保存', exact: true })

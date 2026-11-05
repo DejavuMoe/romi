@@ -1112,10 +1112,15 @@
 .card > .card-foot {
   display: flex;
   align-items: center;
+  justify-content: normal;
+  flex-wrap: nowrap;
+  gap: normal;
   min-height: var(--control);
-  margin-top: 0;
+  margin-top: auto;
   padding: 0;
-  border-top: 0;
+  border: 0;
+  font-size: var(--fs-md);
+  color: var(--text-3);
 }
 
 /* security */
