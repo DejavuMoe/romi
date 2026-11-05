@@ -32,6 +32,22 @@ async function expectNoChinese(locator) {
   expect(await locator.innerText()).not.toMatch(/[\u3400-\u9fff]/)
 }
 
+async function expectFullContentWidth(page, selector) {
+  const geometry = await page.locator(selector).evaluate(layout => {
+    const content = layout.closest('.admin-content')
+    if (!content) throw new Error('section is outside the admin content column')
+    const box = layout.getBoundingClientRect()
+    const frame = content.getBoundingClientRect()
+    const style = getComputedStyle(content)
+    return {
+      leftGap: Math.round(box.left - frame.left - parseFloat(style.paddingLeft)),
+      rightGap: Math.round(frame.right - parseFloat(style.paddingRight) - box.right),
+    }
+  })
+  expect(Math.abs(geometry.leftGap)).toBeLessThanOrEqual(2)
+  expect(Math.abs(geometry.rightGap)).toBeLessThanOrEqual(2)
+}
+
 test('the v15 probes section selects, creates, edits and deletes a monitor', async ({ page, hub }) => {
   const online = await hub.node('Online edge', false)
   await hub.node('Offline edge', false)
@@ -133,19 +149,7 @@ test('the v15 security section requires the current password and confirms sessio
   // The approved v15 sections use the whole content column, not the old
   // 960px settings page. Measure against its padding so the assertion follows
   // both desktop and mobile shells.
-  const geometry = await page.locator('.security-layout').evaluate(layout => {
-    const content = layout.closest('.admin-content')
-    if (!content) throw new Error('security page is outside the admin content column')
-    const box = layout.getBoundingClientRect()
-    const frame = content.getBoundingClientRect()
-    const style = getComputedStyle(content)
-    return {
-      leftGap: Math.round(box.left - frame.left - parseFloat(style.paddingLeft)),
-      rightGap: Math.round(frame.right - parseFloat(style.paddingRight) - box.right),
-    }
-  })
-  expect(Math.abs(geometry.leftGap)).toBeLessThanOrEqual(2)
-  expect(Math.abs(geometry.rightGap)).toBeLessThanOrEqual(2)
+  await expectFullContentWidth(page, '.security-layout')
 
   // The prototype footer only sets its display, alignment, height and bottom
   // edge. Compare the rest with `.muted.small` so the old public-card footer
@@ -274,5 +278,91 @@ test('the migrated security section has English interface copy', async ({ page, 
   const loadError = page.getByRole('alert').filter({ hasText: "Couldn't load Security settings" })
   await expect(loadError).toBeVisible()
   await expectNoChinese(loadError)
+  await expectNoChinese(page.locator('main'))
+})
+
+test('the v15 settings section discards, saves and restores the site form', async ({ page, hub }) => {
+  await signIn(page)
+  await navigateAdmin(page, '设置')
+  await expect(page.getByRole('heading', { name: '站点', exact: true })).toBeVisible()
+  await expectFullContentWidth(page, '.settings-layout')
+
+  const site = page.getByLabel('站点名称', { exact: true })
+  const original = await site.inputValue()
+  const bar = page.locator('.save-bar')
+  await expect(bar).toHaveAttribute('aria-hidden', 'true')
+
+  await site.fill('V15 settings site')
+  await expect(bar).toHaveAttribute('aria-hidden', 'false')
+  await bar.getByRole('button', { name: '放弃', exact: true }).click()
+  await expect(site).toHaveValue(original)
+  await expect(bar).toHaveAttribute('aria-hidden', 'true')
+
+  await site.fill('V15 persisted site')
+  await page.getByRole('radio', { name: '列表', exact: true }).click()
+  await page.getByLabel('分钟历史保留天数', { exact: true }).fill('90')
+  await page.getByLabel('连续在线重置阈值（分钟）', { exact: true }).fill('15')
+  await bar.getByRole('button', { name: '保存站点设置', exact: true }).click()
+  await expect(page.getByText('站点设置已保存', { exact: true })).toBeVisible()
+  await expect(bar).toHaveAttribute('aria-hidden', 'true')
+
+  const saved = await hub.request('/api/settings')
+  expect(saved.site_name).toBe('V15 persisted site')
+  expect(saved.public_default_view).toBe('list')
+  expect(saved.retention_days).toBe('90')
+  expect(saved.online_grace_minutes).toBe('15')
+
+  await page.reload()
+  await expect(page.getByLabel('站点名称', { exact: true })).toHaveValue('V15 persisted site')
+  await expect(page.getByRole('radio', { name: '列表', exact: true })).toHaveAttribute('aria-checked', 'true')
+  await expect(page.getByLabel('分钟历史保留天数', { exact: true })).toHaveValue('90')
+  await expect(page.getByLabel('连续在线重置阈值（分钟）', { exact: true })).toHaveValue('15')
+})
+
+test('the v15 settings section validates fields and moves the view choice by keyboard', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '设置')
+  const site = page.getByLabel('站点名称', { exact: true })
+  const retention = page.getByLabel('分钟历史保留天数', { exact: true })
+  const save = page.getByRole('button', { name: '保存站点设置', exact: true })
+
+  await retention.fill('60')
+  await site.fill('')
+  await expect(page.getByRole('alert').filter({ hasText: '请填写站点名称' })).toBeVisible()
+  await expect(save).toBeDisabled()
+
+  await site.fill('Validation site')
+  await retention.fill('0')
+  await expect(page.getByRole('alert').filter({ hasText: '不能小于 1' })).toBeVisible()
+  await retention.fill('3651')
+  await expect(page.getByRole('alert').filter({ hasText: '不能大于 3650' })).toBeVisible()
+  const grace = page.getByLabel('连续在线重置阈值（分钟）', { exact: true })
+  await grace.fill('61')
+  await expect(page.getByRole('alert').filter({ hasText: '不能大于 60' })).toBeVisible()
+
+  await retention.fill('30')
+  await grace.fill('5')
+  const cards = page.getByRole('radio', { name: '卡片', exact: true })
+  await cards.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('radio', { name: '列表', exact: true })).toHaveAttribute('aria-checked', 'true')
+  await expect(page.getByRole('radio', { name: '列表', exact: true })).toBeFocused()
+  await expect(save).toBeEnabled()
+})
+
+test('the migrated settings section has English interface copy', async ({ page }) => {
+  await signIn(page)
+  await page.route('**/api/geolite', route => route.fulfill({ status: 503, contentType: 'text/plain', body: 'temporary geo failure' }))
+  await navigateAdmin(page, '设置')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Site', exact: true })).toBeVisible()
+  await expect(page.getByText('Not configured', { exact: true })).toBeVisible()
+  const readError = page.getByRole('alert').filter({ hasText: 'temporary geo failure' })
+  await expect(readError).toBeVisible()
+  await expectNoChinese(readError)
+  await expectNoChinese(page.locator('main'))
+
+  await page.getByLabel('Minute history retention (days)', { exact: true }).fill('60')
+  await expect(page.getByRole('alert').filter({ hasText: 'Enter a site name' })).toBeVisible()
   await expectNoChinese(page.locator('main'))
 })

@@ -17,8 +17,8 @@ test('revoking the current session returns an open panel to login', async ({ pag
   await expect(page.getByRole('navigation', { name: '后台导航' })).toHaveCount(0)
 })
 
-for (const [section, loaded] of [
-  ['设置', '保存站点设置'], ['通知', '保存事件设置'], ['安全', '保存'],
+for (const [section, role, loaded] of [
+  ['设置', 'heading', '站点'], ['通知', 'button', '保存事件设置'], ['安全', 'button', '保存'],
 ]) {
   test(`${section} recovers from a failed settings request`, async ({ page }) => {
     await signIn(page)
@@ -28,9 +28,9 @@ for (const [section, loaded] of [
       : route.continue())
     await navigateAdmin(page, section)
     await expect(page.getByRole('alert')).toContainText('Temporary settings failure')
-    await expect(page.getByRole('button', { name: loaded, exact: true })).toHaveCount(0)
+    await expect(page.getByRole(role, { name: loaded, exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: '重试', exact: true }).click()
-    await expect(page.getByRole('button', { name: loaded, exact: true })).toBeVisible()
+    await expect(page.getByRole(role, { name: loaded, exact: true })).toBeVisible()
     await expect(page.getByRole('alert').filter({ hasText: 'Temporary settings failure' })).toHaveCount(0)
     expect(requests).toBe(2)
   })
@@ -41,7 +41,7 @@ test('saving settings survives a page reload', async ({ page }) => {
   await navigateAdmin(page, '设置')
   await page.getByLabel('站点名称', { exact: true }).fill('Saved E2E site')
   await page.getByRole('button', { name: '保存站点设置' }).click()
-  await expect(page.getByText('已保存', { exact: true })).toBeVisible()
+  await expect(page.getByText('站点设置已保存', { exact: true })).toBeVisible()
   await page.reload()
   await expect(page.getByLabel('站点名称', { exact: true })).toHaveValue('Saved E2E site')
   await expect(page).toHaveTitle('Saved E2E site · 管理')

@@ -18,7 +18,7 @@ export function Admin({
   refresh: () => void
 }) {
   return (
-    <div className={`flex flex-col gap-4 ${["/admin/settings","/admin/data","/admin/notify"].includes(path) ? "settings-page" : ""}`}>
+    <div className={`flex flex-col gap-4 ${["/admin/data","/admin/notify"].includes(path) ? "settings-page" : ""}`}>
       <div className="min-w-0 flex-1">
         {path === "/admin/ping" ? (
           <Ping nodes={nodes} />
