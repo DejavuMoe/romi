@@ -213,7 +213,7 @@ test('the v15 security section requires the current password and confirms sessio
   await expect(rows).toHaveCount(before - 1)
 })
 
-test('a successful credential change keeps the security form mounted', async ({ page, hub }) => {
+test('a successful credential change keeps the security form mounted', async ({ page }) => {
   await signIn(page)
   await navigateAdmin(page, '安全')
   await expect(page.getByRole('heading', { name: '账号与密码', exact: true })).toBeVisible()
