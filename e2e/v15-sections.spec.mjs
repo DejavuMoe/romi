@@ -529,3 +529,137 @@ test('the migrated notification section has English interface copy', async ({ pa
   await expectNoChinese(loadError)
   await expectNoChinese(page.locator('main'))
 })
+
+test('the v15 data section shows the database and saves the maintenance schedule', async ({ page, hub }) => {
+  await signIn(page)
+  await navigateAdmin(page, '数据')
+  await expect(page.getByRole('heading', { name: '数据库', exact: true })).toBeVisible()
+  await expect(page.locator('.db-size')).toBeVisible()
+  const download = page.getByRole('link', { name: '下载备份', exact: true })
+  await expect(download).toHaveAttribute('href', '/api/db/backup')
+  await expect(download).toHaveAttribute('download', '')
+  await expect(page.locator('input[type="file"]')).toHaveAttribute('accept', /\.gz/)
+
+  const schedule = page.getByRole('combobox', { name: '自动维护周期', exact: true })
+  await schedule.selectOption('7')
+  await page.getByRole('button', { name: '保存周期', exact: true }).click()
+  await expect(page.getByText('已保存', { exact: true })).toBeVisible()
+  await expect.poll(async () => (await hub.request('/api/settings')).maintenance_days).toBe('7')
+  await page.reload()
+  await expect(page.getByRole('combobox', { name: '自动维护周期', exact: true })).toHaveValue('7')
+})
+
+test('the v15 data section gates restore on the backup checkbox and rejects non-backups', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '数据')
+  const picker = page.locator('input[type="file"]')
+  await picker.setInputFiles({ name: 'not-a-backup.zip', mimeType: 'application/zip', buffer: Buffer.from('no') })
+  await expect(page.getByText('请选择 .tar.gz 备份文件', { exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  await picker.setInputFiles({ name: 'romi-backup.tar.gz', mimeType: 'application/gzip', buffer: Buffer.alloc(32, 1) })
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading', { name: '用备份覆盖当前数据？', exact: true })).toBeVisible()
+  const confirm = dialog.getByRole('button', { name: '确认恢复', exact: true })
+  await expect(confirm).toBeDisabled()
+  await dialog.getByRole('checkbox', { name: '我已保留当前数据的备份', exact: true }).check()
+  await expect(confirm).toBeEnabled()
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+})
+
+test('cancelling a restore leaves the database unchanged', async ({ page, hub }) => {
+  await hub.request('/api/settings', { method: 'PUT', body: { site_name: 'before restore' } })
+  await signIn(page)
+  await navigateAdmin(page, '数据')
+  const chunks = []
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  await page.route('**/api/db/restore?**', async route => {
+    chunks.push(new URL(route.request().url()).searchParams.get('offset'))
+    await held
+    await route.continue().catch(() => {})
+  })
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'romi-backup.tar.gz', mimeType: 'application/gzip', buffer: Buffer.alloc(5 * 1024 * 1024, 1),
+  })
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('checkbox', { name: '我已保留当前数据的备份', exact: true }).check()
+  await dialog.getByRole('button', { name: '确认恢复', exact: true }).click()
+  await expect.poll(() => chunks.length).toBe(1)
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.getByText('已取消，数据库没有改动', { exact: true })).toBeVisible()
+  release()
+  await page.waitForTimeout(300)
+  expect(chunks).toEqual(['0'])
+  expect((await hub.request('/api/settings')).site_name).toBe('before restore')
+})
+
+test('the restore verification phase disables cancel', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '数据')
+  await page.route('**/api/db/restore?**', async route => {
+    const offset = new URL(route.request().url()).searchParams.get('offset')
+    if (offset === '0') return route.fulfill({ status: 200, json: { received: 4 * 1024 * 1024 } })
+    await new Promise(resolve => setTimeout(resolve, 1200))
+    return route.fulfill({ status: 400, contentType: 'text/plain', body: 'final upload failure' })
+  })
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'romi-backup.tar.gz', mimeType: 'application/gzip', buffer: Buffer.alloc(5 * 1024 * 1024, 1),
+  })
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('checkbox', { name: '我已保留当前数据的备份', exact: true }).check()
+  await dialog.getByRole('button', { name: '确认恢复', exact: true }).click()
+  await expect(dialog.getByRole('button', { name: '正在校验并切换', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: '取消', exact: true })).toBeDisabled()
+  await expect(page.getByText('final upload failure', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: '确认恢复', exact: true })).toBeVisible()
+})
+
+test('the v15 data section reports both maintenance outcomes', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '数据')
+  let calls = 0
+  await page.route('**/api/db/maintenance', route => {
+    calls += 1
+    return route.fulfill({
+      json: calls === 1
+        ? { pruned: 1284, freed: 18.4 * 1024 * 1024, compacted: true, reusable: 0 }
+        : { pruned: 1284, freed: 0, compacted: false, reusable: 18.4 * 1024 * 1024 },
+    })
+  })
+
+  await page.getByRole('button', { name: '运行维护', exact: true }).click()
+  const first = page.getByRole('dialog')
+  await first.getByRole('button', { name: '运行维护', exact: true }).click()
+  await expect(page.getByText('已清理 1,284 行，重写文件后实际回收 18.4 MiB', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '运行维护', exact: true }).click()
+  const second = page.getByRole('dialog')
+  await second.getByRole('button', { name: '运行维护', exact: true }).click()
+  await expect(page.getByText('已清理 1,284 行，可复用 18.4 MiB 未达重写阈值，本次未重写文件', { exact: true })).toBeVisible()
+})
+
+test('the migrated data section has English interface copy', async ({ page }) => {
+  await signIn(page)
+  await navigateAdmin(page, '数据')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Database', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Backup and restore', exact: true })).toBeVisible()
+  await expectNoChinese(page.locator('main'))
+
+  await page.locator('input[type="file"]').setInputFiles({ name: 'romi-backup.tar.gz', mimeType: 'application/gzip', buffer: Buffer.alloc(32, 1) })
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByText('Replace current data with the backup?', { exact: true })).toBeVisible()
+  await expectNoChinese(dialog)
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  await page.route('**/api/db', route => route.fulfill({ status: 500, contentType: 'text/plain', body: 'test database failure' }))
+  await page.reload()
+  const loadError = page.getByRole('alert').filter({ hasText: "Couldn't load Storage" })
+  await expect(loadError).toBeVisible()
+  await expectNoChinese(loadError)
+  await expectNoChinese(page.locator('main'))
+})

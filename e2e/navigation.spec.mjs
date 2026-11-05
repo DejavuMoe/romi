@@ -88,6 +88,7 @@ test('leaving the data section stops an unfinished restore', async ({ page }) =>
   await page.locator('input[type=file]').setInputFiles({
     name: 'romi-backup.tar.gz', mimeType: 'application/gzip', buffer: Buffer.alloc(size, 1),
   })
+  await page.getByRole('checkbox', { name: '我已保留当前数据的备份', exact: true }).check()
   await page.getByRole('button', { name: '确认恢复', exact: true }).click()
   await expect.poll(() => chunks.length).toBe(1)
 

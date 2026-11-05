@@ -107,13 +107,12 @@ test('v7 node settings, card navigation and maintenance persist through real API
   await page.getByRole('link',{name:'节点',exact:true}).click()
   await expect(page.getByRole('table',{name:'节点列表',exact:true})).toBeVisible()
   await navigateAdmin(page,'数据')
-  await expect(page.getByRole('combobox',{name:'自动维护周期',exact:true})).toContainText('关闭')
-  await page.getByRole('combobox',{name:'自动维护周期',exact:true}).click()
-  await page.getByRole('option',{name:'每 7 天',exact:true}).click()
+  await expect(page.getByRole('combobox',{name:'自动维护周期',exact:true})).toHaveValue('0')
+  await page.getByRole('combobox',{name:'自动维护周期',exact:true}).selectOption('7')
   await page.getByRole('button',{name:'保存周期',exact:true}).click()
   await expect.poll(async()=>(await hub.request('/api/settings')).maintenance_days).toBe('7')
   await page.reload()
-  await expect(page.getByRole('combobox',{name:'自动维护周期',exact:true})).toContainText('每 7 天')
+  await expect(page.getByRole('combobox',{name:'自动维护周期',exact:true})).toHaveValue('7')
 })
 
 test('local login requires both the configured account and password',async({page,hub})=>{

@@ -87,6 +87,7 @@ export async function upload<T>(
   file: File,
   onProgress?: (sent: number) => void,
   signal?: AbortSignal,
+  onFinalChunk?: () => void,
 ): Promise<T> {
   if (file.size === 0) throw new ApiError(400, "文件是空的")
   let last: Response | null = null
@@ -100,6 +101,7 @@ export async function upload<T>(
     // up on it -- so aborting it would report "nothing changed" about a restore
     // the hub may be applying. Earlier chunks change nothing and stay abortable.
     const final = offset + CHUNK >= file.size
+    if (final) onFinalChunk?.()
     const res = await fetch(`/api${path}?offset=${offset}&total=${file.size}`, {
       method: "POST",
       headers: { "content-type": "application/octet-stream" },
