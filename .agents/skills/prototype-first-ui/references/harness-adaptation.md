@@ -7,15 +7,17 @@ not invent unavailable tools or claim capabilities based on another product.
 
 ### Level 1 — repository workflow
 
-Required for bootstrap, audit, and implementation:
+Required for the scripted product UI workflow and optional bootstrap:
 
 - read/search/write files;
 - run local shell commands;
 - use Git;
 - inspect command output.
 
-If these are missing, the full workflow is not executable. Provide only a manual
-plan and state the limitation.
+Without Git or a shell, the UI commit gate is not executable. File-capable agents
+can still author standalone systems, slides, diagrams and static prototypes;
+report missing checks and never claim gated implementation. Read-only agents can
+provide a specification but must not claim to have created files.
 
 ### Level 2 — rendered prototype review
 
@@ -67,7 +69,15 @@ intentionally tied to that client.
 Skill invocation syntax also varies. `$prototype-first-ui` is an example, not a
 portable command. Use the host's skill selector, a supported slash invocation,
 or ask it to read `prototype-first-ui/SKILL.md` in the project's actual skills
-directory. Resolve dependency paths through the host's skill discovery mechanism.
+directory. Install only at project scope; never write global/home skill folders.
+No named external design skill is required.
+
+Image generation, native document export and chart rendering are optional
+capabilities. Reuse available tools or project libraries; plain HTML/CSS/SVG is
+a portable editable fallback. A missing PPTX/PDF/native renderer must be reported
+as a missing deliverable or check, never silently replaced or claimed complete.
+Do not enforce a model family, hosted artifact API, custom editor, or Node runtime
+on all agents merely because one adapter uses it.
 
 ## Questions and ambiguity
 

@@ -23,7 +23,6 @@ The interface uses system fonts only; no font files are distributed.
 - Prototype vendor provenance and notices: `designs/romi-next/vendor/`.
 - The MaxMind GeoIP2 Country test database (`GeoIP2-Country-Test.mmdb`, MIT) and its notice: `server/testdata/maxmind/`.
   It is used by tests and not shipped.
-- Local development skills under `.agents/skills/` keep their own licenses: `baoyu-design` (MIT),
-  `prototype-first-ui` (Apache-2.0) and `security-audit` (MIT, Cloudflare).
+- The local development skill `prototype-first-ui` under `.agents/skills/` keeps its own license (MIT).
 
 Exact dependency versions are in `server/Cargo.lock`, `agent/Cargo.lock` and `pnpm-lock.yaml`.

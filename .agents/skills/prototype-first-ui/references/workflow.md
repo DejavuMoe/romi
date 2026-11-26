@@ -1,7 +1,8 @@
 # Workflow reference
 
-This file defines the detailed lifecycle behind `SKILL.md`. Read the sections for
-the selected mode only.
+This file defines the product UI lifecycle behind `SKILL.md`. Read only the
+selected mode. Standalone design systems, decks, print layouts and charts use
+their capability reference and delivery checks, not this production UI gate.
 
 ## State machine
 
@@ -162,7 +163,7 @@ by default.
 
 ### C2. Direction generation
 
-Invoke `$baoyu-design`. Use the same capability set and sanitized fixture data for
+Follow [UI design](ui-design.md). Use the same capability set and sanitized fixture data for
 all directions. Vary real information architecture:
 
 - navigation model;
@@ -179,7 +180,7 @@ Recommended structure:
 
 ```text
 designs/<project>/
-├── _d_meta.json
+├── design-review.json
 ├── ui-contract.json
 ├── design-sources.json       # when external/multimodal sources are used
 ├── content-inventory.json
@@ -194,8 +195,9 @@ designs/<project>/
 └── screenshots/
 ```
 
-Baoyu-Design may use another compatible split. Preserve its required metadata and
-keep small changes diff-readable.
+Create only files the deliverable needs; plain HTML/CSS/JS or the existing stack
+is sufficient. Keep small changes diff-readable and list visual/behavior
+dependencies in the UI contract. No external editor/runtime is required.
 
 ### C3. Content and runtime review
 
@@ -234,7 +236,8 @@ asks for exploration, produce one coherent extension.
 Approval is a state transition, not a mood. Require the exact deliverable path or
 an unambiguous immediately preceding version.
 
-1. Re-record the same path with Baoyu-Design status `approved`.
+1. Record the same path as `approved` in `design-review.json` with actual user
+   approval evidence, following [the review contract](design-review.md).
 2. Re-capture strings; no unclassified or removal-pending content may remain.
 3. Validate source roles and UI contract.
 4. Run:
@@ -341,7 +344,7 @@ python <skill-dir>/scripts/validate_workflow.py sources \
 python <skill-dir>/scripts/content_audit.py check \
   --inventory designs/<project>/content-inventory.json
 
-# Exact Baoyu approval
+# Exact project-owned approval
 python <skill-dir>/scripts/validate_workflow.py approval \
   --project-dir designs/<project> --asset-path <file>
 ```

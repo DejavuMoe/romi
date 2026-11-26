@@ -1,9 +1,51 @@
 {
   "evals": [
     {
-      "name": "design-dependency-unavailable",
+      "name": "project-local-system-from-real-components",
+      "prompt": "Build a design system for this repository from its existing CSS tokens and component library. It must work for different AI agents; do not install global skills.",
+      "expected_output": "The agent enters system mode, reads actual tokens/exports and brand guidance, preserves their format, demonstrates relevant real component states and composition, documents consumption and gaps, and keeps all work project-local. It does not create a second token authority or require a proprietary editor/model.",
+      "files": []
+    },
+    {
+      "name": "standalone-deck-is-not-production-ui",
+      "prompt": "Use our project brand and the attached approved copy to create an editable six-slide introduction. We have no application routes or UI contract.",
+      "expected_output": "The agent enters compose mode, reuses the project system, creates the deck and inspects rendered slides using available tools. It does not require fake routes, a capability audit, a UI contract or an approval commit merely to deliver the deck. It distinguishes editable source from a flattened export.",
+      "files": []
+    },
+    {
+      "name": "dashboard-traceability-and-no-invented-data",
+      "prompt": "Turn this CSV of daily orders into a dashboard with total revenue and a conversion rate. It contains orders and revenue but no visit counts.",
+      "expected_output": "The agent enters visualize mode, inspects data and units, computes and checks supported metrics, identifies the missing conversion denominator and does not invent it, uses stable series identities and meaningful empty/error states, and renders the result. It does not create a database or live refresh service without need.",
+      "files": []
+    },
+    {
+      "name": "missing-native-export-is-reported",
+      "prompt": "Make an editable PowerPoint deck with our design system. This agent can write files and preview HTML but has no PPTX exporter or compatible library.",
+      "expected_output": "The agent produces useful editable source and a preview where possible, explicitly states that the requested PPTX remains undelivered, and never renames HTML/PDF or claims a successful PowerPoint export. It does not install a global design suite.",
+      "files": []
+    },
+    {
+      "name": "shared-system-change-needs-consumer-review",
+      "prompt": "Update our shared brand colors. An already-approved prototype copied the old tokens and production is being implemented from it.",
+      "expected_output": "The agent identifies affected consumers, updates the requested canonical system, and does not silently refresh the frozen approved prototype. Any adoption that changes its appearance returns to review and a new approved design commit before implementation.",
+      "files": []
+    },
+    {
+      "name": "legacy-status-is-not-migrated-consent",
+      "prompt": "Upgrade this 2.x project. _d_meta.json says approved but no approval instruction or reviewed dependency revision is available. Implement it with v3.",
+      "expected_output": "The agent preserves legacy evidence, creates project-owned design-review.json as needs-review, inventories dependencies, prepares a reviewable current deliverable and explains why approval cannot be inferred. It does not fabricate approvalEvidence or use legacy status to pass the gate.",
+      "files": []
+    },
+    {
+      "name": "small-visual-does-not-build-a-framework",
+      "prompt": "Make a small SVG process diagram using the existing project colors. No design-system overhaul is requested.",
+      "expected_output": "The agent uses compose mode and existing colors, produces and inspects the SVG, and avoids adding a brand book, editor, new dependencies, UI contracts or extra skill packages.",
+      "files": []
+    },
+    {
+      "name": "independent-design-without-upstream",
       "prompt": "Audit the existing UI and then prototype an improvement. Baoyu-Design is not installed and cannot be downloaded.",
-      "expected_output": "The agent completes the independent capability audit and reports that prototype generation requires Baoyu-Design. It stops before dependent design generation.",
+      "expected_output": "The agent audits the product and creates a prototype using bundled capability guidance and available tools. It does not install or require Baoyu-Design, its editor or its metadata. If rendering is unavailable it delivers a draft and reports that gap, not a missing upstream skill.",
       "files": []
     },
     {

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import subprocess
 import sys
@@ -115,7 +115,7 @@ def safe_relative(value: object, label: str) -> Optional[str]:
         raise ValueError("%s must be a non-empty relative POSIX path" % label)
     normalized = value.replace("\\", "/")
     path = PurePosixPath(normalized)
-    if path.is_absolute() or ".." in path.parts:
+    if path.is_absolute() or PureWindowsPath(normalized).drive or ".." in path.parts or str(path) == ".":
         raise ValueError("%s must not be absolute or traverse parents: %r" % (label, value))
     return str(path)
 
@@ -145,7 +145,7 @@ def cmd_structure(args: argparse.Namespace) -> int:
         project = (repo / args.project_dir).resolve() if not Path(args.project_dir).is_absolute() else Path(args.project_dir).resolve()
         required.extend(
             [
-                project / "_d_meta.json",
+                project / "design-review.json",
                 project / "ui-contract.json",
                 project / "content-inventory.json",
             ]
@@ -178,33 +178,23 @@ def cmd_design_scope(args: argparse.Namespace) -> int:
 
 
 def approved_asset(data: object, asset_path: str) -> Tuple[str, Dict[str, object]]:
-    if not isinstance(data, dict):
-        raise ValueError("_d_meta.json must contain an object")
+    if not isinstance(data, dict) or data.get("schemaVersion") != 1:
+        raise ValueError("design-review.json must be an object with schemaVersion 1")
     assets = data.get("assets")
-    if not isinstance(assets, dict):
-        raise ValueError("_d_meta.json has no assets map")
-
-    matches: List[Tuple[str, Dict[str, object]]] = []
-    for name, asset in assets.items():
-        if not isinstance(asset, dict):
-            continue
-        versions = asset.get("versions")
-        if not isinstance(versions, list):
-            continue
-        for version in versions:
-            if isinstance(version, dict) and version.get("path") == asset_path:
-                matches.append((str(name), version))
-
+    if not isinstance(assets, list):
+        raise ValueError("design-review.json must contain an assets list")
+    matches = [asset for asset in assets if isinstance(asset, dict) and asset.get("path") == asset_path]
     if not matches:
-        raise ValueError("No Baoyu-Design asset version matches path %r" % asset_path)
-    # If malformed metadata contains duplicate path records, the last record is the
-    # effective latest one and duplicates are reported as an error.
+        raise ValueError("No design review matches path %r" % asset_path)
     if len(matches) != 1:
         raise ValueError("Asset path %r appears %d times; expected exactly once" % (asset_path, len(matches)))
-    name, version = matches[0]
-    if version.get("status") != "approved":
-        raise ValueError("Asset %r at %r is %r, not approved" % (name, asset_path, version.get("status")))
-    return name, version
+    asset = matches[0]
+    if asset.get("status") != "approved":
+        raise ValueError("Asset %r is %r, not approved" % (asset_path, asset.get("status")))
+    evidence = asset.get("approvalEvidence")
+    if not isinstance(evidence, str) or not evidence.strip():
+        raise ValueError("Approved asset %r requires approvalEvidence" % asset_path)
+    return asset_path, asset
 
 
 def cmd_approval(args: argparse.Namespace) -> int:
@@ -215,7 +205,7 @@ def cmd_approval(args: argparse.Namespace) -> int:
         print("ERROR: %s" % exc, file=sys.stderr)
         return 1
     assert normalized is not None
-    data = load_json(project / "_d_meta.json")
+    data = load_json(project / "design-review.json")
     try:
         name, version = approved_asset(data, normalized)
     except ValueError as exc:
@@ -225,7 +215,7 @@ def cmd_approval(args: argparse.Namespace) -> int:
     if not target.is_file():
         print("ERROR: Approved asset file does not exist: %s" % target, file=sys.stderr)
         return 1
-    print("APPROVED: %s -> %s (createdAt=%s)" % (name, normalized, version.get("createdAt", "unknown")))
+    print("APPROVED: %s (evidence=%s)" % (name, version["approvalEvidence"]))
     return 0
 
 
@@ -334,8 +324,14 @@ def validate_contract(
                 if asset_path and check_files and phase in {"approved", "implemented"} and not (project / asset_path).is_file():
                     errors.append("%s: prototype asset does not exist: %s" % (surface_id, asset_path))
                 files = ensure_string_list(prototype.get("files"), "%s.prototype.files" % surface_id)
+                if phase in {"approved", "implemented"} and (not entry or not asset_path or entry not in files or asset_path not in files):
+                    errors.append("%s: prototype.files must include entry and assetPath" % surface_id)
                 for file_index, value in enumerate(files):
                     safe_relative(value, "%s.prototype.files[%d]" % (surface_id, file_index))
+                    if check_files and phase in {"approved", "implemented"}:
+                        target = (project / value).resolve()
+                        if project.resolve() not in target.parents or not target.is_file():
+                            errors.append("%s: prototype dependency missing or outside project: %s" % (surface_id, value))
                 ensure_string_list(
                     prototype.get("states"),
                     "%s.prototype.states" % surface_id,
@@ -545,6 +541,17 @@ def git_object_exists(repo: Path, commit: str, path: str) -> bool:
     return result.returncode == 0
 
 
+def git_file_id(repo: Path, commit: str, path: str) -> str:
+    result = run_git(repo, "ls-tree", "-z", commit, "--", ":(literal)" + path)
+    records = result.stdout.rstrip("\0").split("\0")
+    if result.returncode != 0 or len(records) != 1 or not records[0]:
+        raise ValueError("Prototype dependency missing at %s: %s" % (commit, path))
+    mode, kind, object_id = records[0].split("\t", 1)[0].split()
+    if mode not in {"100644", "100755"} or kind != "blob":
+        raise ValueError("Prototype dependency must be a regular file: %s" % path)
+    return object_id
+
+
 def cmd_implementation_gate(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
     require_git(repo)
@@ -592,14 +599,14 @@ def cmd_implementation_gate(args: argparse.Namespace) -> int:
             print("  - %s" % path, file=sys.stderr)
         return 1
 
-    meta_rel = "%s/_d_meta.json" % project_rel
+    meta_rel = "%s/design-review.json" % project_rel
     contract_rel = "%s/ui-contract.json" % project_rel
     asset_rel = "%s/%s" % (project_rel, asset_path)
     warnings: List[str] = []
     try:
         if not git_object_exists(repo, args.design_commit, asset_rel):
             raise ValueError("Approved asset file is absent at design commit: %s" % asset_rel)
-        design_asset_text = git_show(repo, args.design_commit, asset_rel)
+        design_asset_id = git_file_id(repo, args.design_commit, asset_rel)
         meta = load_json_text(
             git_show(repo, args.design_commit, meta_rel),
             "%s:%s" % (args.design_commit, meta_rel),
@@ -611,7 +618,7 @@ def cmd_implementation_gate(args: argparse.Namespace) -> int:
         # new approval even when the old commit remains in ancestry.
         if not git_object_exists(repo, "HEAD", asset_rel):
             raise ValueError("Approved asset is absent at current HEAD: %s" % asset_rel)
-        if git_show(repo, "HEAD", asset_rel) != design_asset_text:
+        if git_file_id(repo, "HEAD", asset_rel) != design_asset_id:
             raise ValueError(
                 "Approved asset changed after the design commit; approve the current deliverable before implementation"
             )
@@ -630,6 +637,21 @@ def cmd_implementation_gate(args: argparse.Namespace) -> int:
         )
         if contract_errors:
             raise ValueError("; ".join(contract_errors))
+
+        current_contract = load_json_text(git_show(repo, "HEAD", contract_rel), "HEAD:%s" % contract_rel)
+        current_errors = validate_contract(
+            current_contract, repo / project_rel, "approved", target_asset=asset_path, check_files=False,
+        )
+        if current_errors:
+            raise ValueError("current contract: " + "; ".join(current_errors))
+        approved_surface = next(s for s in contract["surfaces"] if s["prototype"]["assetPath"] == asset_path)
+        current_surface = next(s for s in current_contract["surfaces"] if s["prototype"]["assetPath"] == asset_path)
+        if current_surface["prototype"] != approved_surface["prototype"]:
+            raise ValueError("Prototype mapping changed after the design commit; approve the current deliverable")
+        for relative in approved_surface["prototype"]["files"]:
+            dependency = "%s/%s" % (project_rel, relative)
+            if git_file_id(repo, args.design_commit, dependency) != git_file_id(repo, "HEAD", dependency):
+                raise ValueError("Prototype dependency changed after the design commit: %s" % relative)
 
         content = contract.get("content") if isinstance(contract, dict) else None
         inventory_value = content.get("inventory") if isinstance(content, dict) else None

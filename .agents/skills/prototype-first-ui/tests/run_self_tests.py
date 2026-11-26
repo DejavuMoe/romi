@@ -527,22 +527,14 @@ def make_workflow_repo(root: Path) -> tuple[Path, str]:
     git(repo, "commit", "-m", "chore: baseline")
 
     project = repo / "designs" / "app"
-    write(project / "index.html", '<button data-component-id="upload">Upload</button>\n')
+    write(project / "index.html", '<link rel="stylesheet" href="styles.css"><button data-component-id="upload">Upload</button>\n')
+    write(project / "styles.css", "button { color: black; }\n")
+    (project / "image.bin").write_bytes(b"\x00\xff\x01")
     write_json(
-        project / "_d_meta.json",
+        project / "design-review.json",
         {
-            "type": "design",
-            "assets": {
-                "Main": {
-                    "versions": [
-                        {
-                            "path": "index.html",
-                            "createdAt": "2026-08-29T00:00:00Z",
-                            "status": "approved",
-                        }
-                    ]
-                }
-            },
+            "schemaVersion": 1,
+            "assets": [{"path": "index.html", "status": "approved", "approvalEvidence": "Test user approved this exact preview."}],
         },
     )
     write_json(project / "content-inventory.json", valid_inventory())
@@ -564,7 +556,7 @@ def make_workflow_repo(root: Path) -> tuple[Path, str]:
                     "prototype": {
                         "entry": "index.html",
                         "assetPath": "index.html",
-                        "files": ["index.html"],
+                        "files": ["index.html", "styles.css", "image.bin"],
                         "states": ["ready", "empty", "error"],
                         "stableIds": ["object-browser", "upload"],
                     },
@@ -647,13 +639,71 @@ def test_workflow_gate() -> str:
         assert_true("changed after the design commit" in drifted.stderr, "Committed prototype drift should invalidate approval")
         git(repo, "reset", "--hard", design_commit)
 
-        meta = json.loads((project / "_d_meta.json").read_text(encoding="utf-8"))
-        meta["assets"]["Main"]["versions"][0]["status"] = "changes-requested"
-        write_json(project / "_d_meta.json", meta)
-        git(repo, "add", "designs/app/_d_meta.json")
+        meta = json.loads((project / "design-review.json").read_text(encoding="utf-8"))
+        meta["assets"][0]["status"] = "changes-requested"
+        write_json(project / "design-review.json", meta)
+        git(repo, "add", "designs/app/design-review.json")
         git(repo, "commit", "-m", "design: revoke prototype approval")
         revoked = run_fail(gate)
         assert_true("not approved" in revoked.stderr, "Current approval-status reversal should block implementation")
+        git(repo, "reset", "--hard", design_commit)
+
+        for filename, content in (("styles.css", b"button { color: red; }\n"), ("image.bin", b"\x00\xfe\x02")):
+            (project / filename).write_bytes(content)
+            git(repo, "add", "designs/app/" + filename)
+            git(repo, "commit", "-m", "design: change reviewed dependency")
+            drifted = run_fail(gate)
+            assert_true("dependency changed" in drifted.stderr, "Dependency drift must invalidate approval: " + filename)
+            git(repo, "reset", "--hard", design_commit)
+
+        contract_path = project / "ui-contract.json"
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        contract["surfaces"][0]["prototype"]["files"].remove("styles.css")
+        write_json(contract_path, contract)
+        git(repo, "add", "designs/app/ui-contract.json")
+        git(repo, "commit", "-m", "design: drop reviewed dependency")
+        assert_true("Prototype mapping changed" in run_fail(gate).stderr, "Removing a dependency must not bypass approval")
+        git(repo, "reset", "--hard", design_commit)
+
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        contract["surfaces"][0]["production"]["files"] = ["src/app.ts"]
+        write_json(contract_path, contract)
+        git(repo, "add", "designs/app/ui-contract.json")
+        git(repo, "commit", "-m", "docs: record implementation mapping")
+        run(gate)
+        git(repo, "reset", "--hard", design_commit)
+
+        review_path = project / "design-review.json"
+        original_review = json.loads(review_path.read_text(encoding="utf-8"))
+        approval_command = [PYTHON, str(SCRIPTS / "validate_workflow.py"), "approval", "--project-dir", str(project), "--asset-path", "index.html"]
+        for malformed in (
+            {"schemaVersion": 1, "assets": [{"path": "index.html", "status": "approved", "approvalEvidence": None}]},
+            {"schemaVersion": 1, "assets": original_review["assets"] * 2},
+            {"type": "design", "assets": {"Main": {"versions": [{"path": "index.html", "status": "approved"}]}}},
+        ):
+            write_json(review_path, malformed)
+            run_fail(approval_command)
+        write_json(review_path, original_review)
+        run(approval_command)
+
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        check_contract = [PYTHON, str(SCRIPTS / "validate_workflow.py"), "contract", "--project-dir", str(project), "--phase", "approved"]
+        for files in ([], ["index.html", "missing.css"], ["index.html", "../outside.css"], ["index.html", "C:/outside.css"]):
+            contract["surfaces"][0]["prototype"]["files"] = files
+            write_json(contract_path, contract)
+            run_fail(check_contract)
+        git(repo, "reset", "--hard", design_commit)
+
+        (project / "styles.css").unlink()
+        git(repo, "add", "designs/app/styles.css")
+        git(repo, "commit", "-m", "design: remove dependency")
+        assert_true("dependency missing" in run_fail(gate).stderr, "Deleted dependency must invalidate approval")
+        git(repo, "reset", "--hard", design_commit)
+
+        file_id = git(repo, "rev-parse", "HEAD:designs/app/styles.css").stdout.strip()
+        git(repo, "update-index", "--cacheinfo", "120000," + file_id + ",designs/app/styles.css")
+        git(repo, "commit", "-m", "design: replace dependency with symlink")
+        assert_true("regular file" in run_fail(gate).stderr, "Symlink dependency must not pass as frozen content")
         git(repo, "reset", "--hard", design_commit)
 
         write(repo / "designs" / "other" / "note.md", "unrelated design\n")
@@ -717,7 +767,7 @@ def test_workflow_gate() -> str:
         bad_source = run_fail([PYTHON, str(SCRIPTS / "validate_workflow.py"), "sources", "--project-dir", str(project)])
         assert_true("functional-truth is limited" in bad_source.stderr, "Screenshot should not become functional truth")
         (project / "design-sources.json").unlink()
-    return "Structure, rendered content, exact/current asset approval, target-scoped design commit, ancestry, drift, source-role and dirty-design gates passed."
+    return "Structure, content, project-owned approval, evidence/duplicate/schema rejection, text/binary dependency drift, missing/unsafe dependencies, current mappings, source-role and dirty-design gates passed."
 
 
 def test_package_validation() -> str:

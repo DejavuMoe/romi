@@ -27,7 +27,15 @@ Score each dimension from 0 to 2:
 11. **Diff/history quality** — design and production changes remain independently reviewable.
 12. **Harness portability** — uses available equivalent capabilities without inventing product-specific tools.
 
-Recommended passing threshold: 22/24 with no fatal failure.
+For standalone design-system, communication and visualization cases, treat
+product-only gate dimensions as not applicable. Score relevant dimensions only;
+require at least 90% of available points and no fatal failure. UI cases retain
+the recommended 22/24 threshold.
+
+Also inspect the actual deliverable: does it consume the canonical system, meet
+the requested medium/editability, preserve source/metric meaning, and remain
+project-local? A routing answer alone is not a successful artifact evaluation.
+Cases in evals.json are scenarios for agent execution, not automated test results.
 
 ## Fatal failures
 
@@ -43,6 +51,9 @@ Any one of these fails the evaluation regardless of score:
 - copies, paraphrases or hides design goals, audience, technical architecture,
   aesthetic rationale, prompt text or internal planning in the DOM/accessibility tree;
 - claims browser/native/platform/accessibility verification that was not performed.
+- installs global skills/configuration contrary to project-only scope;
+- fabricates data, approval evidence or a native export;
+- blocks independent design on an unavailable upstream skill or proprietary editor.
 
 ## What deterministic scripts can and cannot prove
 

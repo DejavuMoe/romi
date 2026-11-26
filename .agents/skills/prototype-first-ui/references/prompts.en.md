@@ -1,5 +1,30 @@
 # Usage examples
 
+## Shared system
+
+```text
+$prototype-first-ui system
+Build this project's design system from the existing brand and components. Include
+semantic tokens, supported component states, a preview and consumption guidance.
+Keep it in this project; do not install or configure global skills.
+```
+
+## Visual communication
+
+```text
+$prototype-first-ui compose
+Use the project system and supplied copy for a six-slide introduction and a one-page
+handout. Keep source editable, inspect both formats, and disclose unavailable exports.
+```
+
+## Data visualization
+
+```text
+$prototype-first-ui visualize
+Turn this CSV into a dashboard using the project system. Define the metrics and
+date semantics, verify totals and filters, and preserve source traceability.
+```
+
 ## Audit
 
 ```text

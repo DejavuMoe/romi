@@ -8,6 +8,9 @@
 - Durable product/UX constraints: `docs/product/constraints.md`
 - Current UI capability audit: `docs/ui/capabilities.md` when present
 - Design project: `designs/{{PROJECT_SLUG}}/`
+- Shared design foundations: reuse the existing system, otherwise `designs/system/`
+- Skill installation: project-local `.agents/skills/prototype-first-ui/` or the
+  host's project-local equivalent; never a global/home installation
 
 ## Commands
 
@@ -22,6 +25,10 @@ Replace every placeholder with the repository's real commands:
 
 ## Prototype-first gate
 
+This gate applies to production UI changes. Standalone design systems, slides,
+documents, diagrams and charts use their own artifact checks without fabricated
+product routes or UI approval commits.
+
 - Every user-visible layout, copy, navigation, interaction, workflow, component
   state, dialog, menu, or information-hierarchy change follows the
   `prototype-first-ui` workflow.
@@ -33,6 +40,8 @@ Replace every placeholder with the repository's real commands:
   design project are visual and interaction truth. Explicitly approved copy is
   content truth.
 - Keep design-only and production implementation commits separate.
+- Record explicit approval in `design-review.json`; include all reviewed local
+  dependencies in `ui-contract.json` prototype mappings before implementation.
 - Build success alone is not UI completion; run and compare the real product.
 
 ## Content firewall

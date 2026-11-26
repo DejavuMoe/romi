@@ -7,7 +7,7 @@ Default branch: `master`.
 ```sh
 python -B scripts/validate_skill.py --skill-dir .
 python -B tests/run_all.py --report ../validation.json
-python -B scripts/package_skill.py --source . --tag v2.1.0 --output ../prototype-first-ui.zip
+python -B scripts/package_skill.py --source . --tag v3.0.0 --output ../prototype-first-ui.zip
 ```
 
 ## Publish
@@ -17,8 +17,8 @@ Commit the changes, then push the branch and version tag:
 
 ```sh
 git push origin master
-git tag -a v2.1.0 -m "Release v2.1.0"
-git push origin v2.1.0
+git tag -a v3.0.0 -m "Release v3.0.0"
+git push origin v3.0.0
 ```
 
 [GitHub Actions](.github/workflows/ci.yml) tests the extracted package and publishes

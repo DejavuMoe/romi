@@ -1,7 +1,18 @@
 # Non-negotiable content contract
 
-This contract applies to every prototype and production surface governed by this
-skill. The task brief is design input, not product content.
+This contract applies to product UI and informs content review in other media.
+The task brief is design input, not automatically product content.
+
+## Standalone communication and system documentation
+
+For decks, reports, diagrams and design-system documentation, the requested subject
+may itself be architecture, audience, positioning, or design rationale. When the
+user asks to communicate that subject, it is legitimate artifact content. Distinguish
+that content from hidden agent instructions and incidental implementation notes.
+User-authorized drafting is allowed from supplied or evidenced facts; mark new
+copy as draft rather than claiming it was previously approved. Do not invent
+claims or alter legal wording. UI profiles and machine inventories below apply
+to product surfaces, not mandatory scaffolding for every visual artifact.
 
 ## Universal content firewall
 
@@ -55,7 +66,7 @@ approved.
 
 ## Content profiles
 
-Every project declares one profile in `docs/product/constraints.md` and
+Every product UI project declares one profile in `docs/product/constraints.md` and
 `ui-contract.json`.
 
 ### `operational-strict` — default for software product UI
